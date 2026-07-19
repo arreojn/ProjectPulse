@@ -8,12 +8,13 @@ require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/app/auth.php';
 require_once __DIR__ . '/app/health.php';
 require_once __DIR__ . '/app/parents.php';
+require_once __DIR__ . '/app/announcements.php';
 require_once __DIR__ . '/app/teachers.php';
 
 try {
     health_portal_bootstrap();
     parent_portal_bootstrap();
-    teacher_management_bootstrap();
+    announcements_bootstrap();
 } catch (Throwable $exception) {
     // Keep the login screen available even if demo account seeding cannot run.
 }
@@ -70,6 +71,7 @@ if (is_post()) {
                 <p>Attendance: <code>attendance_user</code> / <code>attendance123</code></p>
                 <p>Admin: <code>portal_admin</code> / <code>admin123</code></p>
                 <p>Health: <code>health_coordinator</code> / <code>health123</code></p>
+                <p>Guidance: <code>guidance_counselor</code> / <code>guidance123</code></p>
                 <p>Teacher: <code>teacher_mabini</code> / <code>teacher123</code></p>
                 <p>Parent: <code>demo_parent</code> / <code>parent123</code></p>
             </div>

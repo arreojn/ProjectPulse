@@ -94,6 +94,13 @@ function flash_set(string $key, string $message, string $type = 'success'): void
     ];
 }
 
+function theme_stylesheet_markup(): string
+{
+    require_once __DIR__ . '/theme_settings.php';
+
+    return theme_inline_styles();
+}
+
 function flash_get(string $key): ?array
 {
     start_session();

@@ -758,3 +758,21 @@ function parent_import_normalize_row(array $row): array
 
     return $payload;
 }
+
+function parent_account_options(): array
+{
+    $statement = database()->query(
+        'SELECT
+            u.id,
+            u.username,
+            u.email,
+            p.first_name,
+            p.last_name
+         FROM users u
+         INNER JOIN parents p ON p.user_id = u.id
+         WHERE u.role = \'parent\' AND u.is_active = 1
+         ORDER BY p.last_name, p.first_name, u.username'
+    );
+
+    return $statement->fetchAll();
+}

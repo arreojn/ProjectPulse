@@ -10,6 +10,8 @@ require_once __DIR__ . '/app/learners.php';
 require_once __DIR__ . '/app/reports.php';
 require_once __DIR__ . '/app/sections.php';
 require_once __DIR__ . '/app/teachers.php';
+require_once __DIR__ . '/app/announcements.php';
+require_once __DIR__ . '/app/theme_settings.php';
 
 function format_report_time(?string $value): string
 {
@@ -58,14 +60,10 @@ function report_filter_summary_items(array $filters, array $sections, array $lea
         $items['Date Range'] = format_report_date($filters['date_from']) . ' to ' . format_report_date($filters['date_to']);
     }
 
-    if ($filters['grade_level'] !== '') {
-        $items['Grade Level'] = $filters['grade_level'];
-    }
-
     if ($filters['section_id'] !== '') {
         foreach ($sections as $section) {
             if ((string) $section['id'] === (string) $filters['section_id']) {
-                $items['Section'] = $section['grade_level'] . ' - ' . $section['name'];
+                $items['Section'] = ($section['grade_level'] ?? 'N/A') . ' - ' . ($section['name'] ?? 'Unknown');
                 break;
             }
         }
@@ -118,6 +116,8 @@ $allowedModules = [
     'sections_management' => 'Sections Management',
     'teacher_management' => 'Teacher Management',
     'attendance_reports' => 'Attendance Reports',
+    'announcements' => 'Announcements',
+    'settings' => 'Settings',
 ];
 
 $module = (string) ($_GET['module'] ?? 'attendance_module');
@@ -142,7 +142,6 @@ $attendanceStatusRows = [];
 $attendanceHourRows = [];
 $attendanceGradeRows = [];
 $latestLogs = [];
-$systemLoginLogs = [];
 $dataWarning = null;
 $learnerFlash = flash_get('learner_management');
 $learnerForm = learner_form_defaults();
@@ -175,6 +174,17 @@ $teacherForm = teacher_form_defaults();
 $teacherRows = [];
 $teacherSections = [];
 $teacherEditId = isset($_GET['edit_teacher_id']) ? (int) $_GET['edit_teacher_id'] : null;
+$announcementFlash = flash_get('announcements_management');
+$announcementForm = ['id' => null, 'title' => '', 'content' => '', 'is_published' => 0];
+$announcementRows = [];
+$announcementEditId = isset($_GET['edit_announcement_id']) ? (int) $_GET['edit_announcement_id'] : null;
+$settingsFlash = flash_get('admin_settings');
+$themeColors = [];
+$activeThemeKey = 'default';
+$systemLoginLogs = [];
+
+announcements_bootstrap();
+theme_settings_bootstrap();
 
 if ($module === 'learner_management') {
     try {
@@ -215,9 +225,7 @@ if ($module === 'learner_management') {
             }
         }
 
-        if ($learnerFiltersApplied) {
-            $learnerRows = learner_list($learnerFilters);
-        }
+        $learnerRows = learner_list($learnerFilters);
     } catch (Throwable $exception) {
         $learnerFlash = [
             'type' => 'error',
@@ -313,6 +321,73 @@ if ($module === 'teacher_management') {
     }
 }
 
+if ($module === 'announcements') {
+    try {
+        if (is_post()) {
+            if (!verify_csrf_token($_POST['csrf_token'] ?? null)) {
+                throw new RuntimeException('Invalid form token. Please refresh the page.');
+            }
+
+            $formAction = (string) ($_POST['form_action'] ?? '');
+
+            if ($formAction === 'save_announcement') {
+                announcement_save($_POST, (int) $user['id']);
+                flash_set('announcements_management', 'Announcement saved successfully.');
+                redirect('admin.php?module=announcements');
+            }
+
+            if ($formAction === 'delete_announcement') {
+                announcement_delete((int) ($_POST['announcement_id'] ?? 0));
+                flash_set('announcements_management', 'Announcement deleted successfully.');
+                redirect('admin.php?module=announcements');
+            }
+        }
+
+        if ($announcementEditId !== null) {
+            $existingAnnouncement = announcement_find($announcementEditId);
+            if ($existingAnnouncement !== null) {
+                $announcementForm = $existingAnnouncement;
+            }
+        }
+
+        $announcementRows = announcement_list();
+    } catch (Throwable $exception) {
+        $announcementFlash = [
+            'type' => 'error',
+            'message' => $exception->getMessage(),
+        ];
+    }
+}
+
+if ($module === 'settings') {
+    try {
+        if (is_post() && ($_POST['form_action'] ?? '') === 'save_theme') {
+            theme_colors_save((string) ($_POST['theme_key'] ?? ''));
+            flash_set('admin_settings', 'Theme colors saved successfully.');
+            redirect('admin.php?module=settings');
+        }
+
+        if (is_post() && ($_POST['form_action'] ?? '') === 'reset_theme') {
+            if (!verify_csrf_token($_POST['csrf_token'] ?? null)) {
+                throw new RuntimeException('Invalid form token. Please refresh the page.');
+            }
+            theme_colors_reset();
+            flash_set('admin_settings', 'Theme colors have been reset to default.');
+            redirect('admin.php?module=settings');
+        }
+    } catch (Throwable $exception) {
+        $settingsFlash = [
+            'type' => 'error',
+            'message' => $exception->getMessage(),
+        ];
+    }
+
+    $themeColors = theme_colors();
+    $activeThemeKey = theme_active_key();
+    $stats['today_logins'] = (int) database()->query('SELECT COUNT(*) FROM auth_login_logs WHERE login_status = \'success\' AND DATE(logged_in_at) = CURDATE()')->fetchColumn();
+    $systemLoginLogs = auth_recent_login_logs(10);
+}
+
 if ($module === 'attendance_module') {
     try {
         $statsStatement = database()->query(
@@ -330,15 +405,6 @@ if ($module === 'attendance_module') {
         $stats['last_scan'] = !empty($statsRow['last_scan'])
             ? date('M j, Y h:i A', strtotime((string) $statsRow['last_scan']))
             : 'No scans yet';
-
-        $loginStatsStatement = database()->query(
-            'SELECT COUNT(*) AS total
-             FROM auth_login_logs
-             WHERE login_status = \'success\'
-               AND DATE(logged_in_at) = CURDATE()'
-        );
-        $loginStatsRow = $loginStatsStatement->fetch() ?: [];
-        $stats['today_logins'] = (int) ($loginStatsRow['total'] ?? 0);
 
         $attendanceSchoolYear = current_school_year();
 
@@ -443,11 +509,16 @@ if ($module === 'attendance_module') {
              LIMIT 8'
         );
         $latestLogs = $logsStatement->fetchAll();
-        $systemLoginLogs = auth_recent_login_logs(10);
     } catch (Throwable $exception) {
         $dataWarning = 'Attendance data preview is unavailable right now.';
     }
 }
+
+if ($module === 'settings') {
+    $stats['today_logins'] = (int) database()->query('SELECT COUNT(*) FROM auth_login_logs WHERE login_status = \'success\' AND DATE(logged_in_at) = CURDATE()')->fetchColumn();
+    $systemLoginLogs = auth_recent_login_logs(10);
+}
+
 
 if ($module === 'attendance_reports') {
     try {
@@ -485,6 +556,7 @@ foreach ($attendanceGradeRows as $row) {
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <?php echo theme_settings_stylesheet_markup(); ?>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo escape(APP_NAME); ?> Admin</title>
     <link rel="stylesheet" href="<?php echo escape(asset_url('assets/css/app.css')); ?>">
@@ -523,11 +595,16 @@ foreach ($attendanceGradeRows as $row) {
                         <a href="<?php echo escape(route_url('admin.php?module=sections_management')); ?>" class="submenu-link<?php echo $module === 'sections_management' ? ' active' : ''; ?>">Sections Management</a>
                         <a href="<?php echo escape(route_url('admin.php?module=teacher_management')); ?>" class="submenu-link<?php echo $module === 'teacher_management' ? ' active' : ''; ?>">Teacher Management</a>
                         <a href="<?php echo escape(route_url('admin.php?module=attendance_reports')); ?>" class="submenu-link<?php echo $module === 'attendance_reports' ? ' active' : ''; ?>">Attendance Reports</a>
+                        <a href="<?php echo escape(route_url('admin.php?module=announcements')); ?>" class="submenu-link<?php echo $module === 'announcements' ? ' active' : ''; ?>">Announcements</a>
+                    </div>
+                    <div class="menu-group">
+                        <p class="menu-group-title">System</p>
+                        <a href="<?php echo escape(route_url('admin.php?module=settings')); ?>" class="submenu-link<?php echo $module === 'settings' ? ' active' : ''; ?>">Settings</a>
+                        <a href="<?php echo escape(route_url('change_password.php')); ?>" class="submenu-link">Change Password</a>
                     </div>
                 </nav>
 
                 <div class="sidebar-footer">
-                    <a href="<?php echo escape(route_url('change_password.php')); ?>" class="secondary-link full-width-link">Change Password</a>
                     <a href="<?php echo escape(route_url('logout.php')); ?>" class="secondary-link full-width-link">Logout</a>
                 </div>
             </aside>
@@ -567,11 +644,6 @@ foreach ($attendanceGradeRows as $row) {
                         <article class="admin-stat-card">
                             <span class="stat-label">Last Scan</span>
                             <strong><?php echo escape($stats['last_scan']); ?></strong>
-                        </article>
-
-                        <article class="admin-stat-card">
-                            <span class="stat-label">Successful Logins Today</span>
-                            <strong><?php echo escape((string) $stats['today_logins']); ?></strong>
                         </article>
                     </section>
 
@@ -698,33 +770,7 @@ foreach ($attendanceGradeRows as $row) {
                         </article>
                     </section>
 
-                    <section class="admin-module-grid">
-                        <article class="admin-module-card">
-                            <div class="panel-heading compact-heading">
-                                <h2>Scan Windows</h2>
-                                <p>Active rules used by the attendance station.</p>
-                            </div>
-
-                            <div class="window-list">
-                                <div class="window-item">
-                                    <span>5:00 AM to 9:00 AM</span>
-                                    <strong>AM Time In</strong>
-                                </div>
-                                <div class="window-item">
-                                    <span>11:00 AM to 12:30 PM</span>
-                                    <strong>AM Time Out</strong>
-                                </div>
-                                <div class="window-item">
-                                    <span>12:31 PM to 2:00 PM</span>
-                                    <strong>PM Time In</strong>
-                                </div>
-                                <div class="window-item">
-                                    <span>3:00 PM onward</span>
-                                    <strong>PM Time Out</strong>
-                                </div>
-                            </div>
-                        </article>
-
+                    <section>
                         <article class="admin-module-card">
                             <div class="panel-heading compact-heading">
                                 <h2>Latest Attendance Logs</h2>
@@ -764,46 +810,6 @@ foreach ($attendanceGradeRows as $row) {
                                 </table>
                             </div>
                         </article>
-
-                        <article class="admin-module-card">
-                            <div class="panel-heading compact-heading">
-                                <h2>System Entry Logs</h2>
-                                <p>Recent logins into the system, including successful and failed attempts.</p>
-                            </div>
-
-                            <div class="table-shell">
-                                <table class="records-table admin-log-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Date</th>
-                                            <th>Time</th>
-                                            <th>Identity</th>
-                                            <th>Name</th>
-                                            <th>Role</th>
-                                            <th>Status</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <?php if ($systemLoginLogs === []): ?>
-                                            <tr>
-                                                <td colspan="6" class="empty-row">No system login logs are available yet.</td>
-                                            </tr>
-                                        <?php else: ?>
-                                            <?php foreach ($systemLoginLogs as $log): ?>
-                                                <tr>
-                                                    <td><?php echo escape(date('Y-m-d', strtotime($log['logged_in_at']))); ?></td>
-                                                    <td><?php echo escape(date('h:i:s A', strtotime($log['logged_in_at']))); ?></td>
-                                                    <td><?php echo escape($log['identity_value']); ?></td>
-                                                    <td><?php echo escape($log['full_name_snapshot'] !== null && $log['full_name_snapshot'] !== '' ? $log['full_name_snapshot'] : ($log['username_snapshot'] ?? '-')); ?></td>
-                                                    <td><?php echo escape($log['role_snapshot'] !== null && $log['role_snapshot'] !== '' ? ucfirst($log['role_snapshot']) : '-'); ?></td>
-                                                    <td><span class="table-status"><?php echo escape(ucfirst($log['login_status'])); ?></span></td>
-                                                </tr>
-                                            <?php endforeach; ?>
-                                        <?php endif; ?>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </article>
                     </section>
                 <?php elseif ($module === 'learner_management'): ?>
                     <header class="admin-page-header">
@@ -823,6 +829,21 @@ foreach ($attendanceGradeRows as $row) {
 
                     <section class="learner-admin-grid">
                         <article class="admin-module-card">
+                            <?php if ($learnerForm['id'] !== null): ?>
+                                <div class="teacher-profile-identity" style="margin-bottom: 1rem;">
+                                    <div class="teacher-profile-photo-frame">
+                                        <img
+                                            class="teacher-profile-photo"
+                                            src="<?php echo escape(learner_photo_url($learnerForm['lrn'])); ?>"
+                                            alt="<?php echo escape($learnerForm['first_name'] . ' ' . $learnerForm['last_name']); ?> photo"
+                                        >
+                                    </div>
+                                    <div class="teacher-profile-identity-copy">
+                                        <p class="meta-label dark">Editing Learner</p>
+                                        <div class="teacher-readonly-field"><?php echo escape(trim($learnerForm['last_name'] . ', ' . $learnerForm['first_name'])); ?></div>
+                                    </div>
+                                </div>
+                            <?php endif; ?>
                             <div class="panel-heading compact-heading">
                                 <h2><?php echo $learnerForm['id'] === null ? 'Add Learner' : 'Edit Learner'; ?></h2>
                                 <p>Current school year: <?php echo escape($learnerSchoolYear['label'] ?? 'Not set'); ?></p>
@@ -1036,11 +1057,7 @@ foreach ($attendanceGradeRows as $row) {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <?php if (!$learnerFiltersApplied): ?>
-                                        <tr>
-                                            <td colspan="11" class="empty-row">Choose a search term or filter to display learners.</td>
-                                        </tr>
-                                    <?php elseif ($learnerRows === []): ?>
+                                    <?php if ($learnerRows === []): ?>
                                         <tr>
                                             <td colspan="11" class="empty-row">No learners matched the current filter.</td>
                                         </tr>
@@ -1049,7 +1066,11 @@ foreach ($attendanceGradeRows as $row) {
                                             <tr>
                                                 <td><?php echo escape($learner['learner_number']); ?></td>
                                                 <td><?php echo escape($learner['lrn']); ?></td>
-                                                <td><?php echo escape(trim($learner['last_name'] . ', ' . $learner['first_name'] . ' ' . $learner['middle_name'])); ?></td>
+                                                <td>
+                                                    <a href="<?php echo escape(route_url('admin.php?module=learner_management&edit_learner_id=' . $learner['id'])); ?>" class="table-inline-link">
+                                                        <?php echo escape(trim($learner['last_name'] . ', ' . $learner['first_name'] . ' ' . $learner['middle_name'])); ?>
+                                                    </a>
+                                                </td>
                                                 <td><?php echo escape($learner['birthdate'] !== null && $learner['birthdate'] !== '' ? $learner['birthdate'] : '-'); ?></td>
                                                 <td><?php $rowAge = learner_age_for_school_year($learner['birthdate'] ?? null, $learnerSchoolYear); echo escape($rowAge !== null ? (string) $rowAge : '-'); ?></td>
                                                 <td><?php echo escape(trim((string) ($learner['mother_tongue'] ?? '')) !== '' ? (string) $learner['mother_tongue'] : '-'); ?></td>
@@ -1091,7 +1112,7 @@ foreach ($attendanceGradeRows as $row) {
                         <div class="alert <?php echo escape($sectionFlash['type']); ?>"><?php echo escape($sectionFlash['message']); ?></div>
                     <?php endif; ?>
 
-                    <section class="admin-single-card-grid">
+                    <section>
                         <article class="admin-module-card">
                             <div class="panel-heading compact-heading">
                                 <h2><?php echo $sectionForm['id'] === null ? 'Add Section' : 'Edit Section'; ?></h2>
@@ -1211,7 +1232,7 @@ foreach ($attendanceGradeRows as $row) {
                         <div class="alert <?php echo escape($teacherFlash['type']); ?>"><?php echo escape($teacherFlash['message']); ?></div>
                     <?php endif; ?>
 
-                    <section class="admin-single-card-grid">
+                    <section>
                         <article class="admin-module-card">
                             <div class="panel-heading compact-heading">
                                 <h2><?php echo $teacherForm['id'] === null ? 'Add Teacher Account' : 'Edit Teacher Account'; ?></h2>
@@ -1339,7 +1360,7 @@ foreach ($attendanceGradeRows as $row) {
                             </table>
                         </div>
                     </section>
-                <?php else: ?>
+                <?php elseif ($module === 'attendance_reports'): ?>
                     <header class="admin-page-header">
                         <div>
                             <p class="eyebrow">Attendance</p>
@@ -1377,16 +1398,6 @@ foreach ($attendanceGradeRows as $row) {
                                 </select>
                                 </div>
 
-                                <div class="report-filter-field" data-report-filter-key="report_date"<?php echo in_array('report_date', $reportMeta['filters'] ?? [], true) ? '' : ' hidden'; ?>>
-                                    <label for="report_date">Report Date</label>
-                                    <input id="report_date" name="report_date" type="date" value="<?php echo escape($reportFilters['report_date']); ?>">
-                                </div>
-
-                                <div class="report-filter-field" data-report-filter-key="report_month"<?php echo in_array('report_month', $reportMeta['filters'] ?? [], true) ? '' : ' hidden'; ?>>
-                                    <label for="report_month">Report Month</label>
-                                    <input id="report_month" name="report_month" type="month" value="<?php echo escape($reportFilters['report_month']); ?>">
-                                </div>
-
                                 <div class="report-filter-field" data-report-filter-key="date_range"<?php echo in_array('date_range', $reportMeta['filters'] ?? [], true) ? '' : ' hidden'; ?>>
                                     <label for="date_from">Date From</label>
                                     <input id="date_from" name="date_from" type="date" value="<?php echo escape($reportFilters['date_from']); ?>">
@@ -1397,20 +1408,18 @@ foreach ($attendanceGradeRows as $row) {
                                     <input id="date_to" name="date_to" type="date" value="<?php echo escape($reportFilters['date_to']); ?>">
                                 </div>
 
-                                <div class="report-filter-field" data-report-filter-key="grade_level"<?php echo in_array('grade_level', $reportMeta['filters'] ?? [], true) ? '' : ' hidden'; ?>>
-                                    <label for="report_grade_level">Grade Level</label>
-                                    <select id="report_grade_level" name="grade_level">
-                                        <option value="">All grade levels</option>
-                                        <?php foreach ($gradeLevelOptions as $option): ?>
-                                            <option value="<?php echo escape($option); ?>"<?php echo $reportFilters['grade_level'] === $option ? ' selected' : ''; ?>>
-                                                <?php echo escape($option); ?>
-                                            </option>
-                                        <?php endforeach; ?>
-                                    </select>
+                                <div class="report-filter-field" data-report-filter-key="report_date"<?php echo in_array('report_date', $reportMeta['filters'] ?? [], true) ? '' : ' hidden'; ?>>
+                                    <label for="report_date">Report Date</label>
+                                    <input id="report_date" name="report_date" type="date" value="<?php echo escape($reportFilters['report_date']); ?>">
+                                </div>
+
+                                <div class="report-filter-field" data-report-filter-key="report_month"<?php echo in_array('report_month', $reportMeta['filters'] ?? [], true) ? '' : ' hidden'; ?>>
+                                    <label for="report_month">Report Month</label>
+                                    <input id="report_month" name="report_month" type="month" value="<?php echo escape($reportFilters['report_month']); ?>">
                                 </div>
 
                                 <div class="report-filter-field" data-report-filter-key="section_id"<?php echo in_array('section_id', $reportMeta['filters'] ?? [], true) ? '' : ' hidden'; ?>>
-                                    <label for="report_section_id">Section</label>
+                                    <label for="report_section_id">Grade Level and Section</label>
                                     <select id="report_section_id" name="section_id">
                                         <option value="">All sections</option>
                                         <?php foreach ($reportSections as $section): ?>
@@ -1687,6 +1696,194 @@ foreach ($attendanceGradeRows as $row) {
                             <?php endif; ?>
                         </section>
                     <?php endif; ?>
+                <?php elseif ($module === 'announcements'): ?>
+                    <header class="admin-page-header">
+                        <div class="admin-page-title">
+                            <img class="school-logo header-logo" src="<?php echo escape(school_logo_url()); ?>" alt="School logo">
+                            <div class="header-copy">
+                                <p class="eyebrow">Communication</p>
+                                <h2>Announcements</h2>
+                                <p>Create and manage announcements for the parent portal.</p>
+                            </div>
+                        </div>
+                    </header>
+
+                    <?php if ($announcementFlash !== null): ?>
+                        <div class="alert <?php echo escape($announcementFlash['type']); ?>"><?php echo escape($announcementFlash['message']); ?></div>
+                    <?php endif; ?>
+
+                    <section>
+                        <article class="admin-module-card">
+                            <div class="panel-heading compact-heading">
+                                <h2><?php echo $announcementForm['id'] === null ? 'Create Announcement' : 'Edit Announcement'; ?></h2>
+                                <p>Published announcements will be visible on the parent portal.</p>
+                            </div>
+
+                            <form method="post" class="learner-form-grid">
+                                <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
+                                <input type="hidden" name="form_action" value="save_announcement">
+                                <input type="hidden" name="id" value="<?php echo escape((string) ($announcementForm['id'] ?? '')); ?>">
+
+                                <div class="teacher-form-grid-full">
+                                    <label for="announcement_title">Title</label>
+                                    <input id="announcement_title" name="title" type="text" value="<?php echo escape($announcementForm['title']); ?>" required>
+                                </div>
+
+                                <div class="teacher-form-grid-full">
+                                    <label for="announcement_content">Content</label>
+                                    <textarea id="announcement_content" name="content" rows="5" required><?php echo escape($announcementForm['content']); ?></textarea>
+                                </div>
+
+                                <div class="teacher-inline-check teacher-form-grid-full">
+                                    <label>
+                                        <input type="checkbox" name="is_published" value="1"<?php echo !empty($announcementForm['is_published']) ? ' checked' : ''; ?>>
+                                        Publish this announcement
+                                    </label>
+                                </div>
+
+                                <div class="learner-form-actions">
+                                    <button type="submit" class="primary-button"><?php echo $announcementForm['id'] === null ? 'Save Announcement' : 'Update Announcement'; ?></button>
+                                    <?php if ($announcementForm['id'] !== null): ?>
+                                        <a href="<?php echo escape(route_url('admin.php?module=announcements')); ?>" class="secondary-link">Cancel Edit</a>
+                                    <?php endif; ?>
+                                </div>
+                            </form>
+                        </article>
+                    </section>
+
+                    <section class="admin-module-card">
+                        <div class="panel-heading compact-heading">
+                            <h2>Existing Announcements</h2>
+                            <p>Review and manage all announcements.</p>
+                        </div>
+
+                        <div class="table-shell">
+                            <table class="records-table learner-table">
+                                <thead>
+                                    <tr>
+                                        <th>Title</th>
+                                        <th>Status</th>
+                                        <th>Created By</th>
+                                        <th>Published On</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php if ($announcementRows === []): ?>
+                                        <tr>
+                                            <td colspan="5" class="empty-row">No announcements have been created yet.</td>
+                                        </tr>
+                                    <?php else: ?>
+                                        <?php foreach ($announcementRows as $announcement): ?>
+                                            <tr>
+                                                <td><?php echo escape($announcement['title']); ?></td>
+                                                <td><span class="table-status"><?php echo !empty($announcement['is_published']) ? 'Published' : 'Draft'; ?></span></td>
+                                                <td><?php echo escape($announcement['username'] ?? 'N/A'); ?></td>
+                                                <td><?php echo escape($announcement['published_at'] !== null ? date('M j, Y', strtotime($announcement['published_at'])) : '-'); ?></td>
+                                                <td>
+                                                    <div class="table-actions">
+                                                        <a href="<?php echo escape(route_url('admin.php?module=announcements&edit_announcement_id=' . $announcement['id'])); ?>" class="secondary-link small-link">Edit</a>
+                                                        <form method="post" class="inline-form" onsubmit="return confirm('Delete this announcement?');">
+                                                            <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
+                                                            <input type="hidden" name="form_action" value="delete_announcement">
+                                                            <input type="hidden" name="announcement_id" value="<?php echo escape((string) $announcement['id']); ?>">
+                                                            <button type="submit" class="danger-button">Delete</button>
+                                                        </form>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                <?php elseif ($module === 'settings'): ?>
+                    <header class="admin-page-header">
+                        <div class="admin-page-title">
+                            <img class="school-logo header-logo" src="<?php echo escape(school_logo_url()); ?>" alt="School logo">
+                            <div class="header-copy">
+                                <p class="eyebrow">System</p>
+                                <h2>Settings</h2>
+                                <p>Manage system settings and view logs.</p>
+                            </div>
+                        </div>
+                    </header>
+
+                    <?php if ($settingsFlash !== null): ?>
+                        <div class="alert <?php echo escape($settingsFlash['type']); ?>"><?php echo escape($settingsFlash['message']); ?></div>
+                    <?php endif; ?>
+
+                    <article class="admin-module-card">
+                        <div class="panel-heading compact-heading">
+                            <h2>Theme Customization</h2>
+                            <p>Customize the portal's color scheme. Changes are saved locally in your browser.</p>
+                        </div>
+                        <form method="post" class="learner-form-grid">
+                            <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
+                            <input type="hidden" name="form_action" value="save_theme">
+
+                            <div class="teacher-form-grid-full">
+                                <label>Select Theme</label>
+                                <div class="option-checklist">
+                                    <?php foreach (theme_predefined_sets() as $key => $theme): ?>
+                                        <label class="check-card">
+                                            <input type="radio" name="theme_key" value="<?php echo escape($key); ?>"<?php echo $activeThemeKey === $key ? ' checked' : ''; ?>>
+                                            <span>
+                                                <?php echo escape($theme['name']); ?>
+                                            </span>
+                                        </label>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
+
+                            <div class="learner-form-actions">
+                                <button type="submit" class="primary-button">Save Theme</button>
+                            </div>
+                        </form>
+                        <form method="post" class="learner-form-grid">
+                        </form>
+                    </article>
+
+                    <article class="admin-module-card">
+                        <div class="panel-heading compact-heading">
+                            <h2>System Entry Logs</h2>
+                            <p>Recent logins into the system, including successful and failed attempts. Total successful logins today: <?php echo escape((string) $stats['today_logins']); ?></p>
+                        </div>
+
+                        <div class="table-shell">
+                            <table class="records-table admin-log-table">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Time</th>
+                                        <th>Identity</th>
+                                        <th>Name</th>
+                                        <th>Role</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php if ($systemLoginLogs === []): ?>
+                                        <tr>
+                                            <td colspan="6" class="empty-row">No system login logs are available yet.</td>
+                                        </tr>
+                                    <?php else: ?>
+                                        <?php foreach ($systemLoginLogs as $log): ?>
+                                            <tr>
+                                                <td><?php echo escape(date('Y-m-d', strtotime($log['logged_in_at']))); ?></td>
+                                                <td><?php echo escape(date('h:i:s A', strtotime($log['logged_in_at']))); ?></td>
+                                                <td><?php echo escape($log['identity_value']); ?></td>
+                                                <td><?php echo escape($log['full_name_snapshot'] !== null && $log['full_name_snapshot'] !== '' ? $log['full_name_snapshot'] : ($log['username_snapshot'] ?? '-')); ?></td>
+                                                <td><?php echo escape($log['role_snapshot'] !== null && $log['role_snapshot'] !== '' ? ucfirst($log['role_snapshot']) : '-'); ?></td>
+                                                <td><span class="table-status"><?php echo escape(ucfirst($log['login_status'])); ?></span></td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </article>
                 <?php endif; ?>
             </section>
         </section>

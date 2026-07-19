@@ -112,6 +112,16 @@ function attendance_can_manage_scan_mode(array $user): bool
     return ($user['role'] ?? '') === 'admin';
 }
 
+function attendance_scan_windows(): array
+{
+    return [
+        ['range' => '5:00 AM to 9:00 AM', 'label' => 'AM Time In'],
+        ['range' => '11:00 AM to 12:30 PM', 'label' => 'AM Time Out'],
+        ['range' => '12:31 PM to 2:00 PM', 'label' => 'PM Time In'],
+        ['range' => '3:00 PM onward', 'label' => 'PM Time Out'],
+    ];
+}
+
 function attendance_strict_scan_slot_for_time(string $currentTime): ?array
 {
     if ($currentTime >= '05:00:00' && $currentTime <= '09:00:00') {

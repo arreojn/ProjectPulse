@@ -345,6 +345,7 @@ function dashboard_path_for_role(?string $role): string
         'admin' => 'admin.php',
         'attendance' => 'attendance.php',
         'health' => 'health.php',
+        'guidance' => 'guidance.php',
         'teacher' => 'teacher.php',
         'parent' => 'parent.php',
         default => 'attendance.php',

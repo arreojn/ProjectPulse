@@ -2,6 +2,34 @@
 
 declare(strict_types=1);
 
+function attendance_report_learner_order_sql(string $learnerAlias = 'l'): string
+{
+    return 'CASE ' . $learnerAlias . '.sex '
+        . 'WHEN \'male\' THEN 1 '
+        . 'WHEN \'female\' THEN 2 '
+        . 'ELSE 3 END, '
+        . $learnerAlias . '.last_name ASC, '
+        . $learnerAlias . '.first_name ASC, '
+        . $learnerAlias . '.middle_name ASC';
+}
+
+function attendance_report_sort_rows_by_sex_and_name(array $rows, string $sexKey = 'sex', string $nameKey = 'learner_name'): array
+{
+    usort($rows, static function (array $left, array $right) use ($sexKey, $nameKey): int {
+        $sexOrder = ['male' => 0, 'female' => 1];
+        $leftSex = $sexOrder[(string) ($left[$sexKey] ?? '')] ?? 2;
+        $rightSex = $sexOrder[(string) ($right[$sexKey] ?? '')] ?? 2;
+
+        if ($leftSex !== $rightSex) {
+            return $leftSex <=> $rightSex;
+        }
+
+        return strcasecmp((string) ($left[$nameKey] ?? ''), (string) ($right[$nameKey] ?? ''));
+    });
+
+    return $rows;
+}
+
 function attendance_report_type_options(): array
 {
     return [
@@ -17,7 +45,6 @@ function attendance_report_type_options(): array
 function attendance_report_valid_date(string $value): bool
 {
     $date = DateTime::createFromFormat('Y-m-d', $value);
-
     return $date instanceof DateTime && $date->format('Y-m-d') === $value;
 }
 
@@ -75,7 +102,6 @@ function attendance_report_filters(): array
         'report_month' => $reportMonth,
         'date_from' => $dateFrom,
         'date_to' => $dateTo,
-        'grade_level' => trim((string) ($_GET['grade_level'] ?? '')),
         'section_id' => trim((string) ($_GET['section_id'] ?? '')),
         'learner_id' => trim((string) ($_GET['learner_id'] ?? '')),
     ];
@@ -110,11 +136,6 @@ function attendance_report_filter_conditions(array $filters, array &$params, str
 {
     $conditions = [];
 
-    if ($filters['grade_level'] !== '') {
-        $conditions[] = "{$enrollmentAlias}.grade_level = :grade_level";
-        $params['grade_level'] = $filters['grade_level'];
-    }
-
     if ($filters['section_id'] !== '') {
         $conditions[] = "COALESCE({$enrollmentAlias}.section_id, 0) = :section_id";
         $params['section_id'] = (int) $filters['section_id'];
@@ -141,15 +162,15 @@ function attendance_report_meta(string $reportType): array
     return match ($reportType) {
         'daily_attendance' => array_merge($defaults, [
             'title' => 'Daily Attendance Report', 'description' => 'Attendance snapshot for the selected day.',
-            'filters' => ['report_date', 'grade_level', 'section_id'], 'is_selected' => true,
+            'filters' => ['report_date', 'section_id'], 'is_selected' => true,
         ]),
         'monthly_summary' => array_merge($defaults, [
             'title' => 'Monthly Attendance Summary', 'description' => 'Monthly attendance counts by learner.',
-            'filters' => ['report_month', 'grade_level', 'section_id'], 'is_selected' => true,
+            'filters' => ['report_month', 'section_id'], 'is_selected' => true,
         ]),
         'section_attendance' => array_merge($defaults, [
             'title' => 'Section Attendance Report', 'description' => 'Section-filtered attendance for the selected day.',
-            'filters' => ['report_date', 'grade_level', 'section_id'], 'is_selected' => true,
+            'filters' => ['report_date', 'section_id'], 'is_selected' => true,
         ]),
         'learner_history' => array_merge($defaults, [
             'title' => 'Learner Attendance History', 'description' => 'Date-by-date attendance history for the selected learner.',
@@ -157,11 +178,11 @@ function attendance_report_meta(string $reportType): array
         ]),
         'late_absence' => array_merge($defaults, [
             'title' => 'Late and Absence Report', 'description' => 'Learners with late, absent, or excused records in the selected range.',
-            'filters' => ['date_range', 'grade_level', 'section_id', 'learner_id'], 'is_selected' => true,
+            'filters' => ['date_range', 'section_id', 'learner_id'], 'is_selected' => true,
         ]),
         'attendance_logs' => array_merge($defaults, [
             'title' => 'Attendance Log Report', 'description' => 'Raw attendance scan entries for auditing and troubleshooting.',
-            'filters' => ['date_range', 'grade_level', 'section_id', 'learner_id'], 'is_selected' => true,
+            'filters' => ['date_range', 'section_id', 'learner_id'], 'is_selected' => true,
         ]),
         default => $defaults,
     };
@@ -221,6 +242,7 @@ function attendance_report_daily(array $filters): array
                 l.first_name,
                 IF(l.middle_name IS NULL OR l.middle_name = \'\', \'\', CONCAT(\' \', l.middle_name))
             ) AS learner_name,
+            l.sex,
             le.grade_level,
             COALESCE(s.name, \'Unassigned\') AS section_name,
             COALESCE(al.label, \'No record\') AS attendance_status,
@@ -237,7 +259,7 @@ function attendance_report_daily(array $filters): array
          LEFT JOIN attendance_legends al ON al.id = ar.legend_id
          WHERE le.school_year_id = :school_year_id' .
          ($conditions !== [] ? ' AND ' . implode(' AND ', $conditions) : '') . '
-         ORDER BY le.grade_level ASC, section_name ASC, l.last_name ASC, l.first_name ASC'
+         ORDER BY le.grade_level ASC, section_name ASC, ' . attendance_report_learner_order_sql('l')
     );
     $statement->execute($params);
 
@@ -265,6 +287,7 @@ function attendance_report_monthly_summary(array $filters): array
         'SELECT
             l.id AS learner_id,
             l.learner_number,
+            l.sex,
             CONCAT(l.last_name, \', \', l.first_name) AS learner_name,
             le.grade_level,
             COALESCE(s.name, \'Unassigned\') AS section_name,
@@ -280,7 +303,7 @@ function attendance_report_monthly_summary(array $filters): array
          LEFT JOIN attendance_legends al ON al.id = ar.legend_id
          WHERE le.school_year_id = :school_year_id' .
          ($conditions !== [] ? ' AND ' . implode(' AND ', $conditions) : '') . '
-         ORDER BY le.grade_level ASC, section_name ASC, l.last_name ASC, ar.attendance_date ASC'
+         ORDER BY ' . attendance_report_learner_order_sql('l') . ', ar.attendance_date ASC'
     );
     $statement->execute($params);
 
@@ -293,13 +316,14 @@ function attendance_report_monthly_summary(array $filters): array
         $learnerId = (int) $rawRow['learner_id'];
 
         if ($filters['section_id'] !== '' && $rawRow['section_name'] !== '') {
-            $sectionLabel = (string) $rawRow['section_name'];
+            $sectionLabel = (string) $rawRow['grade_level'] . ' - ' . (string) $rawRow['section_name'];
         }
 
         if (!isset($rows[$learnerId])) {
             $rows[$learnerId] = [
                 'no' => count($rows) + 1,
                 'learner_name' => $rawRow['learner_name'],
+                'sex' => $rawRow['sex'] ?? null,
                 'grade_level' => $rawRow['grade_level'],
                 'section_name' => $rawRow['section_name'],
                 'days' => array_fill(1, $daysInMonth, ''),
@@ -338,8 +362,14 @@ function attendance_report_monthly_summary(array $filters): array
         }
     }
 
+    $sortedRows = attendance_report_sort_rows_by_sex_and_name(array_values($rows));
+    foreach ($sortedRows as $index => &$row) {
+        $row['no'] = $index + 1;
+    }
+    unset($row);
+
     return [
-        'rows' => array_values($rows),
+        'rows' => $sortedRows,
         'days_in_month' => range(1, $daysInMonth),
         'day_totals' => $dayTotals,
         'section_label' => $sectionLabel,
@@ -380,7 +410,7 @@ function attendance_report_section(array $filters): array
          LEFT JOIN attendance_legends al ON al.id = ar.legend_id
          WHERE le.school_year_id = :school_year_id' .
          ($conditions !== [] ? ' AND ' . implode(' AND ', $conditions) : '') . '
-         ORDER BY le.grade_level ASC, section_name ASC, l.last_name ASC'
+         ORDER BY le.grade_level ASC, section_name ASC, ' . attendance_report_learner_order_sql('l')
     );
     $statement->execute($params);
 
@@ -448,6 +478,7 @@ function attendance_report_late_absence(array $filters): array
         'SELECT
             l.learner_number,
             l.lrn,
+            l.sex,
             CONCAT(l.last_name, \', \', l.first_name) AS learner_name,
             le.grade_level,
             COALESCE(s.name, \'Unassigned\') AS section_name,
@@ -463,9 +494,9 @@ function attendance_report_late_absence(array $filters): array
          INNER JOIN attendance_legends al ON al.id = ar.legend_id
          WHERE le.school_year_id = :school_year_id' .
          ($conditions !== [] ? ' AND ' . implode(' AND ', $conditions) : '') . '
-         GROUP BY l.id, l.learner_number, l.lrn, l.last_name, l.first_name, le.grade_level, s.name
+         GROUP BY l.id, l.learner_number, l.lrn, l.sex, l.last_name, l.first_name, le.grade_level, s.name
          HAVING late_count > 0 OR absent_count > 0 OR excused_count > 0
-         ORDER BY absent_count DESC, late_count DESC, learner_name ASC'
+         ORDER BY absent_count DESC, late_count DESC, ' . attendance_report_learner_order_sql('l')
     );
     $statement->execute($params);
 

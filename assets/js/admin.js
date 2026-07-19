@@ -218,4 +218,33 @@
 
     syncAgeDisplays();
     syncForViewport();
+
+    function initAnnouncementModal() {
+        const modal = document.getElementById('announcement-modal');
+        const closeButton = document.getElementById('close-announcement-modal');
+
+        if (!modal || !closeButton) {
+            return;
+        }
+
+        function closeModal() {
+            modal.classList.remove('is-open');
+        }
+
+        closeButton.addEventListener('click', closeModal);
+
+        modal.addEventListener('click', function (event) {
+            if (event.target === modal) {
+                closeModal();
+            }
+        });
+
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape' && modal.classList.contains('is-open')) {
+                closeModal();
+            }
+        });
+    }
+
+    initAnnouncementModal();
 })();

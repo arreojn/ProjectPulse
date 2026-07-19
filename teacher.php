@@ -10,6 +10,8 @@ require_once __DIR__ . '/app/learners.php';
 require_once __DIR__ . '/app/parents.php';
 require_once __DIR__ . '/app/teachers.php';
 require_once __DIR__ . '/app/grades.php';
+require_once __DIR__ . '/app/announcements.php';
+require_once __DIR__ . '/app/theme_settings.php';
 
 function teacher_module_url(string $module, array $params = []): string
 {
@@ -118,25 +120,25 @@ $allowedModules = [
         'title' => 'Link Parent Account',
         'description' => 'Attach an existing parent account to one learner in your assigned section.',
     ],
-    'parent_links' => [
-        'eyebrow' => 'Parent Account',
-        'title' => 'Parents Link In The Section',
-        'description' => 'Review the parent accounts already connected to your advisory learners.',
-    ],
     'grades_import' => [
         'eyebrow' => 'Grades',
         'title' => 'Import Grades',
         'description' => 'Upload subject grades for learners inside your assigned section and review imported records.',
     ],
-    'imported_grades' => [
-        'eyebrow' => 'Grades',
-        'title' => 'Imported Grades',
-        'description' => 'Inspect imported grade details for one learner at a time.',
-    ],
     'learner_profiles' => [
         'eyebrow' => 'Learner Profile',
         'title' => 'Learner Basic Profile',
         'description' => 'Import or update birthdate, age basis, mother tongue, religion, and address details.',
+    ],
+    'announcements' => [
+        'eyebrow' => 'Communication',
+        'title' => 'Announcements',
+        'description' => 'Post announcements for parents of your advisory learners.',
+    ],
+    'settings' => [
+        'eyebrow' => 'Account',
+        'title' => 'Settings',
+        'description' => 'Manage your portal and account settings.',
     ],
 ];
 
@@ -154,6 +156,12 @@ $existingParentForm = parent_account_form_defaults([
     'relationship' => 'Parent/Guardian',
 ]);
 $profileForm = learner_profile_form_defaults();
+$announcementForm = ['id' => null, 'title' => '', 'content' => '', 'is_published' => 0];
+$announcementRows = [];
+$adminAnnouncements = [];
+$settingsFlash = flash_get('teacher_settings');
+$activeThemeKey = 'default';
+$announcementEditId = isset($_GET['edit_announcement_id']) ? (int) $_GET['edit_announcement_id'] : null;
 $profileFormFromPost = false;
 $section = teacher_assigned_section((int) $user['id']);
 
@@ -233,6 +241,24 @@ if (is_post()) {
             flash_set('teacher_dashboard', 'Imported ' . $importedCount . ' learner basic profile row(s) successfully.');
             redirect('teacher.php?module=learner_profiles');
         }
+
+        if ($formAction === 'save_announcement') {
+            announcement_save($_POST, (int) $user['id']);
+            flash_set('teacher_dashboard', 'Announcement saved successfully.');
+            redirect('teacher.php?module=announcements');
+        }
+
+        if ($formAction === 'delete_announcement') {
+            announcement_delete((int) ($_POST['announcement_id'] ?? 0));
+            flash_set('teacher_dashboard', 'Announcement deleted successfully.');
+            redirect('teacher.php?module=announcements');
+        }
+
+        if ($formAction === 'save_theme') {
+            theme_colors_save((string) ($_POST['theme_key'] ?? ''));
+            flash_set('teacher_settings', 'Theme saved successfully.');
+            redirect('teacher.php?module=settings');
+        }
     } catch (Throwable $exception) {
         $teacherFlash = [
             'type' => 'error',
@@ -241,10 +267,28 @@ if (is_post()) {
     }
 }
 
+if ($module === 'announcements') {
+    announcements_bootstrap();
+    $announcementRows = announcement_list(['user_id' => (int) $user['id']]);
+
+    if ($announcementEditId !== null) {
+        $existingAnnouncement = announcement_find($announcementEditId);
+        if ($existingAnnouncement !== null && (int) $existingAnnouncement['created_by_user_id'] === (int) $user['id']) {
+            $announcementForm = $existingAnnouncement;
+        }
+    }
+}
+
+if ($module === 'settings') {
+    theme_settings_bootstrap();
+    $activeThemeKey = theme_active_key();
+}
+
 $sectionLearners = $section === null ? [] : teacher_section_learners((int) $user['id']);
 $parentLinks = $section === null ? [] : teacher_section_parent_links((int) $user['id']);
 $gradeRows = $section === null ? [] : grade_teacher_section_rows((int) $user['id']);
 $usesSeniorGradeLayout = $section !== null && grade_is_senior_high((string) $section['grade_level']);
+$parentAccountOptions = in_array($module, ['create_parent_account', 'link_parent_account'], true) ? parent_account_options() : [];
 $linkedLearnerCount = count(array_filter(
     $sectionLearners,
     static fn (array $learner): bool => (int) $learner['linked_parent_count'] > 0
@@ -278,6 +322,11 @@ $referenceYear = $section !== null && !empty($section['school_year_start_date'])
     ? (int) substr((string) $section['school_year_start_date'], 0, 4)
     : (int) date('Y');
 $ageReferenceDate = learner_first_friday_of_june($referenceYear);
+
+if ($module === 'dashboard') {
+    announcements_bootstrap();
+    $adminAnnouncements = announcement_list(['role' => 'admin', 'is_published' => 1]);
+}
 $ageReferenceLabel = teacher_format_date($ageReferenceDate, 'F j, Y');
 
 $selectedGradeLearnerId = isset($_GET['grade_learner_id']) ? (int) $_GET['grade_learner_id'] : 0;
@@ -314,6 +363,7 @@ $pageMeta = $allowedModules[$module];
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <?php echo theme_stylesheet_markup(); ?>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo escape(APP_NAME); ?> Teacher Portal</title>
     <link rel="stylesheet" href="<?php echo escape(asset_url('assets/css/app.css')); ?>">
@@ -355,23 +405,28 @@ $pageMeta = $allowedModules[$module];
                         <a href="<?php echo escape(teacher_module_url('create_parent_account')); ?>" class="submenu-link<?php echo $module === 'create_parent_account' ? ' active' : ''; ?>">Create Parent Account</a>
                         <a href="<?php echo escape(teacher_module_url('parent_accounts_import')); ?>" class="submenu-link<?php echo $module === 'parent_accounts_import' ? ' active' : ''; ?>">Import</a>
                         <a href="<?php echo escape(teacher_module_url('link_parent_account')); ?>" class="submenu-link<?php echo $module === 'link_parent_account' ? ' active' : ''; ?>">Link Parent Account</a>
-                        <a href="<?php echo escape(teacher_module_url('parent_links')); ?>" class="submenu-link<?php echo $module === 'parent_links' ? ' active' : ''; ?>">Parents Link In The Section</a>
                     </div>
 
                     <div class="menu-group">
                         <p class="menu-group-title">Grades</p>
                         <a href="<?php echo escape(teacher_module_url('grades_import')); ?>" class="submenu-link<?php echo $module === 'grades_import' ? ' active' : ''; ?>">Import Grades</a>
-                        <a href="<?php echo escape(teacher_module_url('imported_grades')); ?>" class="submenu-link<?php echo $module === 'imported_grades' ? ' active' : ''; ?>">Imported Grades</a>
                     </div>
 
                     <div class="menu-group">
                         <p class="menu-group-title">Learner Profile</p>
                         <a href="<?php echo escape(teacher_module_url('learner_profiles')); ?>" class="submenu-link<?php echo $module === 'learner_profiles' ? ' active' : ''; ?>">Basic Profile</a>
                     </div>
+                    <div class="menu-group">
+                        <p class="menu-group-title">Communication</p>
+                        <a href="<?php echo escape(teacher_module_url('announcements')); ?>" class="submenu-link<?php echo $module === 'announcements' ? ' active' : ''; ?>">Announcements</a>
+                    </div>
+                    <div class="menu-group">
+                        <p class="menu-group-title">Account</p>
+                        <a href="<?php echo escape(teacher_module_url('settings')); ?>" class="submenu-link<?php echo $module === 'settings' ? ' active' : ''; ?>">Settings</a>
+                    </div>
                 </nav>
 
                 <div class="sidebar-footer">
-                    <a href="<?php echo escape(route_url('change_password.php')); ?>" class="secondary-link full-width-link">Change Password</a>
                     <a href="<?php echo escape(route_url('logout.php')); ?>" class="secondary-link full-width-link">Logout</a>
                 </div>
             </aside>
@@ -726,7 +781,22 @@ $pageMeta = $allowedModules[$module];
 
                             <div class="report-filter-field report-filter-field-wide">
                                 <label for="existing_identity">Parent Username or Email</label>
-                                <input id="existing_identity" name="identity" type="text" value="<?php echo escape($existingParentForm['identity']); ?>" required>
+                                <select id="existing_identity" name="identity" required>
+                                    <option value="">Select from existing parent accounts</option>
+                                    <?php if ($parentAccountOptions === []): ?>
+                                        <option value="" disabled>No parent accounts exist yet</option>
+                                    <?php else: ?>
+                                        <?php foreach ($parentAccountOptions as $parent): ?>
+                                            <?php
+                                            $parentName = trim(($parent['last_name'] ?? '') . ', ' . ($parent['first_name'] ?? ''));
+                                            $parentLabel = $parentName !== ',' ? $parentName : ($parent['username'] ?? '');
+                                            ?>
+                                            <option value="<?php echo escape($parent['username']); ?>"<?php echo $existingParentForm['identity'] === $parent['username'] ? ' selected' : ''; ?>>
+                                                <?php echo escape($parentLabel . ' (' . $parent['username'] . ')'); ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
+                                </select>
                             </div>
 
                             <div class="report-filter-field">
@@ -755,7 +825,7 @@ $pageMeta = $allowedModules[$module];
                             </div>
                         </form>
                     </article>
-                <?php elseif ($module === 'parent_links'): ?>
+
                     <article class="teacher-panel-card">
                         <div class="panel-heading compact-heading">
                             <h2>Parent Links in Your Section</h2>
@@ -765,34 +835,34 @@ $pageMeta = $allowedModules[$module];
                         <div class="table-shell">
                             <table class="records-table">
                                 <thead>
-                                    <tr>
-                                        <th>Learner</th>
-                                        <th>LRN</th>
-                                        <th>Parent</th>
-                                        <th>Username</th>
-                                        <th>Email</th>
-                                        <th>Relationship</th>
-                                        <th>Primary</th>
-                                    </tr>
+                                <tr>
+                                    <th>Learner</th>
+                                    <th>LRN</th>
+                                    <th>Parent</th>
+                                    <th>Username</th>
+                                    <th>Email</th>
+                                    <th>Relationship</th>
+                                    <th>Primary</th>
+                                </tr>
                                 </thead>
                                 <tbody>
-                                    <?php if ($parentLinks === []): ?>
+                                <?php if ($parentLinks === []): ?>
+                                    <tr>
+                                        <td colspan="7" class="empty-row">No parent accounts are linked to this section yet.</td>
+                                    </tr>
+                                <?php else: ?>
+                                    <?php foreach ($parentLinks as $link): ?>
                                         <tr>
-                                            <td colspan="7" class="empty-row">No parent accounts are linked to this section yet.</td>
+                                            <td><?php echo escape($link['learner_name']); ?></td>
+                                            <td><?php echo escape($link['lrn']); ?></td>
+                                            <td><?php echo escape($link['parent_name']); ?></td>
+                                            <td><?php echo escape($link['parent_username']); ?></td>
+                                            <td><?php echo escape($link['parent_email']); ?></td>
+                                            <td><?php echo escape($link['relationship']); ?></td>
+                                            <td><?php echo (int) $link['is_primary_contact'] === 1 ? 'Yes' : 'No'; ?></td>
                                         </tr>
-                                    <?php else: ?>
-                                        <?php foreach ($parentLinks as $link): ?>
-                                            <tr>
-                                                <td><?php echo escape($link['learner_name']); ?></td>
-                                                <td><?php echo escape($link['lrn']); ?></td>
-                                                <td><?php echo escape($link['parent_name']); ?></td>
-                                                <td><?php echo escape($link['parent_username']); ?></td>
-                                                <td><?php echo escape($link['parent_email']); ?></td>
-                                                <td><?php echo escape($link['relationship']); ?></td>
-                                                <td><?php echo (int) $link['is_primary_contact'] === 1 ? 'Yes' : 'No'; ?></td>
-                                            </tr>
-                                        <?php endforeach; ?>
-                                    <?php endif; ?>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
                                 </tbody>
                             </table>
                         </div>
@@ -887,7 +957,7 @@ $pageMeta = $allowedModules[$module];
                             </table>
                         </div>
                     </article>
-                <?php elseif ($module === 'imported_grades'): ?>
+
                     <article class="teacher-panel-card">
                         <div class="panel-heading compact-heading">
                             <h2>Select Learner</h2>
@@ -895,7 +965,7 @@ $pageMeta = $allowedModules[$module];
                         </div>
 
                         <form method="get" class="report-filter-grid">
-                            <input type="hidden" name="module" value="imported_grades">
+                            <input type="hidden" name="module" value="grades_import">
 
                             <div class="report-filter-field report-filter-field-wide">
                                 <label for="grade_learner_id">Learner</label>
@@ -941,45 +1011,45 @@ $pageMeta = $allowedModules[$module];
                             <div class="table-shell">
                                 <table class="records-table report-table">
                                     <thead>
-                                        <tr>
-                                            <th>Subject</th>
-                                            <th>Q1</th>
-                                            <th>Q2</th>
-                                            <?php if ($usesSeniorGradeLayout): ?>
-                                                <th>1st Sem Avg</th>
-                                            <?php endif; ?>
-                                            <th>Q3</th>
-                                            <th>Q4</th>
-                                            <?php if ($usesSeniorGradeLayout): ?>
-                                                <th>2nd Sem Avg</th>
-                                            <?php else: ?>
-                                                <th>Average</th>
-                                            <?php endif; ?>
-                                            <th>Final Avg</th>
-                                            <th>Remarks</th>
-                                        </tr>
+                                    <tr>
+                                        <th>Subject</th>
+                                        <th>Q1</th>
+                                        <th>Q2</th>
+                                        <?php if ($usesSeniorGradeLayout): ?>
+                                            <th>1st Sem Avg</th>
+                                        <?php endif; ?>
+                                        <th>Q3</th>
+                                        <th>Q4</th>
+                                        <?php if ($usesSeniorGradeLayout): ?>
+                                            <th>2nd Sem Avg</th>
+                                        <?php else: ?>
+                                            <th>Average</th>
+                                        <?php endif; ?>
+                                        <th>Final Avg</th>
+                                        <th>Remarks</th>
+                                    </tr>
                                     </thead>
                                     <tbody>
-                                        <?php foreach ($selectedGradeRows as $gradeRow): ?>
-                                            <tr>
-                                                <td><?php echo escape($gradeRow['subject_name']); ?></td>
-                                                <td><?php echo escape($gradeRow['quarter_1_grade'] ?? '-'); ?></td>
-                                                <td><?php echo escape($gradeRow['quarter_2_grade'] ?? '-'); ?></td>
-                                                <?php if ($usesSeniorGradeLayout): ?>
-                                                    <td><?php echo escape($gradeRow['first_semester_average'] ?? '-'); ?></td>
-                                                <?php endif; ?>
-                                                <td><?php echo escape($gradeRow['quarter_3_grade'] ?? '-'); ?></td>
-                                                <td><?php echo escape($gradeRow['quarter_4_grade'] ?? '-'); ?></td>
-                                                <?php if ($usesSeniorGradeLayout): ?>
-                                                    <td><?php echo escape($gradeRow['second_semester_average'] ?? '-'); ?></td>
-                                                <?php else: ?>
-                                                    <?php $quarterAverage = grade_quarter_average($gradeRow); ?>
-                                                    <td><?php echo escape($quarterAverage !== null ? (string) $quarterAverage : '-'); ?></td>
-                                                <?php endif; ?>
-                                                <td><?php echo escape($gradeRow['final_average'] ?? '-'); ?></td>
-                                                <td><?php echo escape($gradeRow['remarks'] ?? '-'); ?></td>
-                                            </tr>
-                                        <?php endforeach; ?>
+                                    <?php foreach ($selectedGradeRows as $gradeRow): ?>
+                                        <tr>
+                                            <td><?php echo escape($gradeRow['subject_name']); ?></td>
+                                            <td><?php echo escape($gradeRow['quarter_1_grade'] ?? '-'); ?></td>
+                                            <td><?php echo escape($gradeRow['quarter_2_grade'] ?? '-'); ?></td>
+                                            <?php if ($usesSeniorGradeLayout): ?>
+                                                <td><?php echo escape($gradeRow['first_semester_average'] ?? '-'); ?></td>
+                                            <?php endif; ?>
+                                            <td><?php echo escape($gradeRow['quarter_3_grade'] ?? '-'); ?></td>
+                                            <td><?php echo escape($gradeRow['quarter_4_grade'] ?? '-'); ?></td>
+                                            <?php if ($usesSeniorGradeLayout): ?>
+                                                <td><?php echo escape($gradeRow['second_semester_average'] ?? '-'); ?></td>
+                                            <?php else: ?>
+                                                <?php $quarterAverage = grade_quarter_average($gradeRow); ?>
+                                                <td><?php echo escape($quarterAverage !== null ? (string) $quarterAverage : '-'); ?></td>
+                                            <?php endif; ?>
+                                            <td><?php echo escape($gradeRow['final_average'] ?? '-'); ?></td>
+                                            <td><?php echo escape($gradeRow['remarks'] ?? '-'); ?></td>
+                                        </tr>
+                                    <?php endforeach; ?>
                                     </tbody>
                                 </table>
                             </div>
@@ -1179,10 +1249,169 @@ $pageMeta = $allowedModules[$module];
                             </table>
                         </div>
                     </article>
+                <?php elseif ($module === 'announcements'): ?>
+                    <section>
+                        <article class="admin-module-card">
+                            <div class="panel-heading compact-heading">
+                                <h2><?php echo $announcementForm['id'] === null ? 'Create Announcement' : 'Edit Announcement'; ?></h2>
+                                <p>Published announcements will be visible to parents of your advisory learners.</p>
+                            </div>
+
+                            <form method="post" class="learner-form-grid">
+                                <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
+                                <input type="hidden" name="form_action" value="save_announcement">
+                                <input type="hidden" name="id" value="<?php echo escape((string) ($announcementForm['id'] ?? '')); ?>">
+
+                                <div class="teacher-form-grid-full">
+                                    <label for="announcement_title">Title</label>
+                                    <input id="announcement_title" name="title" type="text" value="<?php echo escape($announcementForm['title']); ?>" required>
+                                </div>
+
+                                <div class="teacher-form-grid-full">
+                                    <label for="announcement_content">Content</label>
+                                    <textarea id="announcement_content" name="content" rows="5" required><?php echo escape($announcementForm['content']); ?></textarea>
+                                </div>
+
+                                <div class="teacher-inline-check teacher-form-grid-full">
+                                    <label>
+                                        <input type="checkbox" name="is_published" value="1"<?php echo !empty($announcementForm['is_published']) ? ' checked' : ''; ?>>
+                                        Publish this announcement
+                                    </label>
+                                </div>
+
+                                <div class="learner-form-actions">
+                                    <button type="submit" class="primary-button"><?php echo $announcementForm['id'] === null ? 'Save Announcement' : 'Update Announcement'; ?></button>
+                                    <?php if ($announcementForm['id'] !== null): ?>
+                                        <a href="<?php echo escape(teacher_module_url('announcements')); ?>" class="secondary-link">Cancel Edit</a>
+                                    <?php endif; ?>
+                                </div>
+                            </form>
+                        </article>
+                    </section>
+
+                    <section class="admin-module-card">
+                        <div class="panel-heading compact-heading">
+                            <h2>Your Announcements</h2>
+                            <p>Review and manage your announcements.</p>
+                        </div>
+
+                        <div class="table-shell">
+                            <table class="records-table learner-table">
+                                <thead>
+                                <tr>
+                                    <th>Title</th>
+                                    <th>Status</th>
+                                    <th>Published On</th>
+                                    <th>Actions</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <?php if ($announcementRows === []): ?>
+                                    <tr>
+                                        <td colspan="4" class="empty-row">You have not created any announcements yet.</td>
+                                    </tr>
+                                <?php else: ?>
+                                    <?php foreach ($announcementRows as $announcement): ?>
+                                        <tr>
+                                            <td><?php echo escape($announcement['title']); ?></td>
+                                            <td><span class="table-status"><?php echo !empty($announcement['is_published']) ? 'Published' : 'Draft'; ?></span></td>
+                                            <td><?php echo escape($announcement['published_at'] !== null ? date('M j, Y', strtotime($announcement['published_at'])) : '-'); ?></td>
+                                            <td>
+                                                <div class="table-actions">
+                                                    <a href="<?php echo escape(teacher_module_url('announcements', ['edit_announcement_id' => $announcement['id']])); ?>" class="secondary-link small-link">Edit</a>
+                                                    <form method="post" class="inline-form" onsubmit="return confirm('Delete this announcement?');">
+                                                        <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
+                                                        <input type="hidden" name="form_action" value="delete_announcement">
+                                                        <input type="hidden" name="announcement_id" value="<?php echo escape((string) $announcement['id']); ?>">
+                                                        <button type="submit" class="danger-button">Delete</button>
+                                                    </form>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                <?php elseif ($module === 'settings'): ?>
+                    <section>
+                        <article class="teacher-panel-card">
+                            <div class="panel-heading">
+                                <h2>Portal Theme</h2>
+                                <p>Select a predefined theme for the portal.</p>
+                            </div>
+
+                            <?php if ($settingsFlash !== null): ?>
+                                <div class="alert <?php echo escape($settingsFlash['type']); ?>"><?php echo escape($settingsFlash['message']); ?></div>
+                            <?php endif; ?>
+
+                            <form method="post" class="learner-form-grid">
+                                <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
+                                <input type="hidden" name="form_action" value="save_theme">
+
+                                <div class="teacher-form-grid-full">
+                                    <label>Select Theme</label>
+                                    <div class="option-checklist">
+                                        <?php foreach (theme_predefined_sets() as $key => $theme): ?>
+                                            <label class="check-card">
+                                                <input type="radio" name="theme_key" value="<?php echo escape($key); ?>"<?php echo $activeThemeKey === $key ? ' checked' : ''; ?>>
+                                                <span>
+                                                    <?php echo escape($theme['name']); ?>
+                                                </span>
+                                            </label>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </div>
+
+                                <div class="learner-form-actions">
+                                    <button type="submit" class="primary-button">Save Theme</button>
+                                </div>
+                            </form>
+                        </article>
+                        <article class="teacher-panel-card">
+                            <div class="panel-heading compact-heading">
+                                <h2>Account Security</h2>
+                                <p>Change your login password.</p>
+                            </div>
+                            <div class="template-actions">
+                                 <a href="<?php echo escape(route_url('change_password.php')); ?>" class="secondary-link">Change Password</a>
+                            </div>
+                        </article>
+                    </section>
                 <?php endif; ?>
             </section>
         </section>
     </main>
+
+    <?php if ($module === 'dashboard' && $adminAnnouncements !== [] && !isset($_SESSION['seen_admin_announcements'])): ?>
+        <div id="announcement-modal" class="modal-backdrop is-open">
+            <div class="modal-panel">
+                <div class="panel-heading">
+                    <h2>Admin Announcements</h2>
+                    <p>Important updates from the portal administrator.</p>
+                </div>
+                <div class="teacher-link-stack">
+                    <?php foreach ($adminAnnouncements as $announcement): ?>
+                        <article class="admin-module-card">
+                            <div class="panel-heading compact-heading">
+                                <h3><?php echo escape($announcement['title']); ?></h3>
+                                <p>
+                                    Published by <?php echo escape($announcement['username'] ?? 'Admin'); ?>
+                                    on <?php echo escape(teacher_format_date($announcement['published_at'])); ?>
+                                </p>
+                            </div>
+                            <p><?php echo escape($announcement['content']); ?></p>
+                        </article>
+                    <?php endforeach; ?>
+                </div>
+                <div class="modal-actions">
+                    <button id="close-announcement-modal" type="button" class="primary-button">Close</button>
+                </div>
+            </div>
+        </div>
+        <?php $_SESSION['seen_admin_announcements'] = true; ?>
+    <?php endif; ?>
 
     <script src="<?php echo escape(asset_url('assets/js/admin.js')); ?>"></script>
 </body>

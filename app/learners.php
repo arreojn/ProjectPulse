@@ -323,11 +323,15 @@ function learner_find(int $learnerId): ?array
             l.sex,
             l.current_status,
             COALESCE(le.grade_level, \'\') AS grade_level,
-            COALESCE(le.section_id, \'\') AS section_id
+            COALESCE(le.section_id, \'\') AS section_id,
+            COALESCE(s.name, \'Unassigned\') AS section_name,
+            sy.label AS school_year_label
          FROM learners l
          LEFT JOIN learner_enrollments le
             ON le.learner_id = l.id
            AND le.school_year_id = :school_year_id
+         LEFT JOIN sections s ON s.id = le.section_id
+         LEFT JOIN school_years sy ON sy.id = le.school_year_id
          WHERE l.id = :learner_id
          LIMIT 1'
     );
