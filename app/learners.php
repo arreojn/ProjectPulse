@@ -245,22 +245,22 @@ function learner_list(array $filters): array
     $conditions = ['1 = 1'];
     $params = ['school_year_id' => $schoolYear['id']];
 
-    if ($filters['keyword'] !== '') {
+    if (!empty($filters['keyword'])) {
         $conditions[] = '(l.learner_number LIKE :keyword OR l.lrn LIKE :keyword OR l.first_name LIKE :keyword OR l.middle_name LIKE :keyword OR l.last_name LIKE :keyword)';
         $params['keyword'] = '%' . $filters['keyword'] . '%';
     }
 
-    if ($filters['status'] !== '') {
+    if (!empty($filters['status'])) {
         $conditions[] = 'l.current_status = :status';
         $params['status'] = $filters['status'];
     }
 
-    if ($filters['grade_level'] !== '') {
+    if (!empty($filters['grade_level'])) {
         $conditions[] = 'COALESCE(le.grade_level, \'\') = :grade_level';
         $params['grade_level'] = $filters['grade_level'];
     }
 
-    if ($filters['section_id'] !== '') {
+    if (!empty($filters['section_id'])) {
         $conditions[] = 'COALESCE(le.section_id, 0) = :section_id';
         $params['section_id'] = (int) $filters['section_id'];
     }

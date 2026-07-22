@@ -556,7 +556,7 @@ foreach ($attendanceGradeRows as $row) {
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <?php echo theme_settings_stylesheet_markup(); ?>
+    <?php echo theme_stylesheet_markup(); ?>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo escape(APP_NAME); ?> Admin</title>
     <link rel="stylesheet" href="<?php echo escape(asset_url('assets/css/app.css')); ?>">
@@ -623,6 +623,8 @@ foreach ($attendanceGradeRows as $row) {
 
                         <div class="topbar-actions">
                             <a href="<?php echo escape(route_url('attendance.php')); ?>" class="primary-button">Open Attendance Station</a>
+                            <a href="<?php echo escape(route_url('face_enrollment.php')); ?>" class="secondary-link">Face Enrollment</a>
+                            <a href="<?php echo escape(route_url('face_attendance.php')); ?>" class="ghost-button">Face Recognition Station</a>
                         </div>
                     </header>
 

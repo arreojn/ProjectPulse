@@ -187,6 +187,8 @@ h3 {
     grid-template-columns: 60px minmax(0, 1fr);
     align-items: center;
     gap: 14px;
+    width: 380px;
+    max-width: 100%;
 }
 
 label {
@@ -406,7 +408,7 @@ textarea:focus {
 
 .dashboard-grid.expanded {
     display: grid;
-    grid-template-columns: 420px minmax(0, 1fr);
+    grid-template-columns: minmax(340px, 0.6fr) minmax(0, 1.4fr);
     gap: 12px;
     align-items: stretch;
     min-height: calc(100vh - 144px);
@@ -547,7 +549,9 @@ textarea:focus {
 
 .scan-head {
     display: grid;
-    grid-template-columns: minmax(0, 0.9fr) minmax(360px, 1.1fr);
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
     gap: 12px;
     align-items: end;
 }
@@ -1185,7 +1189,7 @@ textarea:focus {
 
 .parent-portal-grid {
     display: grid;
-    grid-template-columns: 360px minmax(0, 1fr);
+    grid-template-columns: minmax(340px, 0.8fr) minmax(0, 1.2fr);
     gap: 14px;
     align-items: start;
 }
@@ -1305,7 +1309,7 @@ textarea:focus {
 
 .teacher-portal-grid {
     display: grid;
-    grid-template-columns: 360px minmax(0, 1fr);
+    grid-template-columns: minmax(340px, 0.8fr) minmax(0, 1.2fr);
     gap: 14px;
     align-items: start;
 }

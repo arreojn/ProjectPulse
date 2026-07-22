@@ -8,6 +8,7 @@ require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/app/auth.php';
 require_once __DIR__ . '/app/learners.php';
 require_once __DIR__ . '/app/health.php';
+require_once __DIR__ . '/app/theme_settings.php';
 
 function health_module_url(string $module, array $params = []): string
 {
@@ -59,15 +60,13 @@ function health_portal_sex_label(?string $sex): string
 function health_portal_filter_label(array $filters, array $sectionOptions): string
 {
     $parts = [];
+    $gradeSectionFilter = $filters['grade_section_filter'] ?? 'all|all';
 
-    if (($filters['grade_level'] ?? '') !== '') {
-        $parts[] = (string) $filters['grade_level'];
-    }
-
-    if (($filters['section_id'] ?? '') !== '') {
-        foreach ($sectionOptions as $section) {
-            if ((string) $section['id'] === (string) $filters['section_id']) {
-                $parts[] = (string) $section['name'];
+    // Find the label for the selected grade_section_filter from the full dropdown options
+    foreach ($sectionOptions as $option) {
+        if ($option['value'] === $gradeSectionFilter) {
+            if ($option['value'] !== 'all|all') { // Only add if not the "All" default
+                $parts[] = $option['label'];
                 break;
             }
         }
@@ -86,6 +85,7 @@ function health_portal_filter_label(array $filters, array $sectionOptions): stri
 
 learner_management_bootstrap();
 health_portal_bootstrap();
+theme_settings_bootstrap();
 
 $user = require_roles(['health']);
 $allowedModules = [
@@ -124,16 +124,20 @@ if (!isset($allowedModules[$module])) {
 
 $healthFlash = flash_get('health_portal');
 $schoolYear = current_school_year();
-$filters = health_filter_defaults($_GET);
-$sectionOptions = $schoolYear !== null ? health_filter_section_options($filters['grade_level']) : [];
+$filters = health_filter_defaults($_GET); // This will now parse grade_section_filter
+$sectionOptions = $schoolYear !== null ? health_filter_section_options($filters['grade_level']) : []; // Still needed for some internal logic, but not for dropdown
+$allSectionDropdownOptions = health_filter_section_options_for_dropdown(); // New function for the combined dropdown
+
 $learnerRows = [];
 $bmiReportRows = [];
 $dewormingRows = [];
 $feedingCandidates = [];
 $feedingRecipients = [];
 $dashboardBmiRows = [];
-$dashboardBmiTotal = 0;
-$dashboardBmiMax = 0;
+$dashboardDewormingCounts = [];
+$dashboardFeedingCounts = [];
+$bmiRemarksForSelectedFilter = [];
+$dewormingStatusForSelectedFilter = [];
 $dashboardStats = [
     'total_learners' => 0,
     'measured_learners' => 0,
@@ -152,7 +156,7 @@ if (is_post()) {
         $redirectModule = (string) ($_POST['redirect_module'] ?? $module);
 
         if (!isset($allowedModules[$redirectModule])) {
-            $redirectModule = $module;
+            $redirectModule = $module; // Fallback to current module
         }
 
         $formAction = (string) ($_POST['form_action'] ?? '');
@@ -229,15 +233,21 @@ if (is_post()) {
 if ($schoolYear !== null) {
     try {
         $dashboardStats = health_dashboard_stats();
+        $dashboardBmiRows = health_dashboard_bmi_remarks_rows();
+        $dashboardDewormingCounts = health_deworming_status_counts();
+        $dashboardFeedingCounts = health_feeding_program_status_counts();
 
         if ($module === 'learner_bmi') {
             $learnerRows = health_learner_rows($filters);
+            $bmiRemarksForSelectedFilter = health_dashboard_bmi_remarks_rows($filters);
         } elseif ($module === 'bmi_reports') {
             $bmiReportRows = health_learner_rows($filters);
         } elseif ($module === 'deworming') {
             $dewormingRows = health_deworming_rows($filters);
+            $dewormingStatusForSelectedFilter = health_deworming_status_counts($filters);
         } elseif ($module === 'feeding_program') {
             $feedingCandidates = health_feeding_candidate_rows($filters);
+            // The feeding_recipient_rows function already filters by the provided filters
             $feedingRecipients = health_feeding_recipient_rows($filters);
         }
     } catch (Throwable $exception) {
@@ -249,7 +259,7 @@ if ($schoolYear !== null) {
 }
 
 $pageMeta = $allowedModules[$module];
-$filterLabel = health_portal_filter_label($filters, $sectionOptions);
+$filterLabel = health_portal_filter_label($filters, $allSectionDropdownOptions);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -257,6 +267,122 @@ $filterLabel = health_portal_filter_label($filters, $sectionOptions);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo escape(APP_NAME); ?> Health Coordinator Portal</title>
+    <?php echo theme_stylesheet_markup(); ?>
+    <style>
+        .chart-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: space-around;
+            margin-top: 20px;
+        }
+        .chart-card {
+            background: var(--surface-strong);
+            border: 1px solid var(--line);
+            border-radius: 28px;
+            box-shadow: var(--shadow);
+            padding: 20px;
+            flex: 1;
+            min-width: 300px;
+            max-width: 45%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .chart-title {
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: var(--ink);
+        }
+        .pie-chart {
+            width: 180px;
+            height: 180px;
+            border-radius: 50%;
+            background: conic-gradient(
+                var(--success) 0% var(--slice1),
+                var(--warning) var(--slice1) var(--slice2),
+                var(--danger) var(--slice2) var(--slice3),
+                var(--info) var(--slice3) var(--slice4),
+                var(--muted) var(--slice4) 100%
+            );
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.9rem;
+            color: var(--surface-strong);
+            font-weight: 600;
+            position: relative;
+        }
+        .pie-chart::before {
+            content: '';
+            position: absolute;
+            background: var(--surface-strong);
+            border-radius: 50%;
+            width: 60%;
+            height: 60%;
+        }
+        .pie-chart span {
+            position: relative;
+            z-index: 1;
+            color: var(--ink);
+        }
+        .chart-legend {
+            margin-top: 20px;
+            width: 100%;
+        }
+        .chart-legend-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            font-size: 0.9rem;
+        }
+        .chart-legend-item span:first-child {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .chart-legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 3px;
+        }
+        .bar-chart-container {
+            width: 100%;
+            height: 150px;
+            display: flex;
+            align-items: flex-end;
+            gap: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--line);
+        }
+        .bar-chart-bar {
+            flex: 1;
+            background-color: var(--accent);
+            border-radius: 5px 5px 0 0;
+            position: relative;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            color: var(--surface-strong);
+            font-size: 0.8rem;
+            font-weight: bold;
+            transition: height 0.5s ease-out;
+        }
+        .bar-chart-bar span {
+            position: absolute;
+            top: -20px;
+            color: var(--ink);
+            font-size: 0.75rem;
+            font-weight: normal;
+        }
+        .bar-chart-label {
+            text-align: center;
+            font-size: 0.8rem;
+            color: var(--muted);
+            margin-top: 5px;
+        }
+    </style>
     <link rel="stylesheet" href="<?php echo escape(asset_url('assets/css/app.css')); ?>">
 </head>
 <body class="dashboard-body admin-dashboard">
@@ -391,22 +517,107 @@ $filterLabel = health_portal_filter_label($filters, $sectionOptions);
                                 </div>
                                 <div>
                                     <dt>Second Dose Records</dt>
-                                    <dd><?php echo escape((string) $dashboardStats['second_dose_count']); ?></dd>
+                                    <dd><?php echo escape((string) $dashboardDewormingCounts['second_dose_count']); ?></dd>
                                 </div>
                             </dl>
                         </article>
 
-                        <article class="teacher-panel-card">
-                            <div class="panel-heading compact-heading">
-                                <h2>Quick Actions</h2>
-                                <p>Jump directly into the most-used health coordination tasks.</p>
-                            </div>
+                        <!-- Removed Quick Actions Card as per request -->
+                    </section>
 
-                            <div class="teacher-link-stack">
-                                <a href="<?php echo escape(health_module_url('learner_bmi')); ?>" class="secondary-link">Update Height and Weight</a>
-                                <a href="<?php echo escape(health_module_url('bmi_reports')); ?>" class="secondary-link">Print BMI Reports</a>
-                                <a href="<?php echo escape(health_module_url('deworming')); ?>" class="secondary-link">Assign Deworming Dose</a>
-                                <a href="<?php echo escape(health_module_url('feeding_program')); ?>" class="secondary-link">Manage Feeding Recipients</a>
+                    <section class="chart-container">
+                        <article class="chart-card">
+                            <h3 class="chart-title">BMI Remarks Distribution</h3>
+                            <?php
+                                $bmiTotal = array_sum(array_column($dashboardBmiRows, 'total'));
+                                $slice1 = health_portal_percent($dashboardBmiRows[0]['total'] ?? 0, $bmiTotal);
+                                $slice2 = $slice1 + health_portal_percent($dashboardBmiRows[1]['total'] ?? 0, $bmiTotal);
+                                $slice3 = $slice2 + health_portal_percent($dashboardBmiRows[2]['total'] ?? 0, $bmiTotal);
+                                $slice4 = $slice3 + health_portal_percent($dashboardBmiRows[3]['total'] ?? 0, $bmiTotal);
+                            ?>
+                            <div class="pie-chart" style="
+                                --slice1: <?php echo escape((string) $slice1); ?>%;
+                                --slice2: <?php echo escape((string) $slice2); ?>%;
+                                --slice3: <?php echo escape((string) $slice3); ?>%;
+                                --slice4: <?php echo escape((string) $slice4); ?>%;
+                            ">
+                                <span><?php echo escape((string) $bmiTotal); ?> Learners</span>
+                            </div>
+                            <div class="chart-legend">
+                                <?php foreach ($dashboardBmiRows as $bmiRow): ?>
+                                    <div class="chart-legend-item">
+                                        <span>
+                                            <span class="chart-legend-color" style="background-color: <?php echo escape($bmiRow['color']); ?>;"></span>
+                                            <?php echo escape($bmiRow['label']); ?>
+                                        </span>
+                                        <strong><?php echo escape((string) $bmiRow['total']); ?> (<?php echo escape((string) health_portal_percent($bmiRow['total'], $bmiTotal)); ?>%)</strong>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        </article>
+
+                        <article class="chart-card">
+                            <h3 class="chart-title">Deworming Status</h3>
+                            <?php
+                                $dewormingTotal = $dashboardDewormingCounts['total_learners'];
+                                $firstDosePercent = health_portal_percent($dashboardDewormingCounts['first_dose_count'], $dewormingTotal);
+                                $secondDosePercent = health_portal_percent($dashboardDewormingCounts['second_dose_count'], $dewormingTotal);
+                                $noDosePercent = health_portal_percent($dashboardDewormingCounts['no_dose_count'], $dewormingTotal);
+                            ?>
+                            <div class="bar-chart-container">
+                                <div class="bar-chart-bar" style="height: <?php echo escape((string) $firstDosePercent); ?>%; background-color: var(--success);">
+                                    <span><?php echo escape((string) $dashboardDewormingCounts['first_dose_count']); ?></span>
+                                </div>
+                                <div class="bar-chart-bar" style="height: <?php echo escape((string) $secondDosePercent); ?>%; background-color: var(--info);">
+                                    <span><?php echo escape((string) $dashboardDewormingCounts['second_dose_count']); ?></span>
+                                </div>
+                                <div class="bar-chart-bar" style="height: <?php echo escape((string) $noDosePercent); ?>%; background-color: var(--muted);">
+                                    <span><?php echo escape((string) $dashboardDewormingCounts['no_dose_count']); ?></span>
+                                </div>
+                            </div>
+                            <div style="display: flex; justify-content: space-around; width: 100%; margin-top: 5px;">
+                                <div class="bar-chart-label">1st Dose</div>
+                                <div class="bar-chart-label">2nd Dose</div>
+                                <div class="bar-chart-label">No Dose</div>
+                            </div>
+                            <div class="chart-legend">
+                                <div class="chart-legend-item">
+                                    <span><span class="chart-legend-color" style="background-color: var(--success);"></span>1st Dose</span>
+                                    <strong><?php echo escape((string) $dashboardDewormingCounts['first_dose_count']); ?> (<?php echo escape((string) $firstDosePercent); ?>%)</strong>
+                                </div>
+                                <div class="chart-legend-item">
+                                    <span><span class="chart-legend-color" style="background-color: var(--info);"></span>2nd Dose</span>
+                                    <strong><?php echo escape((string) $dashboardDewormingCounts['second_dose_count']); ?> (<?php echo escape((string) $secondDosePercent); ?>%)</strong>
+                                </div>
+                                <div class="chart-legend-item">
+                                    <span><span class="chart-legend-color" style="background-color: var(--muted);"></span>No Dose</span>
+                                    <strong><?php echo escape((string) $dashboardDewormingCounts['no_dose_count']); ?> (<?php echo escape((string) $noDosePercent); ?>%)</strong>
+                                </div>
+                            </div>
+                        </article>
+
+                        <article class="chart-card">
+                            <h3 class="chart-title">Feeding Program Status</h3>
+                            <?php
+                                $feedingTotal = $dashboardFeedingCounts['total_learners'];
+                                $recipientPercent = health_portal_percent($dashboardFeedingCounts['recipient_count'], $feedingTotal);
+                                $nonRecipientPercent = health_portal_percent($dashboardFeedingCounts['non_recipient_count'], $feedingTotal);
+                            ?>
+                            <div class="pie-chart" style="
+                                --slice1: <?php echo escape((string) $recipientPercent); ?>%;
+                                background: conic-gradient(var(--accent) 0% var(--slice1), var(--muted) var(--slice1) 100%);
+                            ">
+                                <span><?php echo escape((string) $feedingTotal); ?> Learners</span>
+                            </div>
+                            <div class="chart-legend">
+                                <div class="chart-legend-item">
+                                    <span><span class="chart-legend-color" style="background-color: var(--accent);"></span>Recipients</span>
+                                    <strong><?php echo escape((string) $dashboardFeedingCounts['recipient_count']); ?> (<?php echo escape((string) $recipientPercent); ?>%)</strong>
+                                </div>
+                                <div class="chart-legend-item">
+                                    <span><span class="chart-legend-color" style="background-color: var(--muted);"></span>Non-Recipients</span>
+                                    <strong><?php echo escape((string) $dashboardFeedingCounts['non_recipient_count']); ?> (<?php echo escape((string) $nonRecipientPercent); ?>%)</strong>
+                                </div>
                             </div>
                         </article>
                     </section>
@@ -420,23 +631,12 @@ $filterLabel = health_portal_filter_label($filters, $sectionOptions);
                         <form method="get" class="report-filter-grid">
                             <input type="hidden" name="module" value="learner_bmi">
 
-                            <div class="report-filter-field">
-                                <label for="grade_level">Grade Level</label>
-                                <select id="grade_level" name="grade_level">
-                                    <option value="">All grade levels</option>
-                                    <?php foreach (health_grade_level_options() as $option): ?>
-                                        <option value="<?php echo escape($option); ?>"<?php echo $filters['grade_level'] === $option ? ' selected' : ''; ?>><?php echo escape($option); ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-
-                            <div class="report-filter-field">
-                                <label for="section_id">Section</label>
-                                <select id="section_id" name="section_id">
-                                    <option value="">All sections</option>
-                                    <?php foreach ($sectionOptions as $section): ?>
-                                        <option value="<?php echo escape((string) $section['id']); ?>"<?php echo $filters['section_id'] === (string) $section['id'] ? ' selected' : ''; ?>>
-                                            <?php echo escape($section['grade_level'] . ' - ' . $section['name']); ?>
+                            <div class="report-filter-field report-filter-field-wide">
+                                <label for="grade_section_filter">Grade Level and Section</label>
+                                <select id="grade_section_filter" name="grade_section_filter">
+                                    <?php foreach ($allSectionDropdownOptions as $option): ?>
+                                        <option value="<?php echo escape($option['value']); ?>"<?php echo $filters['grade_section_filter'] === $option['value'] ? ' selected' : ''; ?>>
+                                            <?php echo escape($option['label']); ?>
                                         </option>
                                     <?php endforeach; ?>
                                 </select>
@@ -454,6 +654,44 @@ $filterLabel = health_portal_filter_label($filters, $sectionOptions);
                             <h2>Learner BMI List</h2>
                             <p>Leave both fields blank and save to clear an existing measurement.</p>
                         </div>
+
+                        <?php if ($filters['section_id'] !== '' && $bmiRemarksForSelectedFilter['total_learners'] > 0): ?>
+                            <div class="chart-card" style="width: 100%; max-width: none; margin-bottom: 20px;">
+                                <h3 class="chart-title">BMI Remarks for Selected Section</h3>
+                                <?php
+                                    $bmiTotalFiltered = array_sum(array_column($bmiRemarksForSelectedFilter, 'total'));
+                                    $slice1Filtered = health_portal_percent($bmiRemarksForSelectedFilter[0]['total'] ?? 0, $bmiTotalFiltered);
+                                    $slice2Filtered = $slice1Filtered + health_portal_percent($bmiRemarksForSelectedFilter[1]['total'] ?? 0, $bmiTotalFiltered);
+                                    $slice3Filtered = $slice2Filtered + health_portal_percent($bmiRemarksForSelectedFilter[2]['total'] ?? 0, $bmiTotalFiltered);
+                                    $slice4Filtered = $slice3Filtered + health_portal_percent($bmiRemarksForSelectedFilter[3]['total'] ?? 0, $bmiTotalFiltered);
+                                ?>
+                                <div class="pie-chart" style="
+                                    --slice1: <?php echo escape((string) $slice1Filtered); ?>%;
+                                    --slice2: <?php echo escape((string) $slice2Filtered); ?>%;
+                                    --slice3: <?php echo escape((string) $slice3Filtered); ?>%;
+                                    --slice4: <?php echo escape((string) $slice4Filtered); ?>%;
+                                ">
+                                    <span><?php echo escape((string) $bmiTotalFiltered); ?> Learners</span>
+                                </div>
+                                <div class="chart-legend">
+                                    <?php foreach ($bmiRemarksForSelectedFilter as $bmiRow): ?>
+                                        <div class="chart-legend-item">
+                                            <span>
+                                                <span class="chart-legend-color" style="background-color: <?php echo escape($bmiRow['color']); ?>;"></span>
+                                                <?php echo escape($bmiRow['label']); ?>
+                                            </span>
+                                            <strong><?php echo escape((string) $bmiRow['total']); ?> (<?php echo escape((string) health_portal_percent($bmiRow['total'], $bmiTotalFiltered)); ?>%)</strong>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
+                        <?php elseif ($filters['grade_level'] !== '' && $bmiRemarksForSelectedFilter['total_learners'] > 0): ?>
+                            <div class="alert neutral" style="margin-bottom: 20px;">
+                                Select a specific section to view BMI remarks distribution for that section.
+                            </div>
+                        <?php else: ?>
+                            <!-- No BMI remarks chart if no specific section or grade level is selected -->
+                        <?php endif; ?>
 
                         <p class="import-note">BMI remarks use standard BMI bands as a quick screening view inside the portal.</p>
 
@@ -521,23 +759,12 @@ $filterLabel = health_portal_filter_label($filters, $sectionOptions);
                         <form method="get" class="report-filter-grid">
                             <input type="hidden" name="module" value="bmi_reports">
 
-                            <div class="report-filter-field">
-                                <label for="report_grade_level">Grade Level</label>
-                                <select id="report_grade_level" name="grade_level">
-                                    <option value="">All grade levels</option>
-                                    <?php foreach (health_grade_level_options() as $option): ?>
-                                        <option value="<?php echo escape($option); ?>"<?php echo $filters['grade_level'] === $option ? ' selected' : ''; ?>><?php echo escape($option); ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-
-                            <div class="report-filter-field">
-                                <label for="report_section_id">Section</label>
-                                <select id="report_section_id" name="section_id">
-                                    <option value="">All sections</option>
-                                    <?php foreach ($sectionOptions as $section): ?>
-                                        <option value="<?php echo escape((string) $section['id']); ?>"<?php echo $filters['section_id'] === (string) $section['id'] ? ' selected' : ''; ?>>
-                                            <?php echo escape($section['grade_level'] . ' - ' . $section['name']); ?>
+                            <div class="report-filter-field report-filter-field-wide">
+                                <label for="report_grade_section_filter">Grade Level and Section</label>
+                                <select id="report_grade_section_filter" name="grade_section_filter">
+                                    <?php foreach ($allSectionDropdownOptions as $option): ?>
+                                        <option value="<?php echo escape($option['value']); ?>"<?php echo $filters['grade_section_filter'] === $option['value'] ? ' selected' : ''; ?>>
+                                            <?php echo escape($option['label']); ?>
                                         </option>
                                     <?php endforeach; ?>
                                 </select>
@@ -628,23 +855,12 @@ $filterLabel = health_portal_filter_label($filters, $sectionOptions);
                         <form method="get" class="report-filter-grid">
                             <input type="hidden" name="module" value="deworming">
 
-                            <div class="report-filter-field">
-                                <label for="deworm_grade_level">Grade Level</label>
-                                <select id="deworm_grade_level" name="grade_level">
-                                    <option value="">All grade levels</option>
-                                    <?php foreach (health_grade_level_options() as $option): ?>
-                                        <option value="<?php echo escape($option); ?>"<?php echo $filters['grade_level'] === $option ? ' selected' : ''; ?>><?php echo escape($option); ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-
-                            <div class="report-filter-field">
-                                <label for="deworm_section_id">Section</label>
-                                <select id="deworm_section_id" name="section_id">
-                                    <option value="">All sections</option>
-                                    <?php foreach ($sectionOptions as $section): ?>
-                                        <option value="<?php echo escape((string) $section['id']); ?>"<?php echo $filters['section_id'] === (string) $section['id'] ? ' selected' : ''; ?>>
-                                            <?php echo escape($section['grade_level'] . ' - ' . $section['name']); ?>
+                            <div class="report-filter-field report-filter-field-wide">
+                                <label for="deworm_grade_section_filter">Grade Level and Section</label>
+                                <select id="deworm_grade_section_filter" name="grade_section_filter">
+                                    <?php foreach ($allSectionDropdownOptions as $option): ?>
+                                        <option value="<?php echo escape($option['value']); ?>"<?php echo $filters['grade_section_filter'] === $option['value'] ? ' selected' : ''; ?>>
+                                            <?php echo escape($option['label']); ?>
                                         </option>
                                     <?php endforeach; ?>
                                 </select>
@@ -666,9 +882,8 @@ $filterLabel = health_portal_filter_label($filters, $sectionOptions);
                         <form method="post" class="teacher-form-grid">
                             <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                             <input type="hidden" name="form_action" value="assign_deworming_class">
-                            <input type="hidden" name="redirect_module" value="deworming">
-                            <input type="hidden" name="grade_level" value="<?php echo escape($filters['grade_level']); ?>">
-                            <input type="hidden" name="section_id" value="<?php echo escape($filters['section_id']); ?>">
+                            <input type="hidden" name="redirect_module" value="deworming"> <!-- Keep redirect_module -->
+                            <input type="hidden" name="grade_section_filter" value="<?php echo escape($filters['grade_section_filter']); ?>">
 
                             <div>
                                 <label for="dose_number">Dose</label>
@@ -689,6 +904,43 @@ $filterLabel = health_portal_filter_label($filters, $sectionOptions);
                             </div>
                         </form>
                     </article>
+
+                    <?php if ($dewormingStatusForSelectedFilter['total_learners'] > 0): ?>
+                        <article class="chart-card" style="width: 100%; max-width: none; margin-bottom: 20px;">
+                            <h3 class="chart-title">Deworming Status for Filtered Learners</h3>
+                            <?php
+                                $dewormingTotalFiltered = $dewormingStatusForSelectedFilter['total_learners'];
+                                $firstDosePercentFiltered = health_portal_percent($dewormingStatusForSelectedFilter['first_dose_count'], $dewormingTotalFiltered);
+                                $secondDosePercentFiltered = health_portal_percent($dewormingStatusForSelectedFilter['second_dose_count'], $dewormingTotalFiltered);
+                                $noDosePercentFiltered = health_portal_percent($dewormingStatusForSelectedFilter['no_dose_count'], $dewormingTotalFiltered);
+                            ?>
+                            <div class="bar-chart-container">
+                                <div class="bar-chart-bar" style="height: <?php echo escape((string) $firstDosePercentFiltered); ?>%; background-color: var(--success);">
+                                    <span><?php echo escape((string) $dewormingStatusForSelectedFilter['first_dose_count']); ?></span>
+                                </div>
+                                <div class="bar-chart-bar" style="height: <?php echo escape((string) $secondDosePercentFiltered); ?>%; background-color: var(--info);">
+                                    <span><?php echo escape((string) $dewormingStatusForSelectedFilter['second_dose_count']); ?></span>
+                                </div>
+                                <div class="bar-chart-bar" style="height: <?php echo escape((string) $noDosePercentFiltered); ?>%; background-color: var(--muted);">
+                                    <span><?php echo escape((string) $dewormingStatusForSelectedFilter['no_dose_count']); ?></span>
+                                </div>
+                            </div>
+                            <div style="display: flex; justify-content: space-around; width: 100%; margin-top: 5px;">
+                                <div class="bar-chart-label">1st Dose</div>
+                                <div class="bar-chart-label">2nd Dose</div>
+                                <div class="bar-chart-label">No Dose</div>
+                            </div>
+                            <div class="chart-legend">
+                                <div class="chart-legend-item"><span><span class="chart-legend-color" style="background-color: var(--success);"></span>1st Dose</span><strong><?php echo escape((string) $firstDosePercentFiltered); ?> (<?php echo escape((string) $firstDosePercentFiltered); ?>%)</strong></div>
+                                <div class="chart-legend-item"><span><span class="chart-legend-color" style="background-color: var(--info);"></span>2nd Dose</span><strong><?php echo escape((string) $secondDosePercentFiltered); ?> (<?php echo escape((string) $secondDosePercentFiltered); ?>%)</strong></div>
+                                <div class="chart-legend-item"><span><span class="chart-legend-color" style="background-color: var(--muted);"></span>No Dose</span><strong><?php echo escape((string) $noDosePercentFiltered); ?> (<?php echo escape((string) $noDosePercentFiltered); ?>%)</strong></div>
+                            </div>
+                        </article>
+                    <?php else: ?>
+                        <div class="alert neutral" style="margin-bottom: 20px;">
+                            No learners found for the selected filters to display deworming status.
+                        </div>
+                    <?php endif; ?>
 
                     <article class="teacher-panel-card">
                         <div class="panel-heading compact-heading">
@@ -757,23 +1009,12 @@ $filterLabel = health_portal_filter_label($filters, $sectionOptions);
                         <form method="get" class="report-filter-grid">
                             <input type="hidden" name="module" value="feeding_program">
 
-                            <div class="report-filter-field">
-                                <label for="feeding_grade_level">Grade Level</label>
-                                <select id="feeding_grade_level" name="grade_level">
-                                    <option value="">All grade levels</option>
-                                    <?php foreach (health_grade_level_options() as $option): ?>
-                                        <option value="<?php echo escape($option); ?>"<?php echo $filters['grade_level'] === $option ? ' selected' : ''; ?>><?php echo escape($option); ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-
-                            <div class="report-filter-field">
-                                <label for="feeding_section_id">Section</label>
-                                <select id="feeding_section_id" name="section_id">
-                                    <option value="">All sections</option>
-                                    <?php foreach ($sectionOptions as $section): ?>
-                                        <option value="<?php echo escape((string) $section['id']); ?>"<?php echo $filters['section_id'] === (string) $section['id'] ? ' selected' : ''; ?>>
-                                            <?php echo escape($section['grade_level'] . ' - ' . $section['name']); ?>
+                            <div class="report-filter-field report-filter-field-wide">
+                                <label for="feeding_grade_section_filter">Grade Level and Section</label>
+                                <select id="feeding_grade_section_filter" name="grade_section_filter">
+                                    <?php foreach ($allSectionDropdownOptions as $option): ?>
+                                        <option value="<?php echo escape($option['value']); ?>"<?php echo $filters['grade_section_filter'] === $option['value'] ? ' selected' : ''; ?>>
+                                            <?php echo escape($option['label']); ?>
                                         </option>
                                     <?php endforeach; ?>
                                 </select>
@@ -796,8 +1037,7 @@ $filterLabel = health_portal_filter_label($filters, $sectionOptions);
                             <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                             <input type="hidden" name="form_action" value="add_feeding_recipients">
                             <input type="hidden" name="redirect_module" value="feeding_program">
-                            <input type="hidden" name="grade_level" value="<?php echo escape($filters['grade_level']); ?>">
-                            <input type="hidden" name="section_id" value="<?php echo escape($filters['section_id']); ?>">
+                            <input type="hidden" name="grade_section_filter" value="<?php echo escape($filters['grade_section_filter']); ?>">
 
                             <div class="table-shell">
                                 <table class="records-table learner-table">
@@ -813,7 +1053,7 @@ $filterLabel = health_portal_filter_label($filters, $sectionOptions);
                                     <tbody>
                                         <?php if ($feedingCandidates === []): ?>
                                             <tr>
-                                                <td colspan="5" class="empty-row">No learners matched the selected filters.</td>
+                                                <td colspan="5" class="empty-row">No non-recipient learners matched the selected filters.</td>
                                             </tr>
                                         <?php else: ?>
                                             <?php foreach ($feedingCandidates as $learner): ?>

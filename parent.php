@@ -8,6 +8,8 @@ require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/app/auth.php';
 require_once __DIR__ . '/app/parents.php';
 require_once __DIR__ . '/app/grades.php';
+require_once __DIR__ . '/app/announcements.php';
+require_once __DIR__ . '/app/theme_settings.php';
 
 function parent_portal_format_date(?string $value, string $format = 'D, M j, Y'): string
 {
@@ -33,12 +35,19 @@ function parent_portal_format_time(?string $value): string
 
 parent_portal_bootstrap();
 grade_book_bootstrap();
+announcements_bootstrap();
+theme_settings_bootstrap();
 
 $user = require_roles(['parent']);
 $linkedLearners = parent_linked_learners((int) $user['id']);
 $filters = parent_portal_filters($linkedLearners);
 $selectedChild = parent_portal_selected_child($linkedLearners, $filters['child_id']);
 $selectedMonthLabel = parent_portal_month_label($filters['report_month']);
+$adminAnnouncements = announcement_list(['role' => 'admin', 'is_published' => 1]);
+$teacherAnnouncements = announcement_for_parent((int) $user['id']);
+$allAnnouncements = array_merge($adminAnnouncements, $teacherAnnouncements);
+usort($allAnnouncements, static fn ($a, $b) => strtotime($b['published_at'] ?? $b['created_at']) <=> strtotime($a['published_at'] ?? $a['created_at']));
+
 $attendanceRows = [];
 $attendanceSummary = parent_child_month_summary([]);
 $gradeHistoryGroups = [];
@@ -61,7 +70,31 @@ if ($selectedChild !== null) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo escape(APP_NAME); ?> Parent Portal</title>
+    <?php echo theme_stylesheet_markup(); ?>
     <link rel="stylesheet" href="<?php echo escape(asset_url('assets/css/app.css')); ?>">
+    <style>
+        .parent-child-photo {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            object-fit: cover;
+            flex-shrink: 0;
+            border: 2px solid var(--surface-strong, #fff);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .learner-header-row.with-photo .learner-photo-frame {
+            width: 96px;
+            height: 96px;
+            flex-shrink: 0;
+        }
+
+        .parent-child-detail.health-detail {
+            font-size: 0.8125rem; /* 13px */
+            opacity: 0.85;
+            margin-top: 4px;
+        }
+    </style>
 </head>
 <body class="dashboard-body">
     <main class="dashboard-shell fullscreen-shell">
@@ -119,15 +152,23 @@ if ($selectedChild !== null) {
                                     href="<?php echo escape(route_url('parent.php?child_id=' . urlencode((string) $child['id']) . '&report_month=' . urlencode($filters['report_month']))); ?>"
                                     class="parent-child-card<?php echo (string) $child['id'] === $filters['child_id'] ? ' is-active' : ''; ?>"
                                 >
-                                    <p class="parent-child-eyebrow">
-                                        <?php echo escape($child['relationship']); ?>
-                                        <?php echo (int) $child['is_primary_contact'] === 1 ? ' • Primary contact' : ''; ?>
-                                    </p>
-                                    <h3>
-                                        <?php echo escape(trim($child['first_name'] . ' ' . $child['middle_name'] . ' ' . $child['last_name'])); ?>
-                                    </h3>
-                                    <p class="parent-child-detail"><?php echo escape($child['grade_level'] . ' - ' . $child['section_name']); ?></p>
-                                    <p class="parent-child-detail">LRN: <?php echo escape($child['lrn']); ?></p>
+                                    <!-- <img class="parent-child-photo" src="<?php echo escape(learner_photo_url($child['lrn'])); ?>" alt="Photo of <?php echo escape(trim($child['first_name'] . ' ' . $child['last_name'])); ?>"> -->
+                                    <div class="parent-child-card-content">
+                                        <p class="parent-child-eyebrow">
+                                            <?php echo escape($child['relationship']); ?>
+                                            <?php echo (int) $child['is_primary_contact'] === 1 ? ' • Primary contact' : ''; ?>
+                                        </p>
+                                        <h3>
+                                            <?php echo escape(trim($child['first_name'] . ' ' . $child['middle_name'] . ' ' . $child['last_name'])); ?>
+                                        </h3>
+                                        <p class="parent-child-detail"><?php echo escape($child['grade_level'] . ' - ' . $child['section_name']); ?></p>
+                                        <p class="parent-child-detail">LRN: <?php echo escape($child['lrn']); ?></p>
+                                        <p class="parent-child-detail health-detail">
+                                            <?php echo escape('H: ' . ($child['height_cm'] ?? '-') . 'cm'); ?> •
+                                            <?php echo escape('W: ' . ($child['weight_kg'] ?? '-') . 'kg'); ?> •
+                                            <?php echo escape('BMI: ' . $child['bmi_remarks']); ?>
+                                        </p>
+                                    </div>
                                     <div class="parent-child-footer">
                                         <strong><?php echo escape($child['latest_attendance_status']); ?></strong>
                                         <span><?php echo escape(parent_portal_format_date($child['latest_attendance_date'], 'M j, Y')); ?></span>
@@ -176,7 +217,11 @@ if ($selectedChild !== null) {
 
                 <?php if ($selectedChild !== null): ?>
                     <article class="parent-panel-card">
-                        <div class="learner-header-row">
+                        <div class="learner-header-row with-photo">
+                            <div class="learner-photo-frame">
+                                <img class="learner-photo" src="<?php echo escape(learner_photo_url($selectedChild['lrn'])); ?>" alt="Photo of <?php echo escape(trim($selectedChild['first_name'] . ' ' . $selectedChild['last_name'])); ?>">
+                            </div>
+
                             <div class="learner-summary">
                                 <h3><?php echo escape(trim($selectedChild['first_name'] . ' ' . $selectedChild['middle_name'] . ' ' . $selectedChild['last_name'])); ?></h3>
                                 <p>Attendance records for <?php echo escape($selectedMonthLabel); ?>.</p>
@@ -215,6 +260,22 @@ if ($selectedChild !== null) {
                             <div>
                                 <dt>Latest Attendance Date</dt>
                                 <dd><?php echo escape(parent_portal_format_date($selectedChild['latest_attendance_date'])); ?></dd>
+                            </div>
+                            <div>
+                                <dt>Height</dt>
+                                <dd><?php echo escape($selectedChild['height_cm'] !== null ? $selectedChild['height_cm'] . ' cm' : '-'); ?></dd>
+                            </div>
+                            <div>
+                                <dt>Weight</dt>
+                                <dd><?php echo escape($selectedChild['weight_kg'] !== null ? $selectedChild['weight_kg'] . ' kg' : '-'); ?></dd>
+                            </div>
+                            <div>
+                                <dt>BMI</dt>
+                                <dd><?php echo escape($selectedChild['bmi'] !== null ? (string) $selectedChild['bmi'] : '-'); ?></dd>
+                            </div>
+                            <div>
+                                <dt>BMI Remarks</dt>
+                                <dd><?php echo escape($selectedChild['bmi_remarks']); ?></dd>
                             </div>
                         </dl>
                     </article>
@@ -416,5 +477,35 @@ if ($selectedChild !== null) {
             </section>
         </section>
     </main>
+
+    <?php if ($allAnnouncements !== [] && !isset($_SESSION['seen_parent_announcements'])): ?>
+        <div id="announcement-modal" class="modal-backdrop is-open">
+            <div class="modal-panel">
+                <div class="panel-heading">
+                    <h2>Announcements</h2>
+                    <p>Important updates from the school.</p>
+                </div>
+                <div class="teacher-link-stack">
+                    <?php foreach ($allAnnouncements as $announcement): ?>
+                        <article class="admin-module-card">
+                            <div class="panel-heading compact-heading">
+                                <h3><?php echo escape($announcement['title']); ?></h3>
+                                <p>
+                                    Published by <?php echo escape($announcement['username'] ?? 'System'); ?>
+                                    on <?php echo escape(parent_portal_format_date($announcement['published_at'])); ?>
+                                </p>
+                            </div>
+                            <p><?php echo nl2br(escape($announcement['content'])); ?></p>
+                        </article>
+                    <?php endforeach; ?>
+                </div>
+                <div class="modal-actions">
+                    <button id="close-announcement-modal" type="button" class="primary-button">Close</button>
+                </div>
+            </div>
+        </div>
+        <?php $_SESSION['seen_parent_announcements'] = true; ?>
+    <?php endif; ?>
+    <script src="<?php echo escape(asset_url('assets/js/admin.js')); ?>"></script>
 </body>
 </html>

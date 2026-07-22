@@ -164,7 +164,9 @@ function parent_linked_learners(int $userId): array
             COALESCE(s.name, \'Unassigned\') AS section_name,
             COALESCE(sy.label, \'No school year\') AS school_year_label,
             latest_ar.attendance_date AS latest_attendance_date,
-            COALESCE(latest_al.label, \'No attendance yet\') AS latest_attendance_status
+            COALESCE(latest_al.label, \'No attendance yet\') AS latest_attendance_status,
+            lhm.height_cm,
+            lhm.weight_kg
          FROM parents p
          INNER JOIN parent_learner_links pll ON pll.parent_id = p.id
          INNER JOIN learners l ON l.id = pll.learner_id
@@ -188,12 +190,22 @@ function parent_linked_learners(int $userId): array
                 LIMIT 1
             )
          LEFT JOIN attendance_legends latest_al ON latest_al.id = latest_ar.legend_id
+         LEFT JOIN learner_health_measurements lhm ON lhm.learner_enrollment_id = le.id
          WHERE p.user_id = :user_id
          ORDER BY l.last_name ASC, l.first_name ASC, l.id ASC'
     );
     $statement->execute(['user_id' => $userId]);
 
-    return $statement->fetchAll();
+    $rows = $statement->fetchAll();
+
+    foreach ($rows as &$row) {
+        $bmi = _parent_portal_calculate_bmi($row['height_cm'] ?? null, $row['weight_kg'] ?? null);
+        $row['bmi'] = $bmi;
+        $row['bmi_remarks'] = _parent_portal_bmi_remarks($bmi);
+    }
+    unset($row);
+
+    return $rows;
 }
 
 function parent_portal_filters(array $learners): array
@@ -757,6 +769,39 @@ function parent_import_normalize_row(array $row): array
     }
 
     return $payload;
+}
+
+function _parent_portal_calculate_bmi($heightCm, $weightKg): ?float
+{
+    if ($heightCm === null || $weightKg === null || $heightCm === '' || $weightKg === '') {
+        return null;
+    }
+
+    $height = (float) $heightCm;
+    $weight = (float) $weightKg;
+
+    if ($height <= 0 || $weight <= 0) {
+        return null;
+    }
+
+    $heightMeters = $height / 100;
+    $bmi = $weight / ($heightMeters * $heightMeters);
+
+    return round($bmi, 2);
+}
+
+function _parent_portal_bmi_remarks(?float $bmi): string
+{
+    if ($bmi === null) {
+        return '-';
+    }
+
+    return match (true) {
+        $bmi < 18.5 => 'Underweight',
+        $bmi < 25 => 'Normal',
+        $bmi < 30 => 'Overweight',
+        default => 'Obese',
+    };
 }
 
 function parent_account_options(): array

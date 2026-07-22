@@ -7,15 +7,18 @@ require_once __DIR__ . '/app/helpers.php';
 require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/app/auth.php';
 require_once __DIR__ . '/app/attendance_settings.php';
+require_once __DIR__ . '/app/theme_settings.php';
 
 $user = require_roles(['attendance', 'admin']);
 $scanMode = attendance_scan_mode_details();
 $canManageScanMode = attendance_can_manage_scan_mode($user);
+theme_settings_bootstrap();
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <?php echo theme_stylesheet_markup(); ?>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo escape(APP_NAME); ?> Attendance</title>
     <link rel="stylesheet" href="<?php echo escape(asset_url('assets/css/app.css')); ?>">

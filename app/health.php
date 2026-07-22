@@ -121,11 +121,6 @@ function health_valid_date(string $value): bool
     return $date instanceof DateTime && $date->format('Y-m-d') === $value;
 }
 
-function health_grade_level_options(): array
-{
-    return learner_grade_level_options();
-}
-
 function health_bmi_remark_options(): array
 {
     return [
@@ -139,16 +134,28 @@ function health_bmi_remark_options(): array
 
 function health_filter_defaults(array $source = []): array
 {
-    $gradeLevel = trim((string) ($source['grade_level'] ?? ''));
+    $gradeSectionFilter = trim((string) ($source['grade_section_filter'] ?? 'all|all'));
+    $parts = explode('|', $gradeSectionFilter);
+    $gradeLevel = $parts[0] ?? 'all';
+    $sectionId = $parts[1] ?? 'all';
 
-    if ($gradeLevel !== '' && !in_array($gradeLevel, health_grade_level_options(), true)) {
-        $gradeLevel = '';
+    if ($gradeLevel !== 'all' && !in_array($gradeLevel, learner_grade_level_options(), true)) {
+        $gradeLevel = 'all';
+        $sectionId = 'all';
     }
 
-    $sectionId = trim((string) ($source['section_id'] ?? ''));
-
-    if ($sectionId !== '' && !ctype_digit($sectionId)) {
-        $sectionId = '';
+    if ($sectionId !== 'all') {
+        $sectionOptions = health_filter_section_options_for_dropdown(); // Use the comprehensive list
+        $found = false;
+        foreach ($sectionOptions as $option) {
+            if ($option['value'] === $gradeLevel . '|' . $sectionId) {
+                $found = true;
+                break;
+            }
+        }
+        if (!$found) {
+            $sectionId = 'all';
+        }
     }
 
     $bmiRemarks = trim((string) ($source['bmi_remarks'] ?? ''));
@@ -158,11 +165,32 @@ function health_filter_defaults(array $source = []): array
     }
 
     return [
-        'grade_level' => $gradeLevel,
-        'section_id' => $sectionId,
+        'grade_section_filter' => $gradeLevel . '|' . $sectionId,
+        'grade_level' => $gradeLevel === 'all' ? '' : $gradeLevel,
+        'section_id' => $sectionId === 'all' ? '' : $sectionId,
         'keyword' => trim((string) ($source['keyword'] ?? '')),
         'bmi_remarks' => $bmiRemarks,
     ];
+}
+
+function health_filter_section_options_for_dropdown(): array
+{
+    $schoolYear = require_current_school_year();
+    $pdo = database();
+
+    $options = [];
+    $options[] = ['value' => 'all|all', 'label' => 'All Grade Levels and Sections'];
+
+    foreach (learner_grade_level_options() as $gradeLevel) {
+        $options[] = ['value' => $gradeLevel . '|all', 'label' => $gradeLevel . ' - All Sections'];
+        $sectionsStatement = $pdo->prepare('SELECT id, name FROM sections WHERE school_year_id = :school_year_id AND grade_level = :grade_level ORDER BY name ASC');
+        $sectionsStatement->execute(['school_year_id' => (int) $schoolYear['id'], 'grade_level' => $gradeLevel]);
+        foreach ($sectionsStatement->fetchAll() as $section) {
+            $options[] = ['value' => $gradeLevel . '|' . $section['id'], 'label' => $gradeLevel . ' - ' . $section['name']];
+        }
+    }
+
+    return $options;
 }
 
 function health_filter_section_options(string $gradeLevel = ''): array
@@ -405,6 +433,70 @@ function health_dashboard_bmi_remarks_rows(): array
     }
 
     return $rows;
+}
+
+function health_deworming_status_counts(array $filters = []): array
+{
+    $schoolYear = require_current_school_year();
+    $params = ['school_year_id' => (int) $schoolYear['id']];
+    $conditions = health_enrollment_filter_conditions($filters, $params);
+
+    $sql = 'SELECT
+                COUNT(DISTINCT le.id) AS total_learners,
+                COUNT(DISTINCT CASE WHEN dr1.dose_number = 1 THEN le.id END) AS first_dose_count,
+                COUNT(DISTINCT CASE WHEN dr2.dose_number = 2 THEN le.id END) AS second_dose_count
+            FROM learner_enrollments le
+            INNER JOIN learners l ON l.id = le.learner_id
+            LEFT JOIN learner_deworming_records dr1 ON dr1.learner_enrollment_id = le.id AND dr1.dose_number = 1
+            LEFT JOIN learner_deworming_records dr2 ON dr2.learner_enrollment_id = le.id AND dr2.dose_number = 2
+            WHERE le.school_year_id = :school_year_id' .
+            ($conditions !== [] ? ' AND ' . implode(' AND ', $conditions) : '');
+
+    $statement = database()->prepare($sql);
+    $statement->execute($params);
+    $counts = $statement->fetch();
+
+    $totalLearners = (int) ($counts['total_learners'] ?? 0);
+    $firstDoseCount = (int) ($counts['first_dose_count'] ?? 0);
+    $secondDoseCount = (int) ($counts['second_dose_count'] ?? 0);
+    $noDoseCount = $totalLearners - $firstDoseCount;
+
+    return [
+        'total_learners' => $totalLearners,
+        'first_dose_count' => $firstDoseCount,
+        'second_dose_count' => $secondDoseCount,
+        'no_dose_count' => $noDoseCount,
+    ];
+}
+
+function health_feeding_program_status_counts(array $filters = []): array
+{
+    $schoolYear = require_current_school_year();
+    $params = ['school_year_id' => (int) $schoolYear['id']];
+    $conditions = health_enrollment_filter_conditions($filters, $params);
+
+    $sql = 'SELECT
+                COUNT(DISTINCT le.id) AS total_learners,
+                COUNT(DISTINCT fpr.learner_enrollment_id) AS recipient_count
+            FROM learner_enrollments le
+            INNER JOIN learners l ON l.id = le.learner_id
+            LEFT JOIN feeding_program_recipients fpr ON fpr.learner_enrollment_id = le.id
+            WHERE le.school_year_id = :school_year_id' .
+            ($conditions !== [] ? ' AND ' . implode(' AND ', $conditions) : '');
+
+    $statement = database()->prepare($sql);
+    $statement->execute($params);
+    $counts = $statement->fetch();
+
+    $totalLearners = (int) ($counts['total_learners'] ?? 0);
+    $recipientCount = (int) ($counts['recipient_count'] ?? 0);
+    $nonRecipientCount = $totalLearners - $recipientCount;
+
+    return [
+        'total_learners' => $totalLearners,
+        'recipient_count' => $recipientCount,
+        'non_recipient_count' => $nonRecipientCount,
+    ];
 }
 
 function health_measurement_template_headers(): array
@@ -814,7 +906,7 @@ function health_feeding_candidate_rows(array $filters): array
          INNER JOIN learners l ON l.id = le.learner_id
          LEFT JOIN sections s ON s.id = le.section_id
          LEFT JOIN feeding_program_recipients fpr ON fpr.learner_enrollment_id = le.id
-         WHERE le.school_year_id = :school_year_id' .
+         WHERE fpr.id IS NULL AND le.school_year_id = :school_year_id' .
          ($conditions !== [] ? ' AND ' . implode(' AND ', $conditions) : '') . '
          ORDER BY le.grade_level ASC, section_name ASC, l.last_name ASC, l.first_name ASC, l.id ASC'
     );
@@ -822,8 +914,8 @@ function health_feeding_candidate_rows(array $filters): array
     $rows = $statement->fetchAll();
 
     foreach ($rows as &$row) {
-        $row['complete_name'] = health_full_learner_name($row);
-        $row['is_recipient'] = isset($row['feeding_recipient_id']) && $row['feeding_recipient_id'] !== null;
+        $row['complete_name'] = health_full_learner_name($row); // This will be used for display
+        $row['is_recipient'] = false; // Always false for candidates now
     }
     unset($row);
 

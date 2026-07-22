@@ -123,3 +123,27 @@ function announcement_delete(int $id): void
     );
     $statement->execute(['id' => $id]);
 }
+
+function announcement_for_parent(int $parentUserId): array
+{
+    $pdo = database();
+    $statement = $pdo->prepare(
+        'SELECT DISTINCT
+            a.*,
+            u.username,
+            u.role
+         FROM announcements a
+         INNER JOIN users u ON u.id = a.created_by_user_id
+         INNER JOIN teacher_section_assignments tsa ON tsa.teacher_user_id = u.id
+         INNER JOIN learner_enrollments le ON le.section_id = tsa.section_id AND le.school_year_id = tsa.school_year_id
+         INNER JOIN parent_learner_links pll ON pll.learner_id = le.learner_id
+         INNER JOIN parents p ON p.id = pll.parent_id
+         WHERE p.user_id = :parent_user_id
+           AND a.is_published = 1
+           AND u.role = \'teacher\'
+         ORDER BY a.published_at DESC, a.created_at DESC'
+    );
+    $statement->execute(['parent_user_id' => $parentUserId]);
+
+    return $statement->fetchAll();
+}
