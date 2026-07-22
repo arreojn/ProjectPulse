@@ -41,6 +41,30 @@ function theme_predefined_sets(): array
                 'theme_color_ink' => '#1c1917',
             ],
         ],
+        'forest_canopy' => [
+            'name' => 'Forest Canopy',
+            'colors' => [
+                'theme_color_accent' => '#2f7d4a',
+                'theme_color_accent_strong' => '#1f5130',
+                'theme_color_bg' => '#eef7ef',
+                'theme_color_bg_deep' => '#cfe7d2',
+                'theme_color_surface' => 'rgba(255, 255, 255, 0.94)',
+                'theme_color_surface_strong' => '#ffffff',
+                'theme_color_ink' => '#1e3024',
+            ],
+        ],
+        'lavender_mist' => [
+            'name' => 'Lavender Mist',
+            'colors' => [
+                'theme_color_accent' => '#7357b6',
+                'theme_color_accent_strong' => '#4c357f',
+                'theme_color_bg' => '#f5f1ff',
+                'theme_color_bg_deep' => '#e4daf8',
+                'theme_color_surface' => 'rgba(255, 255, 255, 0.94)',
+                'theme_color_surface_strong' => '#ffffff',
+                'theme_color_ink' => '#29233a',
+            ],
+        ],
     ];
 }
 
@@ -120,13 +144,16 @@ function theme_inline_styles(): string
     $colors = theme_colors();
 
     $css = ':root {'
-        . '--accent: ' . $colors['theme_color_accent'] . ';'
-        . '--accent-strong: ' . $colors['theme_color_accent_strong'] . ';'
-        . '--bg: ' . $colors['theme_color_bg'] . ';'
-        . '--bg-deep: ' . $colors['theme_color_bg_deep'] . ';'
-        . '--surface: ' . $colors['theme_color_surface'] . ';'
-        . '--surface-strong: ' . $colors['theme_color_surface_strong'] . ';'
-        . '--ink: ' . $colors['theme_color_ink'] . ';'
+        // This style is rendered before app.css, so !important ensures the saved theme overrides CSS defaults.
+        . '--accent: ' . $colors['theme_color_accent'] . ' !important;'
+        . '--accent-strong: ' . $colors['theme_color_accent_strong'] . ' !important;'
+        . '--bg: ' . $colors['theme_color_bg'] . ' !important;'
+        . '--bg-deep: ' . $colors['theme_color_bg_deep'] . ' !important;'
+        . '--surface: ' . $colors['theme_color_surface'] . ' !important;'
+        . '--surface-strong: ' . $colors['theme_color_surface_strong'] . ' !important;'
+        . '--ink: ' . $colors['theme_color_ink'] . ' !important;'
+        . '--line: color-mix(in srgb, var(--accent) 18%, transparent) !important;'
+        . '--shadow: 0 24px 60px color-mix(in srgb, var(--accent-strong) 12%, transparent) !important;'
         . '}';
 
     return '<style id="projectpulse-theme">' . $css . '</style>';

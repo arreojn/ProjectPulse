@@ -171,11 +171,11 @@ if (is_post()) {
             throw new RuntimeException('Invalid form token. Please refresh the page.');
         }
 
-        if ($section === null) {
+        $formAction = (string) ($_POST['form_action'] ?? '');
+
+        if ($section === null && $formAction !== 'save_theme') {
             throw new RuntimeException('Your teacher account is not assigned to a section yet.');
         }
-
-        $formAction = (string) ($_POST['form_action'] ?? '');
 
         if ($formAction === 'create_parent_and_link') {
             $newParentForm = parent_account_normalize_payload($_POST);
@@ -454,7 +454,7 @@ $pageMeta = $allowedModules[$module];
                     <div class="alert <?php echo escape($teacherFlash['type']); ?>"><?php echo escape($teacherFlash['message']); ?></div>
                 <?php endif; ?>
 
-                <?php if ($section === null): ?>
+                <?php if ($section === null && $module !== 'settings'): ?>
                     <article class="teacher-panel-card">
                         <div class="panel-heading">
                             <h2>No Section Assignment Yet</h2>
@@ -1356,8 +1356,14 @@ $pageMeta = $allowedModules[$module];
                                         <?php foreach (theme_predefined_sets() as $key => $theme): ?>
                                             <label class="check-card">
                                                 <input type="radio" name="theme_key" value="<?php echo escape($key); ?>"<?php echo $activeThemeKey === $key ? ' checked' : ''; ?>>
-                                                <span>
-                                                    <?php echo escape($theme['name']); ?>
+                                                <span class="theme-choice-copy">
+                                                    <strong><?php echo escape($theme['name']); ?></strong>
+                                                    <small>Accent, background, and interface colors</small>
+                                                    <span class="theme-swatch-row" aria-hidden="true">
+                                                        <i class="theme-swatch" style="--swatch-color: <?php echo escape($theme['colors']['theme_color_accent']); ?>;"></i>
+                                                        <i class="theme-swatch" style="--swatch-color: <?php echo escape($theme['colors']['theme_color_bg']); ?>;"></i>
+                                                        <i class="theme-swatch" style="--swatch-color: <?php echo escape($theme['colors']['theme_color_surface_strong']); ?>;"></i>
+                                                    </span>
                                                 </span>
                                             </label>
                                         <?php endforeach; ?>

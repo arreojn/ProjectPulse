@@ -94,6 +94,7 @@ try {
     $recordStatement = $pdo->prepare(
         'SELECT
             id,
+            legend_id,
             am_time_in,
             am_time_out,
             pm_time_in,
@@ -133,6 +134,22 @@ try {
 
     $targetColumn = $slot['column'];
 
+    if ($record !== false && $record['legend_id'] !== null) {
+        $excusedCheck = $pdo->prepare(
+            'SELECT al.code FROM attendance_legends al WHERE al.id = :legend_id LIMIT 1'
+        );
+        $excusedCheck->execute(['legend_id' => $record['legend_id']]);
+        if ($excusedCheck->fetchColumn() === 'E') {
+            $pdo->rollBack();
+            http_response_code(409);
+            echo json_encode([
+                'success' => false,
+                'message' => 'This attendance record is marked Excused and can only be changed manually.',
+            ]);
+            exit;
+        }
+    }
+
     if ($record !== false && !empty($record[$targetColumn])) {
         $pdo->rollBack();
         http_response_code(409);
@@ -141,6 +158,28 @@ try {
             'message' => $slot['label'] . ' has already been recorded for today.',
         ]);
         exit;
+    }
+
+    $scanRecord = $record !== false ? $record : [
+        'am_time_in' => null,
+        'am_time_out' => null,
+        'pm_time_in' => null,
+        'pm_time_out' => null,
+    ];
+    $scanRecord[$targetColumn] = $currentTime;
+    $summary = attendance_record_summary(
+        $attendanceDate,
+        null,
+        $scanRecord['am_time_in'],
+        $scanRecord['am_time_out'],
+        $scanRecord['pm_time_in'],
+        $scanRecord['pm_time_out']
+    );
+    $legendStatement->execute(['code' => $summary['code'] === 'L' ? 'L' : 'P']);
+    $scanLegend = $legendStatement->fetch();
+
+    if ($scanLegend === false) {
+        throw new RuntimeException('Attendance legend configuration is missing.');
     }
 
     if ($record === false) {
@@ -168,7 +207,7 @@ try {
         $insertStatement->execute([
             'enrollment_id' => $enrollment['id'],
             'attendance_date' => $attendanceDate,
-            'legend_id' => $legend['id'],
+            'legend_id' => $scanLegend['id'],
             'am_time_in' => $targetColumn === 'am_time_in' ? $currentTime : null,
             'am_time_out' => $targetColumn === 'am_time_out' ? $currentTime : null,
             'pm_time_in' => $targetColumn === 'pm_time_in' ? $currentTime : null,
@@ -185,7 +224,7 @@ try {
              WHERE id = :id"
         );
         $updateStatement->execute([
-            'legend_id' => $legend['id'],
+            'legend_id' => $scanLegend['id'],
             'scan_time' => $currentTime,
             'id' => $record['id'],
         ]);
@@ -212,7 +251,7 @@ try {
     $logStatement->execute([
         'attendance_record_id' => $attendanceRecordId,
         'learner_enrollment_id' => $enrollment['id'],
-        'legend_id' => $legend['id'],
+        'legend_id' => $scanLegend['id'],
         'slot_key' => $targetColumn,
         'slot_label' => $slot['label'],
         'scanned_at' => date('Y-m-d H:i:s'),
@@ -234,5 +273,5 @@ try {
 
 echo json_encode([
     'success' => true,
-    'message' => $slot['label'] . ' recorded successfully.',
+    'message' => $slot['label'] . ' recorded successfully. Current status: ' . $summary['label'] . '.',
 ]);

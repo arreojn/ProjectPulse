@@ -61,9 +61,10 @@ theme_settings_bootstrap();
                     <p id="live-date" class="date-value"><?php echo escape(date('l, F j, Y')); ?></p>
                 </div>
 
-                <div class="legend-panel">
-                    <p class="meta-label dark">Attendance Legend</p>
-                    <div class="legend-list">
+                    <div class="legend-panel">
+                        <p class="meta-label dark">Attendance Legend</p>
+                        <p class="scan-mode-note">Present requires all four scans. A complete AM or PM session counts as 0.5 day; arrivals after 7:30 AM or 1:00 PM are late.</p>
+                        <div class="legend-list">
                         <span class="legend-chip success">P Present</span>
                         <span class="legend-chip warning">L Late</span>
                         <span class="legend-chip danger">A Absent</span>
@@ -181,8 +182,8 @@ theme_settings_bootstrap();
                                 <p>The latest records remain visible after every scan.</p>
                             </div>
 
-                            <div class="table-shell">
-                                <table class="records-table">
+                            <div class="table-shell attendance-log-shell">
+                                <table class="records-table attendance-log-table">
                                     <thead>
                                         <tr>
                                             <th>Date</th>

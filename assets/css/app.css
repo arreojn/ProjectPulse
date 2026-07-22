@@ -25,9 +25,9 @@ body {
     font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
     color: var(--ink);
     background:
-        radial-gradient(circle at top left, rgba(180, 83, 9, 0.18), transparent 26%),
-        radial-gradient(circle at bottom right, rgba(124, 45, 18, 0.14), transparent 24%),
-        linear-gradient(160deg, #f6efe4 0%, var(--bg) 55%, var(--bg-deep) 100%);
+        radial-gradient(circle at top left, color-mix(in srgb, var(--accent) 18%, transparent), transparent 26%),
+        radial-gradient(circle at bottom right, color-mix(in srgb, var(--accent-strong) 14%, transparent), transparent 24%),
+        linear-gradient(160deg, color-mix(in srgb, var(--bg) 72%, white) 0%, var(--bg) 55%, var(--bg-deep) 100%);
     min-height: 100vh;
 }
 
@@ -824,6 +824,36 @@ textarea:focus {
     border-bottom: none;
 }
 
+.attendance-log-shell {
+    overflow: hidden;
+}
+
+.attendance-log-table {
+    table-layout: fixed;
+}
+
+.attendance-log-table th,
+.attendance-log-table td {
+    overflow-wrap: anywhere;
+}
+
+.attendance-log-table th:nth-child(1),
+.attendance-log-table th:nth-child(2) {
+    width: 11%;
+}
+
+.attendance-log-table th:nth-child(3) {
+    width: 21%;
+}
+
+.attendance-log-table th:nth-child(4) {
+    width: 16%;
+}
+
+.attendance-log-table th:nth-child(5) {
+    width: 17%;
+}
+
 .table-status {
     font-weight: 700;
 }
@@ -1552,22 +1582,44 @@ textarea:focus {
 
 .option-checklist {
     display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
     gap: 10px;
 }
 
 .check-card {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    padding: 12px 14px;
+    position: relative;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+    min-height: 104px;
+    padding: 14px;
     border-radius: 16px;
     border: 1px solid rgba(31, 41, 51, 0.1);
     background: rgba(255, 255, 255, 0.72);
+    cursor: pointer;
+    transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease, background 160ms ease;
 }
 
-.check-card input[type="checkbox"] {
-    margin-top: 3px;
-    width: auto;
+.check-card:hover {
+    border-color: color-mix(in srgb, var(--accent) 42%, transparent);
+    box-shadow: 0 10px 22px color-mix(in srgb, var(--accent-strong) 12%, transparent);
+    transform: translateY(-1px);
+}
+
+.check-card:has(input:checked) {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 9%, var(--surface-strong));
+    box-shadow: 0 12px 26px color-mix(in srgb, var(--accent-strong) 16%, transparent);
+}
+
+.check-card input[type="checkbox"],
+.check-card input[type="radio"] {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    accent-color: var(--accent);
+    cursor: pointer;
 }
 
 .check-card span {
@@ -1580,6 +1632,37 @@ textarea:focus {
     color: var(--muted);
     font-size: 0.8rem;
     font-weight: 500;
+}
+
+.theme-choice-copy {
+    display: grid;
+    gap: 7px;
+}
+
+.theme-choice-copy strong {
+    font-size: 0.94rem;
+}
+
+.theme-choice-copy small {
+    line-height: 1.35;
+}
+
+.theme-swatch-row {
+    display: flex;
+    gap: 5px;
+}
+
+.theme-swatch {
+    width: 20px;
+    height: 20px;
+    border: 1px solid rgba(31, 41, 51, 0.14);
+    border-radius: 999px;
+    background: var(--swatch-color);
+}
+
+.check-card:focus-within {
+    outline: 3px solid color-mix(in srgb, var(--accent) 35%, transparent);
+    outline-offset: 2px;
 }
 
 .teacher-readonly-field {

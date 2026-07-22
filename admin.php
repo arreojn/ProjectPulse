@@ -362,8 +362,11 @@ if ($module === 'announcements') {
 if ($module === 'settings') {
     try {
         if (is_post() && ($_POST['form_action'] ?? '') === 'save_theme') {
+            if (!verify_csrf_token($_POST['csrf_token'] ?? null)) {
+                throw new RuntimeException('Invalid form token. Please refresh the page.');
+            }
             theme_colors_save((string) ($_POST['theme_key'] ?? ''));
-            flash_set('admin_settings', 'Theme colors saved successfully.');
+            flash_set('admin_settings', 'Portal theme saved successfully.');
             redirect('admin.php?module=settings');
         }
 
@@ -1819,7 +1822,7 @@ foreach ($attendanceGradeRows as $row) {
                     <article class="admin-module-card">
                         <div class="panel-heading compact-heading">
                             <h2>Theme Customization</h2>
-                            <p>Customize the portal's color scheme. Changes are saved locally in your browser.</p>
+                            <p>Choose the color scheme used across the portal.</p>
                         </div>
                         <form method="post" class="learner-form-grid">
                             <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
@@ -1831,8 +1834,14 @@ foreach ($attendanceGradeRows as $row) {
                                     <?php foreach (theme_predefined_sets() as $key => $theme): ?>
                                         <label class="check-card">
                                             <input type="radio" name="theme_key" value="<?php echo escape($key); ?>"<?php echo $activeThemeKey === $key ? ' checked' : ''; ?>>
-                                            <span>
-                                                <?php echo escape($theme['name']); ?>
+                                            <span class="theme-choice-copy">
+                                                <strong><?php echo escape($theme['name']); ?></strong>
+                                                <small>Accent, background, and interface colors</small>
+                                                <span class="theme-swatch-row" aria-hidden="true">
+                                                    <i class="theme-swatch" style="--swatch-color: <?php echo escape($theme['colors']['theme_color_accent']); ?>;"></i>
+                                                    <i class="theme-swatch" style="--swatch-color: <?php echo escape($theme['colors']['theme_color_bg']); ?>;"></i>
+                                                    <i class="theme-swatch" style="--swatch-color: <?php echo escape($theme['colors']['theme_color_surface_strong']); ?>;"></i>
+                                                </span>
                                             </span>
                                         </label>
                                     <?php endforeach; ?>
@@ -1842,8 +1851,6 @@ foreach ($attendanceGradeRows as $row) {
                             <div class="learner-form-actions">
                                 <button type="submit" class="primary-button">Save Theme</button>
                             </div>
-                        </form>
-                        <form method="post" class="learner-form-grid">
                         </form>
                     </article>
 

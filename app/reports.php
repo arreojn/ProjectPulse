@@ -2,6 +2,33 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/attendance_settings.php';
+
+function attendance_report_apply_summary(array $row, ?string $fallbackDate = null): array
+{
+    $attendanceDate = (string) ($row['attendance_date'] ?? '');
+    if ($attendanceDate === '' && $fallbackDate !== null && $fallbackDate <= date('Y-m-d')) {
+        $attendanceDate = $fallbackDate;
+    }
+
+    $summary = attendance_record_summary(
+        $attendanceDate !== '' ? $attendanceDate : null,
+        (string) ($row['attendance_code'] ?? ''),
+        $row['am_time_in'] ?? null,
+        $row['am_time_out'] ?? null,
+        $row['pm_time_in'] ?? null,
+        $row['pm_time_out'] ?? null
+    );
+
+    $row['attendance_code'] = $summary['code'];
+    $row['attendance_status'] = $summary['label'];
+    $row['present_units'] = $summary['present_units'];
+    $row['absent_units'] = $summary['absent_units'];
+    $row['is_late'] = $summary['is_late'];
+
+    return $row;
+}
+
 function attendance_report_learner_order_sql(string $learnerAlias = 'l'): string
 {
     return 'CASE ' . $learnerAlias . '.sex '
@@ -245,7 +272,8 @@ function attendance_report_daily(array $filters): array
             l.sex,
             le.grade_level,
             COALESCE(s.name, \'Unassigned\') AS section_name,
-            COALESCE(al.label, \'No record\') AS attendance_status,
+            ar.attendance_date,
+            COALESCE(al.code, \'\') AS attendance_code,
             ar.am_time_in,
             ar.am_time_out,
             ar.pm_time_in,
@@ -263,7 +291,10 @@ function attendance_report_daily(array $filters): array
     );
     $statement->execute($params);
 
-    return ['rows' => $statement->fetchAll()];
+    return ['rows' => array_map(
+        static fn (array $row): array => attendance_report_apply_summary($row, $filters['report_date']),
+        $statement->fetchAll()
+    )];
 }
 
 function attendance_report_monthly_summary(array $filters): array
@@ -293,7 +324,10 @@ function attendance_report_monthly_summary(array $filters): array
             COALESCE(s.name, \'Unassigned\') AS section_name,
             ar.attendance_date,
             COALESCE(al.code, \'\') AS attendance_code,
-            COALESCE(al.counts_as_present, 0) AS counts_as_present
+            ar.am_time_in,
+            ar.am_time_out,
+            ar.pm_time_in,
+            ar.pm_time_out
          FROM learner_enrollments le
          INNER JOIN learners l ON l.id = le.learner_id
          LEFT JOIN sections s ON s.id = le.section_id
@@ -337,22 +371,19 @@ function attendance_report_monthly_summary(array $filters): array
         }
 
         $dayNumber = (int) date('j', strtotime((string) $rawRow['attendance_date']));
-        $attendanceCode = (string) $rawRow['attendance_code'];
+        $summary = attendance_report_apply_summary($rawRow);
+        $attendanceCode = (string) $summary['attendance_code'];
 
         if ($dayNumber < 1 || $dayNumber > $daysInMonth) {
             continue;
         }
 
-        $rows[$learnerId]['days'][$dayNumber] = $attendanceCode;
-
-        if ($attendanceCode === 'A') {
-            $rows[$learnerId]['total_absences']++;
-        }
-
-        if ((int) $rawRow['counts_as_present'] === 1) {
-            $rows[$learnerId]['total_present_days']++;
-            $dayTotals[$dayNumber]++;
-        }
+        $rows[$learnerId]['days'][$dayNumber] = $attendanceCode === 'A' && $summary['absent_units'] === 0.5
+            ? 'A (0.5)'
+            : $attendanceCode;
+        $rows[$learnerId]['total_absences'] += $summary['absent_units'];
+        $rows[$learnerId]['total_present_days'] += $summary['present_units'];
+        $dayTotals[$dayNumber] += $summary['present_units'];
     }
 
     if ($filters['section_id'] === '' && $rows !== []) {
@@ -396,7 +427,8 @@ function attendance_report_section(array $filters): array
             l.learner_number,
             l.lrn,
             CONCAT(l.last_name, \', \', l.first_name) AS learner_name,
-            COALESCE(al.label, \'No record\') AS attendance_status,
+            ar.attendance_date,
+            COALESCE(al.code, \'\') AS attendance_code,
             ar.am_time_in,
             ar.am_time_out,
             ar.pm_time_in,
@@ -414,7 +446,10 @@ function attendance_report_section(array $filters): array
     );
     $statement->execute($params);
 
-    return ['rows' => $statement->fetchAll()];
+    return ['rows' => array_map(
+        static fn (array $row): array => attendance_report_apply_summary($row, $filters['report_date']),
+        $statement->fetchAll()
+    )];
 }
 
 function attendance_report_learner_history(array $filters): array
@@ -440,7 +475,7 @@ function attendance_report_learner_history(array $filters): array
     $statement = database()->prepare(
         'SELECT
             ar.attendance_date,
-            COALESCE(al.label, \'No record\') AS attendance_status,
+            COALESCE(al.code, \'\') AS attendance_code,
             ar.am_time_in,
             ar.am_time_out,
             ar.pm_time_in,
@@ -461,7 +496,10 @@ function attendance_report_learner_history(array $filters): array
     );
     $statement->execute($params);
 
-    return ['rows' => $statement->fetchAll()];
+    return ['rows' => array_map(
+        static fn (array $row): array => attendance_report_apply_summary($row),
+        $statement->fetchAll()
+    )];
 }
 
 function attendance_report_late_absence(array $filters): array
@@ -476,15 +514,19 @@ function attendance_report_late_absence(array $filters): array
 
     $statement = database()->prepare(
         'SELECT
+            l.id AS learner_id,
             l.learner_number,
             l.lrn,
             l.sex,
             CONCAT(l.last_name, \', \', l.first_name) AS learner_name,
             le.grade_level,
             COALESCE(s.name, \'Unassigned\') AS section_name,
-            SUM(CASE WHEN al.code = \'L\' THEN 1 ELSE 0 END) AS late_count,
-            SUM(CASE WHEN al.code = \'A\' THEN 1 ELSE 0 END) AS absent_count,
-            SUM(CASE WHEN al.code = \'E\' THEN 1 ELSE 0 END) AS excused_count
+            ar.attendance_date,
+            al.code AS attendance_code,
+            ar.am_time_in,
+            ar.am_time_out,
+            ar.pm_time_in,
+            ar.pm_time_out
          FROM learner_enrollments le
          INNER JOIN learners l ON l.id = le.learner_id
          LEFT JOIN sections s ON s.id = le.section_id
@@ -494,13 +536,43 @@ function attendance_report_late_absence(array $filters): array
          INNER JOIN attendance_legends al ON al.id = ar.legend_id
          WHERE le.school_year_id = :school_year_id' .
          ($conditions !== [] ? ' AND ' . implode(' AND ', $conditions) : '') . '
-         GROUP BY l.id, l.learner_number, l.lrn, l.sex, l.last_name, l.first_name, le.grade_level, s.name
-         HAVING late_count > 0 OR absent_count > 0 OR excused_count > 0
-         ORDER BY absent_count DESC, late_count DESC, ' . attendance_report_learner_order_sql('l')
+         ORDER BY ' . attendance_report_learner_order_sql('l') . ', ar.attendance_date ASC'
     );
     $statement->execute($params);
 
-    return ['rows' => $statement->fetchAll()];
+    $rows = [];
+    foreach ($statement->fetchAll() as $rawRow) {
+        $summary = attendance_report_apply_summary($rawRow);
+        $learnerId = (int) $rawRow['learner_id'];
+
+        if (!isset($rows[$learnerId])) {
+            $rows[$learnerId] = [
+                'learner_number' => $rawRow['learner_number'],
+                'lrn' => $rawRow['lrn'],
+                'sex' => $rawRow['sex'],
+                'learner_name' => $rawRow['learner_name'],
+                'grade_level' => $rawRow['grade_level'],
+                'section_name' => $rawRow['section_name'],
+                'late_count' => 0,
+                'absent_count' => 0.0,
+                'excused_count' => 0,
+            ];
+        }
+
+        $rows[$learnerId]['late_count'] += $summary['is_late'] ? 1 : 0;
+        $rows[$learnerId]['absent_count'] += $summary['absent_units'];
+        $rows[$learnerId]['excused_count'] += $summary['code'] === 'E' ? 1 : 0;
+    }
+
+    $rows = array_values(array_filter($rows, static fn (array $row): bool =>
+        $row['late_count'] > 0 || $row['absent_count'] > 0 || $row['excused_count'] > 0
+    ));
+    usort($rows, static fn (array $left, array $right): int =>
+        [$right['absent_count'], $right['late_count'], $left['learner_name']]
+        <=> [$left['absent_count'], $left['late_count'], $right['learner_name']]
+    );
+
+    return ['rows' => $rows];
 }
 
 function attendance_report_logs(array $filters): array

@@ -6,6 +6,7 @@ require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../app/helpers.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../app/auth.php';
+require_once __DIR__ . '/../app/attendance_settings.php';
 
 require_roles(['attendance', 'admin']);
 
@@ -68,7 +69,8 @@ if ($enrollment === false) {
 
 $attendanceStatement = database()->prepare(
     'SELECT
-        al.label AS attendance_label,
+        ar.attendance_date,
+        al.code AS attendance_code,
         ar.am_time_in,
         ar.am_time_out,
         ar.pm_time_in,
@@ -84,6 +86,14 @@ $attendanceStatement->execute([
     'attendance_date' => $attendanceDate,
 ]);
 $attendance = $attendanceStatement->fetch() ?: null;
+$attendanceSummary = attendance_record_summary(
+    $attendance['attendance_date'] ?? null,
+    $attendance['attendance_code'] ?? null,
+    $attendance['am_time_in'] ?? null,
+    $attendance['am_time_out'] ?? null,
+    $attendance['pm_time_in'] ?? null,
+    $attendance['pm_time_out'] ?? null
+);
 
 $fullName = trim(implode(' ', array_filter([
     $learner['first_name'],
@@ -99,7 +109,7 @@ echo json_encode([
         'grade_level' => $enrollment['grade_level'],
         'section' => $enrollment['section_name'],
         'school_year' => $enrollment['school_year'],
-        'attendance_status' => $attendance['attendance_label'] ?? 'No record yet',
+        'attendance_status' => $attendance === null ? 'No record yet' : $attendanceSummary['label'],
         'am_time_in' => $attendance['am_time_in'] ?? null,
         'am_time_out' => $attendance['am_time_out'] ?? null,
         'pm_time_in' => $attendance['pm_time_in'] ?? null,

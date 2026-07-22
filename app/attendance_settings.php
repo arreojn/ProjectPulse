@@ -112,6 +112,60 @@ function attendance_can_manage_scan_mode(array $user): bool
     return ($user['role'] ?? '') === 'admin';
 }
 
+/**
+ * Derive the reportable attendance result from a learner's four daily scans.
+ * Excused records are entered manually and are never replaced by scan rules.
+ */
+function attendance_record_summary(
+    ?string $attendanceDate,
+    ?string $attendanceCode,
+    ?string $amTimeIn,
+    ?string $amTimeOut,
+    ?string $pmTimeIn,
+    ?string $pmTimeOut
+): array {
+    if ($attendanceCode === 'E') {
+        return [
+            'code' => 'E', 'label' => 'Excused', 'present_units' => 0.0,
+            'absent_units' => 0.0, 'is_late' => false,
+        ];
+    }
+
+    $amComplete = !empty($amTimeIn) && !empty($amTimeOut);
+    $pmComplete = !empty($pmTimeIn) && !empty($pmTimeOut);
+    $presentUnits = ($amComplete ? 0.5 : 0.0) + ($pmComplete ? 0.5 : 0.0);
+    $isLate = (!empty($amTimeIn) && $amTimeIn > '07:30:00')
+        || (!empty($pmTimeIn) && $pmTimeIn > '13:00:00');
+
+    if ($presentUnits >= 1.0) {
+        return [
+            'code' => $isLate ? 'L' : 'P',
+            'label' => $isLate ? 'Late' : 'Present',
+            'present_units' => 1.0,
+            'absent_units' => 0.0,
+            'is_late' => $isLate,
+        ];
+    }
+
+    if ($attendanceDate === null || $attendanceDate === '') {
+        return [
+            'code' => '', 'label' => 'No record', 'present_units' => 0.0,
+            'absent_units' => 0.0, 'is_late' => false,
+        ];
+    }
+
+    $absentUnits = 1.0 - $presentUnits;
+    $label = $absentUnits === 0.5 ? 'Absent (0.5)' : 'Absent';
+    if ($isLate) {
+        $label .= ' / Late';
+    }
+
+    return [
+        'code' => 'A', 'label' => $label, 'present_units' => $presentUnits,
+        'absent_units' => $absentUnits, 'is_late' => $isLate,
+    ];
+}
+
 function attendance_scan_windows(): array
 {
     return [
