@@ -10,6 +10,7 @@ require_once __DIR__ . '/app/learners.php';
 require_once __DIR__ . '/app/parents.php';
 require_once __DIR__ . '/app/teachers.php';
 require_once __DIR__ . '/app/grades.php';
+require_once __DIR__ . '/app/health.php';
 require_once __DIR__ . '/app/announcements.php';
 require_once __DIR__ . '/app/theme_settings.php';
 
@@ -93,10 +94,68 @@ function teacher_format_date(?string $value, string $format = 'M j, Y'): string
     return $timestamp === false ? (string) $value : date($format, $timestamp);
 }
 
+function teacher_section_bmi_remarks_rows(array $learners): array
+{
+    $colors = [
+        'Underweight' => '#dd6b20',
+        'Normal' => '#17663a',
+        'Overweight' => '#b45309',
+        'Obese' => '#a12b2b',
+        'Not measured' => '#52606d',
+    ];
+    $counts = array_fill_keys(array_keys($colors), 0);
+
+    foreach ($learners as $learner) {
+        $bmi = health_calculate_bmi($learner['height_cm'] ?? null, $learner['weight_kg'] ?? null);
+        $remark = $bmi === null ? 'Not measured' : health_bmi_remarks($bmi);
+        $counts[$remark]++;
+    }
+
+    return array_map(
+        static fn (string $label): array => ['label' => $label, 'total' => $counts[$label], 'color' => $colors[$label]],
+        array_keys($colors)
+    );
+}
+
+function teacher_bmi_pie_gradient(array $rows): string
+{
+    $total = max(1, array_sum(array_column($rows, 'total')));
+    $start = 0.0;
+    $segments = [];
+
+    foreach ($rows as $row) {
+        $end = $start + ((int) $row['total'] / $total * 360);
+        $segments[] = $row['color'] . ' ' . number_format($start, 2, '.', '') . 'deg ' . number_format($end, 2, '.', '') . 'deg';
+        $start = $end;
+    }
+
+    return 'conic-gradient(' . implode(', ', $segments) . ')';
+}
+
+function teacher_dashboard_learner_health(int $teacherUserId, int $learnerId): ?array
+{
+    $statement = database()->prepare(
+        'SELECT hm.height_cm, hm.weight_kg, hm.recorded_on
+         FROM teacher_section_assignments tsa
+         INNER JOIN learner_enrollments le
+            ON le.section_id = tsa.section_id
+           AND le.school_year_id = tsa.school_year_id
+         LEFT JOIN learner_health_measurements hm ON hm.learner_enrollment_id = le.id
+         WHERE tsa.teacher_user_id = :teacher_user_id
+           AND le.learner_id = :learner_id
+         LIMIT 1'
+    );
+    $statement->execute(['teacher_user_id' => $teacherUserId, 'learner_id' => $learnerId]);
+    $row = $statement->fetch();
+
+    return $row === false ? null : $row;
+}
+
 learner_management_bootstrap();
 teacher_management_bootstrap();
 parent_portal_bootstrap();
 grade_book_bootstrap();
+health_portal_bootstrap();
 
 $user = require_roles(['teacher']);
 $allowedModules = [
@@ -129,6 +188,11 @@ $allowedModules = [
         'eyebrow' => 'Learner Profile',
         'title' => 'Learner Basic Profile',
         'description' => 'Import or update birthdate, age basis, mother tongue, religion, and address details.',
+    ],
+    'learner_details' => [
+        'eyebrow' => 'Learner Profile',
+        'title' => 'Learner Information',
+        'description' => 'Review the selected learner’s profile, health data, parent links, and grades.',
     ],
     'announcements' => [
         'eyebrow' => 'Communication',
@@ -287,6 +351,24 @@ if ($module === 'settings') {
 $sectionLearners = $section === null ? [] : teacher_section_learners((int) $user['id']);
 $parentLinks = $section === null ? [] : teacher_section_parent_links((int) $user['id']);
 $gradeRows = $section === null ? [] : grade_teacher_section_rows((int) $user['id']);
+$bmiRemarkRows = teacher_section_bmi_remarks_rows($sectionLearners);
+$bmiMeasuredCount = array_sum(array_map(
+    static fn (array $row): int => $row['label'] === 'Not measured' ? 0 : (int) $row['total'],
+    $bmiRemarkRows
+));
+$selectedDashboardLearnerId = isset($_GET['learner_id']) ? (int) $_GET['learner_id'] : 0;
+$selectedDashboardLearner = $module === 'learner_details'
+    ? teacher_find_section_learner($sectionLearners, $selectedDashboardLearnerId)
+    : null;
+$selectedDashboardHealth = $selectedDashboardLearner === null
+    ? null
+    : teacher_dashboard_learner_health((int) $user['id'], $selectedDashboardLearnerId);
+$selectedDashboardParents = $selectedDashboardLearner === null
+    ? []
+    : array_values(array_filter($parentLinks, static fn (array $link): bool => (int) $link['learner_id'] === $selectedDashboardLearnerId));
+$selectedDashboardGrades = $selectedDashboardLearner === null
+    ? []
+    : grade_teacher_learner_rows((int) $user['id'], $selectedDashboardLearnerId);
 $usesSeniorGradeLayout = $section !== null && grade_is_senior_high((string) $section['grade_level']);
 $parentAccountOptions = in_array($module, ['create_parent_account', 'link_parent_account'], true) ? parent_account_options() : [];
 $linkedLearnerCount = count(array_filter(
@@ -314,9 +396,6 @@ $unspecifiedSexShare = teacher_percentage($unspecifiedSexCount, $sectionLearnerC
 $genderChartTotal = max(1, $sectionLearnerCount);
 $maleChartEnd = round(($maleLearnerCount / $genderChartTotal) * 360, 2);
 $femaleChartEnd = round($maleChartEnd + (($femaleLearnerCount / $genderChartTotal) * 360), 2);
-$genderBarMax = max(1, $maleLearnerCount, $femaleLearnerCount);
-$maleBarHeight = $maleLearnerCount > 0 ? round(($maleLearnerCount / $genderBarMax) * 100, 2) : 0.0;
-$femaleBarHeight = $femaleLearnerCount > 0 ? round(($femaleLearnerCount / $genderBarMax) * 100, 2) : 0.0;
 
 $referenceYear = $section !== null && !empty($section['school_year_start_date'])
     ? (int) substr((string) $section['school_year_start_date'], 0, 4)
@@ -492,6 +571,34 @@ $pageMeta = $allowedModules[$module];
 
                     <section class="teacher-overview-grid">
                         <article class="teacher-panel-card">
+                            <div class="panel-heading compact-heading">
+                                <h2>BMI Remarks</h2>
+                                <p>Health-measurement overview for your advisory section.</p>
+                            </div>
+
+                            <div class="teacher-dashboard-chart-grid">
+                                <div class="teacher-bmi-donut" style="background: <?php echo escape(teacher_bmi_pie_gradient($bmiRemarkRows)); ?>;" aria-label="BMI remarks distribution">
+                                    <div class="teacher-gender-donut-center">
+                                        <strong><?php echo escape((string) $bmiMeasuredCount); ?></strong>
+                                        <span>measured learners</span>
+                                    </div>
+                                </div>
+
+                                <div class="teacher-chart-legend">
+                                    <?php foreach ($bmiRemarkRows as $bmiRow): ?>
+                                        <div class="teacher-chart-stat">
+                                            <div class="teacher-chart-stat-copy">
+                                                <span class="teacher-chart-swatch" style="background: <?php echo escape($bmiRow['color']); ?>;"></span>
+                                                <strong><?php echo escape($bmiRow['label']); ?></strong>
+                                            </div>
+                                            <strong><?php echo escape((string) $bmiRow['total']); ?></strong>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
+                        </article>
+
+                        <article class="teacher-panel-card">
                             <div class="panel-heading">
                                 <h2>Assigned Section</h2>
                                 <p>Your access is limited to this advisory class.</p>
@@ -580,51 +687,8 @@ $pageMeta = $allowedModules[$module];
                     <section class="teacher-overview-grid">
                         <article class="teacher-panel-card">
                             <div class="panel-heading compact-heading">
-                                <h2>Male vs Female Comparison</h2>
-                                <p>Bar chart view of the learner sex data recorded in your section.</p>
-                            </div>
-
-                            <?php if ($sectionLearners === []): ?>
-                                <div class="alert neutral">No learners are assigned to your section yet.</div>
-                            <?php else: ?>
-                                <div class="teacher-comparison-chart">
-                                    <div class="teacher-comparison-bar">
-                                        <div class="teacher-comparison-bar-meta">
-                                            <strong><?php echo escape((string) $maleLearnerCount); ?></strong>
-                                            <span>Male learners</span>
-                                        </div>
-                                        <div class="teacher-comparison-bar-track">
-                                            <div
-                                                class="teacher-comparison-bar-fill male<?php echo $maleLearnerCount === 0 ? ' is-empty' : ''; ?>"
-                                                style="height: <?php echo escape(number_format($maleBarHeight, 2, '.', '')); ?>%;"
-                                            ></div>
-                                        </div>
-                                    </div>
-
-                                    <div class="teacher-comparison-bar">
-                                        <div class="teacher-comparison-bar-meta">
-                                            <strong><?php echo escape((string) $femaleLearnerCount); ?></strong>
-                                            <span>Female learners</span>
-                                        </div>
-                                        <div class="teacher-comparison-bar-track">
-                                            <div
-                                                class="teacher-comparison-bar-fill female<?php echo $femaleLearnerCount === 0 ? ' is-empty' : ''; ?>"
-                                                style="height: <?php echo escape(number_format($femaleBarHeight, 2, '.', '')); ?>%;"
-                                            ></div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <?php if ($unspecifiedSexCount > 0): ?>
-                                    <p class="teacher-chart-footnote"><?php echo escape((string) $unspecifiedSexCount); ?> learner(s) still have no recorded sex.</p>
-                                <?php endif; ?>
-                            <?php endif; ?>
-                        </article>
-
-                        <article class="teacher-panel-card">
-                            <div class="panel-heading compact-heading">
                                 <h2>Section Learners</h2>
-                                <p>Click a learner name to open the grade details page.</p>
+                                <p>Click a learner name to open the complete learner information.</p>
                             </div>
 
                             <div class="table-shell">
@@ -649,7 +713,7 @@ $pageMeta = $allowedModules[$module];
                                                     <td><?php echo escape($learner['learner_number']); ?></td>
                                                     <td><?php echo escape($learner['lrn']); ?></td>
                                                     <td>
-                                                        <a class="table-inline-link" href="<?php echo escape(teacher_module_url('imported_grades', ['grade_learner_id' => (string) $learner['id']])); ?>">
+                                                        <a class="table-inline-link" href="<?php echo escape(teacher_module_url('learner_details', ['learner_id' => (string) $learner['id']])); ?>">
                                                             <?php echo escape($learner['learner_name']); ?>
                                                         </a>
                                                     </td>
@@ -663,6 +727,100 @@ $pageMeta = $allowedModules[$module];
                             </div>
                         </article>
                     </section>
+                <?php elseif ($module === 'learner_details'): ?>
+                    <?php if ($selectedDashboardLearner === null): ?>
+                        <article class="teacher-panel-card">
+                            <div class="alert error">The requested learner is not part of your assigned section.</div>
+                            <div class="template-actions">
+                                <a href="<?php echo escape(teacher_module_url('dashboard')); ?>" class="secondary-link">Back to Dashboard</a>
+                            </div>
+                        </article>
+                    <?php else: ?>
+                        <?php
+                        $detailBmi = health_calculate_bmi($selectedDashboardHealth['height_cm'] ?? null, $selectedDashboardHealth['weight_kg'] ?? null);
+                        $detailBmiRemark = $detailBmi === null ? 'Not measured' : health_bmi_remarks($detailBmi);
+                        $detailAge = learner_age_on_reference_date((string) ($selectedDashboardLearner['birthdate'] ?? ''), $ageReferenceDate);
+                        ?>
+                        <article class="teacher-panel-card">
+                            <div class="panel-heading compact-heading">
+                                <h2><?php echo escape($selectedDashboardLearner['learner_name']); ?></h2>
+                                <p>Complete information for this learner in your advisory section.</p>
+                            </div>
+                            <div class="template-actions">
+                                <a href="<?php echo escape(teacher_module_url('dashboard')); ?>" class="secondary-link">Back to Dashboard</a>
+                                <a href="<?php echo escape(teacher_module_url('learner_profiles', ['profile_learner_id' => (string) $selectedDashboardLearner['id']])); ?>" class="primary-button">Edit Basic Profile</a>
+                            </div>
+
+                            <div class="teacher-profile-identity teacher-detail-identity">
+                                <div class="teacher-profile-photo-frame">
+                                    <img class="teacher-profile-photo" src="<?php echo escape(learner_photo_url($selectedDashboardLearner['lrn'])); ?>" alt="<?php echo escape($selectedDashboardLearner['learner_name']); ?> photo">
+                                </div>
+                                <div class="teacher-profile-identity-copy">
+                                    <p class="meta-label dark">Learner</p>
+                                    <div class="teacher-readonly-field"><?php echo escape($selectedDashboardLearner['learner_name']); ?></div>
+                                    <div class="teacher-profile-meta">
+                                        <span>LRN: <?php echo escape($selectedDashboardLearner['lrn']); ?></span>
+                                        <span><?php echo escape($selectedDashboardLearner['grade_level'] . ' - ' . $selectedDashboardLearner['section_name']); ?></span>
+                                        <span><?php echo escape(ucfirst((string) ($selectedDashboardLearner['current_status'] ?? 'active'))); ?></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </article>
+
+                        <section class="teacher-overview-grid">
+                            <article class="teacher-panel-card">
+                                <div class="panel-heading compact-heading"><h2>Basic Profile</h2></div>
+                                <dl class="detail-grid wide">
+                                    <div><dt>Learner Number</dt><dd><?php echo escape($selectedDashboardLearner['learner_number']); ?></dd></div>
+                                    <div><dt>Sex</dt><dd><?php echo escape(ucfirst((string) ($selectedDashboardLearner['sex'] ?? 'unspecified'))); ?></dd></div>
+                                    <div><dt>Birthdate</dt><dd><?php echo escape(teacher_format_date($selectedDashboardLearner['birthdate'] ?? null)); ?></dd></div>
+                                    <div><dt>Age</dt><dd><?php echo escape($detailAge === null ? '-' : (string) $detailAge); ?></dd></div>
+                                    <div><dt>Mother Tongue</dt><dd><?php echo escape($selectedDashboardLearner['mother_tongue'] ?: '-'); ?></dd></div>
+                                    <div><dt>Religion</dt><dd><?php echo escape($selectedDashboardLearner['religion'] ?: '-'); ?></dd></div>
+                                    <div class="teacher-detail-wide"><dt>Address</dt><dd><?php echo escape(teacher_profile_address($selectedDashboardLearner)); ?></dd></div>
+                                </dl>
+                            </article>
+
+                            <article class="teacher-panel-card">
+                                <div class="panel-heading compact-heading"><h2>Health Information</h2></div>
+                                <dl class="detail-grid">
+                                    <div><dt>Height</dt><dd><?php echo escape(($selectedDashboardHealth['height_cm'] ?? null) !== null ? $selectedDashboardHealth['height_cm'] . ' cm' : '-'); ?></dd></div>
+                                    <div><dt>Weight</dt><dd><?php echo escape(($selectedDashboardHealth['weight_kg'] ?? null) !== null ? $selectedDashboardHealth['weight_kg'] . ' kg' : '-'); ?></dd></div>
+                                    <div><dt>BMI</dt><dd><?php echo escape($detailBmi === null ? '-' : (string) $detailBmi); ?></dd></div>
+                                    <div><dt>BMI Remark</dt><dd><?php echo escape($detailBmiRemark); ?></dd></div>
+                                    <div><dt>Recorded On</dt><dd><?php echo escape(teacher_format_date($selectedDashboardHealth['recorded_on'] ?? null)); ?></dd></div>
+                                </dl>
+                            </article>
+                        </section>
+
+                        <section class="teacher-overview-grid">
+                            <article class="teacher-panel-card">
+                                <div class="panel-heading compact-heading"><h2>Linked Parents / Guardians</h2></div>
+                                <?php if ($selectedDashboardParents === []): ?>
+                                    <div class="alert neutral">No parent or guardian account is linked yet.</div>
+                                <?php else: ?>
+                                    <div class="teacher-link-stack">
+                                        <?php foreach ($selectedDashboardParents as $parentLink): ?>
+                                            <div class="teacher-metric-row"><span><?php echo escape($parentLink['parent_name'] . ' · ' . $parentLink['relationship']); ?></span><strong><?php echo escape($parentLink['parent_email']); ?></strong></div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                <?php endif; ?>
+                            </article>
+
+                            <article class="teacher-panel-card">
+                                <div class="panel-heading compact-heading"><h2>Grades</h2></div>
+                                <?php if ($selectedDashboardGrades === []): ?>
+                                    <div class="alert neutral">No grade records are available yet.</div>
+                                <?php else: ?>
+                                    <div class="table-shell"><table class="records-table"><thead><tr><th>Subject</th><th>Final Average</th><th>Remarks</th></tr></thead><tbody>
+                                        <?php foreach ($selectedDashboardGrades as $gradeRow): ?>
+                                            <tr><td><?php echo escape($gradeRow['subject_name']); ?></td><td><?php echo escape($gradeRow['final_average'] ?? '-'); ?></td><td><?php echo escape($gradeRow['remarks'] ?? '-'); ?></td></tr>
+                                        <?php endforeach; ?>
+                                    </tbody></table></div>
+                                <?php endif; ?>
+                            </article>
+                        </section>
+                    <?php endif; ?>
                 <?php elseif ($module === 'create_parent_account'): ?>
                     <article class="teacher-panel-card">
                         <div class="panel-heading">

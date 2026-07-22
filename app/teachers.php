@@ -591,6 +591,9 @@ function teacher_section_learners(int $userId): array
             l.current_status,
             le.grade_level,
             COALESCE(s.name, \'Unassigned\') AS section_name,
+            hm.height_cm,
+            hm.weight_kg,
+            hm.recorded_on AS health_recorded_on,
             COUNT(pll.id) AS linked_parent_count
          FROM teacher_section_assignments tsa
          INNER JOIN learner_enrollments le
@@ -598,6 +601,7 @@ function teacher_section_learners(int $userId): array
            AND le.school_year_id = tsa.school_year_id
          INNER JOIN learners l ON l.id = le.learner_id
          LEFT JOIN sections s ON s.id = le.section_id
+         LEFT JOIN learner_health_measurements hm ON hm.learner_enrollment_id = le.id
          LEFT JOIN parent_learner_links pll ON pll.learner_id = l.id
          WHERE tsa.teacher_user_id = :teacher_user_id
          GROUP BY
@@ -617,7 +621,10 @@ function teacher_section_learners(int $userId): array
             l.sex,
             l.current_status,
             le.grade_level,
-            s.name
+            s.name,
+            hm.height_cm,
+            hm.weight_kg,
+            hm.recorded_on
          ORDER BY l.last_name ASC, l.first_name ASC, l.id ASC'
     );
     $statement->execute(['teacher_user_id' => $userId]);

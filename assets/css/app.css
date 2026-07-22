@@ -1416,6 +1416,17 @@ textarea:focus {
     box-shadow: inset 0 0 0 1px rgba(31, 41, 51, 0.06);
 }
 
+.teacher-bmi-donut {
+    width: min(230px, 100%);
+    aspect-ratio: 1;
+    margin: 0 auto;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    padding: 18px;
+    box-shadow: inset 0 0 0 1px rgba(31, 41, 51, 0.06);
+}
+
 .teacher-gender-donut-center {
     width: 68%;
     aspect-ratio: 1;
@@ -1702,6 +1713,10 @@ textarea:focus {
 .teacher-profile-identity-copy {
     display: grid;
     gap: 10px;
+}
+
+.teacher-detail-wide {
+    grid-column: 1 / -1;
 }
 
 .teacher-profile-meta {
