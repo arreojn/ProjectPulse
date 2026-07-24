@@ -227,6 +227,21 @@ function learner_sections(): array
     return $statement->fetchAll();
 }
 
+function learner_school_years(int $learnerId): array
+{
+    $statement = database()->prepare(
+        'SELECT DISTINCT
+            sy.id,
+            sy.label
+         FROM learner_enrollments le
+         INNER JOIN school_years sy ON sy.id = le.school_year_id
+         WHERE le.learner_id = :learner_id
+         ORDER BY sy.start_date DESC'
+    );
+    $statement->execute(['learner_id' => $learnerId]);
+    return $statement->fetchAll();
+}
+
 function learner_list_filters(): array
 {
     return [

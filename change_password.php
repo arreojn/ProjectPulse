@@ -6,11 +6,14 @@ require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/app/helpers.php';
 require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/app/auth.php';
+require_once __DIR__ . '/app/theme_settings.php';
 
 $user = require_login();
 $dashboardPath = dashboard_path_for_role($user['role'] ?? null);
 $passwordFlash = flash_get('account_password');
 $errors = [];
+
+theme_settings_bootstrap();
 
 if (is_post()) {
     $currentPassword = (string) ($_POST['current_password'] ?? '');
@@ -50,6 +53,7 @@ if (is_post()) {
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <?php echo theme_stylesheet_markup(); ?>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo escape(APP_NAME); ?> Change Password</title>
     <link rel="stylesheet" href="<?php echo escape(asset_url('assets/css/app.css')); ?>">

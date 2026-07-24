@@ -97,7 +97,7 @@ function grade_average(array $values): ?float
 
 function grade_level_normalize(string $gradeLevel): string
 {
-    return strtolower(preg_replace('/\s+/', ' ', trim($gradeLevel)) ?? trim($gradeLevel));
+    return strtolower(trim(preg_replace('/[\s\p{Z}]+/u', ' ', $gradeLevel) ?? $gradeLevel));
 }
 
 function grade_level_matches(string $expected, string $actual): bool
@@ -122,6 +122,11 @@ function grade_level_sort_value(string $gradeLevel): int
 function grade_is_senior_high(string $gradeLevel): bool
 {
     return in_array(grade_level_normalize($gradeLevel), ['grade 11', 'grade 12'], true);
+}
+
+function grade_is_junior_high(string $gradeLevel): bool
+{
+    return in_array(grade_level_normalize($gradeLevel), ['grade 7', 'grade 8', 'grade 9', 'grade 10'], true);
 }
 
 function grade_quarter_average(array $row): ?float
@@ -312,22 +317,17 @@ function grade_import_rows_from_file(array $file): array
 function grade_teacher_enrollment_for_lrn(int $teacherUserId, string $lrn, string $schoolYear): ?array
 {
     $statement = database()->prepare(
-        'SELECT le.id AS learner_enrollment_id
-              , le.grade_level
-              , sy.label AS school_year_label
-         FROM teacher_section_assignments tsa
-         INNER JOIN learner_enrollments le
-            ON le.section_id = tsa.section_id
-           AND le.school_year_id = tsa.school_year_id
-         INNER JOIN school_years sy ON sy.id = le.school_year_id
+        'SELECT le.id AS learner_enrollment_id,
+                le.grade_level,
+                sy.label AS school_year_label
+         FROM learner_enrollments le
          INNER JOIN learners l ON l.id = le.learner_id
-         WHERE tsa.teacher_user_id = :teacher_user_id
-           AND l.lrn = :lrn
+         INNER JOIN school_years sy ON sy.id = le.school_year_id
+         WHERE l.lrn = :lrn
            AND sy.label = :school_year
          LIMIT 1'
     );
     $statement->execute([
-        'teacher_user_id' => $teacherUserId,
         'lrn' => $lrn,
         'school_year' => $schoolYear,
     ]);
@@ -406,20 +406,69 @@ function grade_import_file_for_teacher(int $teacherUserId, array $file): int
 
         $payload = grade_normalize_row($row);
         $enrollment = grade_teacher_enrollment_for_lrn($teacherUserId, $payload['lrn'], $payload['school_year']);
+        $enrollmentId = null;
 
-        if ($enrollment === null) {
-            throw new RuntimeException('LRN ' . $payload['lrn'] . ' is not part of your assigned section for school year ' . $payload['school_year'] . '.');
+        if ($enrollment !== null) {
+            if (!grade_school_year_matches((string) $enrollment['school_year_label'], $payload['school_year'])) {
+                throw new RuntimeException('LRN ' . $payload['lrn'] . ' is enrolled in school year ' . $enrollment['school_year_label'] . ', not ' . $payload['school_year'] . '.');
+            }
+
+            if (!grade_level_matches((string) $enrollment['grade_level'], $payload['grade_level'])) {
+                throw new RuntimeException('LRN ' . $payload['lrn'] . ' is enrolled as ' . $enrollment['grade_level'] . ', not ' . $payload['grade_level'] . '.');
+            }
+
+            $enrollmentId = (int) $enrollment['learner_enrollment_id'];
+        } else {
+            $learnerStatement = database()->prepare('SELECT id FROM learners WHERE lrn = :lrn LIMIT 1');
+            $learnerStatement->execute(['lrn' => $payload['lrn']]);
+            $learner = $learnerStatement->fetch();
+
+            if ($learner === false) {
+                throw new RuntimeException('Learner with LRN ' . $payload['lrn'] . ' was not found in the system.');
+            }
+
+            $schoolYearStatement = database()->prepare('SELECT id FROM school_years WHERE label = :label LIMIT 1');
+            $schoolYearStatement->execute(['label' => $payload['school_year']]);
+            $schoolYear = $schoolYearStatement->fetch();
+
+            if ($schoolYear === false) {
+                $yearParts = explode('-', $payload['school_year']);
+                if (count($yearParts) !== 2 || !is_numeric($yearParts[0]) || !is_numeric($yearParts[1])) {
+                    throw new RuntimeException('School year label "' . $payload['school_year'] . '" is not in the expected YYYY-YYYY format.');
+                }
+
+                $pdo = database();
+                $insertSchoolYear = $pdo->prepare(
+                    'INSERT INTO school_years (label, start_date, end_date, is_current)
+                     VALUES (:label, :start_date, :end_date, :is_current)'
+                );
+                $insertSchoolYear->execute([
+                    'label' => $payload['school_year'],
+                    'start_date' => ((int) $yearParts[0]) . '-06-01',
+                    'end_date' => ((int) $yearParts[1]) . '-05-31',
+                    'is_current' => 0,
+                ]);
+
+                $schoolYear = ['id' => (int) $pdo->lastInsertId()];
+            }
+
+            $pdo = database();
+            $insertEnrollment = $pdo->prepare(
+                'INSERT INTO learner_enrollments (learner_id, school_year_id, grade_level, enrollment_status, enrolled_at)
+                 VALUES (:learner_id, :school_year_id, :grade_level, :enrollment_status, :enrolled_at)'
+            );
+            $insertEnrollment->execute([
+                'learner_id' => (int) $learner['id'],
+                'school_year_id' => (int) $schoolYear['id'],
+                'grade_level' => $payload['grade_level'],
+                'enrollment_status' => 'completed',
+                'enrolled_at' => date('Y-m-d'),
+            ]);
+
+            $enrollmentId = (int) $pdo->lastInsertId();
         }
 
-        if (!grade_school_year_matches((string) $enrollment['school_year_label'], $payload['school_year'])) {
-            throw new RuntimeException('LRN ' . $payload['lrn'] . ' is enrolled in school year ' . $enrollment['school_year_label'] . ', not ' . $payload['school_year'] . '.');
-        }
-
-        if (!grade_level_matches((string) $enrollment['grade_level'], $payload['grade_level'])) {
-            throw new RuntimeException('LRN ' . $payload['lrn'] . ' is enrolled as ' . $enrollment['grade_level'] . ', not ' . $payload['grade_level'] . '.');
-        }
-
-        grade_save_subject_grade((int) $enrollment['learner_enrollment_id'], $payload);
+        grade_save_subject_grade($enrollmentId, $payload);
         $importedCount++;
     }
 
@@ -468,12 +517,57 @@ function grade_teacher_section_rows(int $teacherUserId): array
     return $statement->fetchAll();
 }
 
-function grade_teacher_learner_rows(int $teacherUserId, int $learnerId): array
+function grade_teacher_rows_for_school_year(int $teacherUserId, int $schoolYearId): array
 {
     grade_book_bootstrap();
 
     $statement = database()->prepare(
         'SELECT
+            l.lrn,
+            l.id AS learner_id,
+            CONCAT(
+                l.last_name,
+                \', \',
+                l.first_name,
+                IF(l.middle_name IS NULL OR l.middle_name = \'\', \'\', CONCAT(\' \', l.middle_name))
+            ) AS learner_name,
+            sy.label AS school_year_label,
+            le.grade_level,
+            COALESCE(s.name, \'Unassigned\') AS section_name,
+            lsg.subject_name,
+            lsg.quarter_1_grade,
+            lsg.quarter_2_grade,
+            lsg.quarter_3_grade,
+            lsg.quarter_4_grade,
+            lsg.first_semester_average,
+            lsg.second_semester_average,
+            lsg.final_average,
+            lsg.remarks
+         FROM learner_subject_grades lsg
+         INNER JOIN learner_enrollments le ON le.id = lsg.learner_enrollment_id
+         INNER JOIN learners l ON l.id = le.learner_id
+         INNER JOIN school_years sy ON sy.id = le.school_year_id
+         LEFT JOIN sections s ON s.id = le.section_id
+         WHERE le.school_year_id = :school_year_id
+           AND EXISTS (
+                SELECT 1
+                FROM teacher_section_assignments tsa
+                WHERE tsa.teacher_user_id = :teacher_user_id
+                  AND tsa.school_year_id = le.school_year_id
+           )
+         ORDER BY l.last_name ASC, l.first_name ASC, lsg.subject_name ASC'
+    );
+    $statement->execute(['teacher_user_id' => $teacherUserId, 'school_year_id' => $schoolYearId]);
+
+    return $statement->fetchAll();
+}
+
+function grade_teacher_learner_rows(int $teacherUserId, int $learnerId, ?int $schoolYearId = null): array
+{
+    grade_book_bootstrap();
+
+    $params = ['learner_id' => $learnerId];
+    $sql = 'SELECT
             l.id AS learner_id,
             l.lrn,
             CONCAT(
@@ -494,22 +588,23 @@ function grade_teacher_learner_rows(int $teacherUserId, int $learnerId): array
             lsg.second_semester_average,
             lsg.final_average,
             lsg.remarks
-         FROM teacher_section_assignments tsa
-         INNER JOIN learner_enrollments le
-            ON le.section_id = tsa.section_id
-           AND le.school_year_id = tsa.school_year_id
-         INNER JOIN school_years sy ON sy.id = le.school_year_id
+         FROM learner_subject_grades lsg
+         INNER JOIN learner_enrollments le ON le.id = lsg.learner_enrollment_id
          INNER JOIN learners l ON l.id = le.learner_id
+         INNER JOIN school_years sy ON sy.id = le.school_year_id
          LEFT JOIN sections s ON s.id = le.section_id
-         INNER JOIN learner_subject_grades lsg ON lsg.learner_enrollment_id = le.id
-         WHERE tsa.teacher_user_id = :teacher_user_id
-           AND l.id = :learner_id
-         ORDER BY lsg.subject_name ASC'
-    );
-    $statement->execute([
-        'teacher_user_id' => $teacherUserId,
-        'learner_id' => $learnerId,
-    ]);
+         WHERE l.id = :learner_id
+    ';
+
+    if ($schoolYearId !== null) {
+        $sql .= ' AND sy.id = :school_year_id';
+        $params['school_year_id'] = $schoolYearId;
+    }
+
+    $sql .= ' ORDER BY sy.start_date DESC, lsg.subject_name ASC';
+
+    $statement = database()->prepare($sql);
+    $statement->execute($params);
 
     return $statement->fetchAll();
 }
@@ -578,8 +673,8 @@ function grade_group_history_by_level(array $rows): array
     $values = array_values($grouped);
     usort(
         $values,
-        static fn (array $a, array $b): int => grade_level_sort_value((string) $a['grade_level']) <=> grade_level_sort_value((string) $b['grade_level'])
-            ?: strcmp((string) $a['school_year_label'], (string) $b['school_year_label'])
+        static fn (array $a, array $b): int => grade_level_sort_value((string) $b['grade_level']) <=> grade_level_sort_value((string) $a['grade_level'])
+            ?: strcmp((string) $b['school_year_label'], (string) $a['school_year_label'])
     );
 
     return $values;

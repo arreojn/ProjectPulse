@@ -12,6 +12,7 @@ require_once __DIR__ . '/app/teachers.php';
 require_once __DIR__ . '/app/grades.php';
 require_once __DIR__ . '/app/health.php';
 require_once __DIR__ . '/app/announcements.php';
+require_once __DIR__ . '/app/issues.php';
 require_once __DIR__ . '/app/theme_settings.php';
 
 function teacher_module_url(string $module, array $params = []): string
@@ -167,12 +168,7 @@ $allowedModules = [
     'create_parent_account' => [
         'eyebrow' => 'Parent Account',
         'title' => 'Create Parent Account',
-        'description' => 'Create a parent account and link it directly to a learner in your section.',
-    ],
-    'parent_accounts_import' => [
-        'eyebrow' => 'Parent Account',
-        'title' => 'Import Parent Accounts',
-        'description' => 'Bulk import parent accounts and link them by learner LRN.',
+        'description' => 'Create a parent account, link it to a learner, or bulk import accounts from a file.',
     ],
     'link_parent_account' => [
         'eyebrow' => 'Parent Account',
@@ -225,6 +221,7 @@ $announcementRows = [];
 $adminAnnouncements = [];
 $settingsFlash = flash_get('teacher_settings');
 $activeThemeKey = 'default';
+$issueForm = issue_form_defaults();
 $announcementEditId = isset($_GET['edit_announcement_id']) ? (int) $_GET['edit_announcement_id'] : null;
 $profileFormFromPost = false;
 $section = teacher_assigned_section((int) $user['id']);
@@ -282,7 +279,7 @@ if (is_post()) {
         if ($formAction === 'import_parent_accounts') {
             $importedCount = teacher_import_parent_accounts((int) $user['id'], $_FILES['parent_import_file'] ?? []);
             flash_set('teacher_dashboard', 'Imported and linked ' . $importedCount . ' parent account(s) successfully.');
-            redirect('teacher.php?module=parent_accounts_import');
+            redirect('teacher.php?module=create_parent_account');
         }
 
         if ($formAction === 'import_grades') {
@@ -323,6 +320,13 @@ if (is_post()) {
             flash_set('teacher_settings', 'Theme saved successfully.');
             redirect('teacher.php?module=settings');
         }
+
+        if ($formAction === 'report_issue') {
+            $issueForm = issue_normalize_payload($_POST);
+            issue_report_for_teacher((int) $user['id'], $issueForm);
+            flash_set('teacher_settings', 'Issue reported successfully. Thank you for your feedback!');
+            redirect('teacher.php?module=settings');
+        }
     } catch (Throwable $exception) {
         $teacherFlash = [
             'type' => 'error',
@@ -348,9 +352,26 @@ if ($module === 'settings') {
     $activeThemeKey = theme_active_key();
 }
 
+$historicalSchoolYears = teacher_historical_school_years((int) $user['id']);
+$selectedGradeSchoolYearId = isset($_GET['grades_sy_id']) ? (int) $_GET['grades_sy_id'] : 0;
+
+if ($selectedGradeSchoolYearId === 0 && !empty($historicalSchoolYears)) {
+    $currentSectionSyLabel = $section['school_year_label'] ?? null;
+    $currentSyId = null;
+    if ($currentSectionSyLabel !== null) {
+        foreach ($historicalSchoolYears as $sy) {
+            if ($sy['label'] === $currentSectionSyLabel) {
+                $currentSyId = (int) $sy['id'];
+                break;
+            }
+        }
+    }
+    $selectedGradeSchoolYearId = $currentSyId ?? (int) ($historicalSchoolYears[0]['id'] ?? 0);
+}
+
 $sectionLearners = $section === null ? [] : teacher_section_learners((int) $user['id']);
 $parentLinks = $section === null ? [] : teacher_section_parent_links((int) $user['id']);
-$gradeRows = $section === null ? [] : grade_teacher_section_rows((int) $user['id']);
+$gradeRows = $selectedGradeSchoolYearId > 0 ? grade_teacher_rows_for_school_year((int) $user['id'], $selectedGradeSchoolYearId) : [];
 $bmiRemarkRows = teacher_section_bmi_remarks_rows($sectionLearners);
 $bmiMeasuredCount = array_sum(array_map(
     static fn (array $row): int => $row['label'] === 'Not measured' ? 0 : (int) $row['total'],
@@ -360,15 +381,24 @@ $selectedDashboardLearnerId = isset($_GET['learner_id']) ? (int) $_GET['learner_
 $selectedDashboardLearner = $module === 'learner_details'
     ? teacher_find_section_learner($sectionLearners, $selectedDashboardLearnerId)
     : null;
+$selectedLearnerDetailSyId = isset($_GET['learner_sy_id']) ? (int) $_GET['learner_sy_id'] : 0;
+$learnerSchoolYears = [];
+$selectedDashboardGrades = $selectedDashboardLearner === null
+    ? []
+    : grade_teacher_learner_rows((int) $user['id'], $selectedDashboardLearnerId, $selectedLearnerDetailSyId > 0 ? $selectedLearnerDetailSyId : null);
+$gradeHistoryGroups = [];
+if ($selectedDashboardGrades !== []) {
+    $gradeHistoryGroups = grade_group_history_by_level($selectedDashboardGrades);
+}
+if ($selectedDashboardLearner !== null) {
+    $learnerSchoolYears = learner_school_years((int) $selectedDashboardLearner['id']);
+}
 $selectedDashboardHealth = $selectedDashboardLearner === null
     ? null
     : teacher_dashboard_learner_health((int) $user['id'], $selectedDashboardLearnerId);
 $selectedDashboardParents = $selectedDashboardLearner === null
     ? []
     : array_values(array_filter($parentLinks, static fn (array $link): bool => (int) $link['learner_id'] === $selectedDashboardLearnerId));
-$selectedDashboardGrades = $selectedDashboardLearner === null
-    ? []
-    : grade_teacher_learner_rows((int) $user['id'], $selectedDashboardLearnerId);
 $usesSeniorGradeLayout = $section !== null && grade_is_senior_high((string) $section['grade_level']);
 $parentAccountOptions = in_array($module, ['create_parent_account', 'link_parent_account'], true) ? parent_account_options() : [];
 $linkedLearnerCount = count(array_filter(
@@ -379,10 +409,20 @@ $profileCompletedCount = count(array_filter(
     $sectionLearners,
     static fn (array $learner): bool => teacher_profile_is_complete($learner)
 ));
-$gradeLearnerIds = array_values(array_unique(array_map(
-    static fn (array $row): int => (int) $row['learner_id'],
-    $gradeRows
-)));
+$gradeLearners = [];
+$seenGradeLearnerIds = [];
+foreach ($gradeRows as $gradeRow) {
+    if (!in_array((int) $gradeRow['learner_id'], $seenGradeLearnerIds, true)) {
+        $gradeLearners[] = [
+            'id' => $gradeRow['learner_id'],
+            'learner_name' => $gradeRow['learner_name'],
+            'lrn' => $gradeRow['lrn'],
+        ];
+        $seenGradeLearnerIds[] = (int) $gradeRow['learner_id'];
+    }
+}
+$gradeLearnerIds = $seenGradeLearnerIds;
+
 $gradeLearnerCount = count($gradeLearnerIds);
 $gradeRecordCount = count($gradeRows);
 $sectionLearnerCount = count($sectionLearners);
@@ -412,14 +452,36 @@ $selectedGradeLearnerId = isset($_GET['grade_learner_id']) ? (int) $_GET['grade_
 if ($selectedGradeLearnerId <= 0 && $gradeLearnerIds !== []) {
     $selectedGradeLearnerId = $gradeLearnerIds[0];
 }
-$selectedGradeLearner = $selectedGradeLearnerId > 0 ? teacher_accessible_learner((int) $user['id'], $selectedGradeLearnerId) : null;
-$selectedGradeRows = $selectedGradeLearner === null ? [] : grade_teacher_learner_rows((int) $user['id'], (int) $selectedGradeLearner['id']);
+
+$selectedGradeLearner = null;
+if ($selectedGradeLearnerId > 0) {
+    foreach ($gradeLearners as $learner) {
+        if ((int) $learner['id'] === $selectedGradeLearnerId) {
+            $selectedGradeLearner = $learner;
+            break;
+        }
+    }
+}
+
+$selectedGradeRows = [];
+if ($selectedGradeLearner !== null) {
+    $selectedGradeRows = array_values(array_filter($gradeRows, static fn (array $row): bool => (int) $row['learner_id'] === (int) $selectedGradeLearner['id']));
+}
 
 $selectedProfileLearnerId = isset($_GET['profile_learner_id']) ? (int) $_GET['profile_learner_id'] : 0;
 if ($selectedProfileLearnerId <= 0 && $sectionLearners !== []) {
     $selectedProfileLearnerId = (int) $sectionLearners[0]['id'];
 }
 $selectedProfileLearner = teacher_find_section_learner($sectionLearners, $selectedProfileLearnerId);
+
+$profileLearnerGrades = [];
+$profileLearnerGradeHistory = [];
+if ($module === 'learner_profiles' && $selectedProfileLearner !== null) {
+    $profileLearnerGrades = grade_teacher_learner_rows((int) $user['id'], (int) $selectedProfileLearner['id']);
+    if ($profileLearnerGrades !== []) {
+        $profileLearnerGradeHistory = grade_group_history_by_level($profileLearnerGrades);
+    }
+}
 
 if (!$profileFormFromPost && $selectedProfileLearner !== null) {
     $profileForm = learner_profile_form_defaults([
@@ -482,7 +544,6 @@ $pageMeta = $allowedModules[$module];
                     <div class="menu-group">
                         <p class="menu-group-title">Parent Account</p>
                         <a href="<?php echo escape(teacher_module_url('create_parent_account')); ?>" class="submenu-link<?php echo $module === 'create_parent_account' ? ' active' : ''; ?>">Create Parent Account</a>
-                        <a href="<?php echo escape(teacher_module_url('parent_accounts_import')); ?>" class="submenu-link<?php echo $module === 'parent_accounts_import' ? ' active' : ''; ?>">Import</a>
                         <a href="<?php echo escape(teacher_module_url('link_parent_account')); ?>" class="submenu-link<?php echo $module === 'link_parent_account' ? ' active' : ''; ?>">Link Parent Account</a>
                     </div>
 
@@ -569,6 +630,36 @@ $pageMeta = $allowedModules[$module];
                         </article>
                     </section>
 
+                    <!-- Assigned Section Card - Moved to its own section above charts -->
+                    <section>
+                        <article class="teacher-panel-card">
+                            <div class="panel-heading">
+                                <h2>Assigned Section</h2>
+                                <p>Your access is limited to this advisory class.</p>
+                            </div>
+
+                            <dl class="detail-grid wide">
+                                <div>
+                                    <dt>Grade Level</dt>
+                                    <dd><?php echo escape($section['grade_level']); ?></dd>
+                                </div>
+                                <div>
+                                    <dt>Section</dt>
+                                    <dd><?php echo escape($section['name']); ?></dd>
+                                </div>
+                                <div>
+                                    <dt>School Year</dt>
+                                    <dd><?php echo escape($section['school_year_label']); ?></dd>
+                                </div>
+                                <div>
+                                    <dt>Age Basis</dt>
+                                    <dd><?php echo escape($ageReferenceLabel); ?></dd>
+                                </div>
+                            </dl>
+                        </article>
+                    </section>
+
+                    <!-- Charts Section - Now using teacher-chart-overview-grid for stretching -->
                     <section class="teacher-overview-grid">
                         <article class="teacher-panel-card">
                             <div class="panel-heading compact-heading">
@@ -596,32 +687,6 @@ $pageMeta = $allowedModules[$module];
                                     <?php endforeach; ?>
                                 </div>
                             </div>
-                        </article>
-
-                        <article class="teacher-panel-card">
-                            <div class="panel-heading">
-                                <h2>Assigned Section</h2>
-                                <p>Your access is limited to this advisory class.</p>
-                            </div>
-
-                            <dl class="detail-grid">
-                                <div>
-                                    <dt>Grade Level</dt>
-                                    <dd><?php echo escape($section['grade_level']); ?></dd>
-                                </div>
-                                <div>
-                                    <dt>Section</dt>
-                                    <dd><?php echo escape($section['name']); ?></dd>
-                                </div>
-                                <div>
-                                    <dt>School Year</dt>
-                                    <dd><?php echo escape($section['school_year_label']); ?></dd>
-                                </div>
-                                <div>
-                                    <dt>Age Basis</dt>
-                                    <dd><?php echo escape($ageReferenceLabel); ?></dd>
-                                </div>
-                            </dl>
                         </article>
 
                         <article class="teacher-panel-card">
@@ -684,49 +749,50 @@ $pageMeta = $allowedModules[$module];
                         </article>
                     </section>
 
-                    <section class="teacher-overview-grid">
-                        <article class="teacher-panel-card">
-                            <div class="panel-heading compact-heading">
-                                <h2>Section Learners</h2>
-                                <p>Click a learner name to open the complete learner information.</p>
-                            </div>
+                    <!-- Section Learners Card - Now in its own section -->
+                    <section>
+        <article class="teacher-panel-card">
+            <div class="panel-heading compact-heading">
+                <h2>Section Learners</h2>
+                <p>Click a learner name to open the complete learner information.</p>
+            </div>
 
-                            <div class="table-shell">
-                                <table class="records-table learner-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Learner No.</th>
-                                            <th>LRN</th>
-                                            <th>Name</th>
-                                            <th>Grade</th>
-                                            <th>Linked Parents</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <?php if ($sectionLearners === []): ?>
-                                            <tr>
-                                                <td colspan="5" class="empty-row">No learners are assigned to your section yet.</td>
-                                            </tr>
-                                        <?php else: ?>
-                                            <?php foreach ($sectionLearners as $learner): ?>
-                                                <tr>
-                                                    <td><?php echo escape($learner['learner_number']); ?></td>
-                                                    <td><?php echo escape($learner['lrn']); ?></td>
-                                                    <td>
-                                                        <a class="table-inline-link" href="<?php echo escape(teacher_module_url('learner_details', ['learner_id' => (string) $learner['id']])); ?>">
-                                                            <?php echo escape($learner['learner_name']); ?>
-                                                        </a>
-                                                    </td>
-                                                    <td><?php echo escape($learner['grade_level']); ?></td>
-                                                    <td><?php echo escape((string) $learner['linked_parent_count']); ?></td>
-                                                </tr>
-                                            <?php endforeach; ?>
-                                        <?php endif; ?>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </article>
-                    </section>
+            <div class="table-shell">
+                <table class="records-table learner-table">
+                    <thead>
+                        <tr>
+                            <th>Learner No.</th>
+                            <th>LRN</th>
+                            <th>Name</th>
+                            <th>Grade</th>
+                            <th>Linked Parents</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if ($sectionLearners === []): ?>
+                            <tr>
+                                <td colspan="5" class="empty-row">No learners are assigned to your section yet.</td>
+                            </tr>
+                        <?php else: ?>
+                            <?php foreach ($sectionLearners as $learner): ?>
+                                <tr>
+                                    <td><?php echo escape($learner['learner_number']); ?></td>
+                                    <td><?php echo escape($learner['lrn']); ?></td>
+                                    <td>
+                                        <a class="table-inline-link" href="<?php echo escape(teacher_module_url('learner_details', ['learner_id' => (string) $learner['id']])); ?>">
+                                            <?php echo escape($learner['learner_name']); ?>
+                                        </a>
+                                    </td>
+                                    <td><?php echo escape($learner['grade_level']); ?></td>
+                                    <td><?php echo escape((string) $learner['linked_parent_count']); ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </article>
+    </section>
                 <?php elseif ($module === 'learner_details'): ?>
                     <?php if ($selectedDashboardLearner === null): ?>
                         <article class="teacher-panel-card">
@@ -806,20 +872,88 @@ $pageMeta = $allowedModules[$module];
                                     </div>
                                 <?php endif; ?>
                             </article>
-
-                            <article class="teacher-panel-card">
-                                <div class="panel-heading compact-heading"><h2>Grades</h2></div>
-                                <?php if ($selectedDashboardGrades === []): ?>
-                                    <div class="alert neutral">No grade records are available yet.</div>
-                                <?php else: ?>
-                                    <div class="table-shell"><table class="records-table"><thead><tr><th>Subject</th><th>Final Average</th><th>Remarks</th></tr></thead><tbody>
-                                        <?php foreach ($selectedDashboardGrades as $gradeRow): ?>
-                                            <tr><td><?php echo escape($gradeRow['subject_name']); ?></td><td><?php echo escape($gradeRow['final_average'] ?? '-'); ?></td><td><?php echo escape($gradeRow['remarks'] ?? '-'); ?></td></tr>
-                                        <?php endforeach; ?>
-                                    </tbody></table></div>
-                                <?php endif; ?>
-                            </article>
                         </section>
+
+                        <article class="teacher-panel-card">
+                            <div class="panel-heading compact-heading">
+                                <h2>Grades</h2>
+                            </div>
+
+                            <form method="get" class="report-filter-grid" style="margin-bottom: 1.5rem;">
+                                <input type="hidden" name="module" value="learner_details">
+                                <input type="hidden" name="learner_id" value="<?php echo escape((string) $selectedDashboardLearner['id']); ?>">
+
+                                <div class="report-filter-field report-filter-field-wide">
+                                    <label for="learner_sy_id">School Year</label>
+                                    <select id="learner_sy_id" name="learner_sy_id">
+                                        <option value="0">All School Years</option>
+                                        <?php if ($learnerSchoolYears === []): ?>
+                                            <option value="" disabled>No school years with grades</option>
+                                        <?php else: ?>
+                                            <?php foreach ($learnerSchoolYears as $sy): ?>
+                                                <option value="<?php echo escape((string) $sy['id']); ?>"<?php echo $selectedLearnerDetailSyId === (int) $sy['id'] ? ' selected' : ''; ?>>
+                                                    <?php echo escape($sy['label']); ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        <?php endif; ?>
+                                    </select>
+                                </div>
+
+                                <div class="report-actions">
+                                    <button type="submit" class="primary-button">View Grades</button>
+                                </div>
+                            </form>
+
+                            <?php if ($selectedDashboardGrades === []): ?>
+                                <div class="alert neutral">No grade records are available for the selected school year.</div>
+                            <?php else: ?>
+                                <div class="table-shell">
+                                    <table class="records-table report-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Subject</th>
+                                                <th>Q1</th>
+                                                <th>Q2</th>
+                                                <?php if ($usesSeniorGradeLayout): ?>
+                                                    <th>1st Sem Avg</th>
+                                                <?php endif; ?>
+                                                <th>Q3</th>
+                                                <th>Q4</th>
+                                                <?php if ($usesSeniorGradeLayout): ?>
+                                                    <th>2nd Sem Avg</th>
+                                                <?php else: ?>
+                                                    <th>Average</th>
+                                                <?php endif; ?>
+                                                <th>Final Avg</th>
+                                                <th>Remarks</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <?php foreach ($selectedDashboardGrades as $gradeRow): ?>
+                                                <tr>
+                                                    <td><?php echo escape($gradeRow['subject_name']); ?></td>
+                                                    <td><?php echo escape($gradeRow['quarter_1_grade'] ?? '-'); ?></td>
+                                                    <td><?php echo escape($gradeRow['quarter_2_grade'] ?? '-'); ?></td>
+                                                    <?php if ($usesSeniorGradeLayout): ?>
+                                                        <td><?php echo escape($gradeRow['first_semester_average'] ?? '-'); ?></td>
+                                                    <?php endif; ?>
+                                                    <td><?php echo escape($gradeRow['quarter_3_grade'] ?? '-'); ?></td>
+                                                    <td><?php echo escape($gradeRow['quarter_4_grade'] ?? '-'); ?></td>
+                                                    <?php if ($usesSeniorGradeLayout): ?>
+                                                        <td><?php echo escape($gradeRow['second_semester_average'] ?? '-'); ?></td>
+                                                    <?php else: ?>
+                                                        <?php $quarterAverage = grade_quarter_average($gradeRow); ?>
+                                                        <td><?php echo escape($quarterAverage !== null ? (string) $quarterAverage : '-'); ?></td>
+                                                    <?php endif; ?>
+                                                    <td><?php echo escape($gradeRow['final_average'] ?? '-'); ?></td>
+                                                    <td><?php echo escape($gradeRow['remarks'] ?? '-'); ?></td>
+                                                </tr>
+                                            <?php endforeach; ?>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            <?php endif; ?>
+                        </article>
                     <?php endif; ?>
                 <?php elseif ($module === 'create_parent_account'): ?>
                     <article class="teacher-panel-card">
@@ -901,7 +1035,7 @@ $pageMeta = $allowedModules[$module];
                             </div>
                         </form>
                     </article>
-                <?php elseif ($module === 'parent_accounts_import'): ?>
+
                     <article class="teacher-panel-card">
                         <div class="panel-heading">
                             <h2>Import Parent Accounts</h2>
@@ -1057,6 +1191,29 @@ $pageMeta = $allowedModules[$module];
                             <p>Review the grade records currently stored for your assigned learners.</p>
                         </div>
 
+                        <form method="get" class="report-filter-grid" style="margin-bottom: 1.5rem;">
+                            <input type="hidden" name="module" value="grades_import">
+
+                            <div class="report-filter-field report-filter-field-wide">
+                                <label for="grades_sy_id">School Year</label>
+                                <select id="grades_sy_id" name="grades_sy_id">
+                                    <?php if ($historicalSchoolYears === []): ?>
+                                        <option value="">No historical data found</option>
+                                    <?php else: ?>
+                                        <?php foreach ($historicalSchoolYears as $sy): ?>
+                                            <option value="<?php echo escape((string) $sy['id']); ?>"<?php echo $selectedGradeSchoolYearId === (int) $sy['id'] ? ' selected' : ''; ?>>
+                                                <?php echo escape($sy['label']); ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
+                                </select>
+                            </div>
+
+                            <div class="report-actions">
+                                <button type="submit" class="primary-button">View Grades</button>
+                            </div>
+                        </form>
+
                         <div class="table-shell">
                             <table class="records-table report-table">
                                 <thead>
@@ -1128,8 +1285,8 @@ $pageMeta = $allowedModules[$module];
                             <div class="report-filter-field report-filter-field-wide">
                                 <label for="grade_learner_id">Learner</label>
                                 <select id="grade_learner_id" name="grade_learner_id">
-                                    <?php foreach ($sectionLearners as $learner): ?>
-                                        <option value="<?php echo escape((string) $learner['id']); ?>"<?php echo $selectedGradeLearner !== null && (int) $selectedGradeLearner['id'] === (int) $learner['id'] ? ' selected' : ''; ?>>
+                                    <?php foreach ($gradeLearners as $learner): ?>
+                                        <option value="<?php echo escape((string) $learner['id']); ?>"<?php echo $selectedGradeLearnerId === (int) $learner['id'] ? ' selected' : ''; ?>>
                                             <?php echo escape($learner['learner_name'] . ' [' . $learner['lrn'] . ']'); ?>
                                         </option>
                                     <?php endforeach; ?>
@@ -1361,52 +1518,118 @@ $pageMeta = $allowedModules[$module];
                         <?php endif; ?>
                     </article>
 
-                    <article class="teacher-panel-card">
-                        <div class="panel-heading compact-heading">
-                            <h2>Section Learner Profiles</h2>
-                            <p>Age below is auto-computed using <?php echo escape($ageReferenceLabel); ?>.</p>
-                        </div>
+                    <?php if ($selectedProfileLearner !== null): ?>
+                        <article class="teacher-panel-card">
+                            <div class="panel-heading compact-heading">
+                                <h2>Grade History</h2>
+                                <p>Complete grade history for <?php echo escape($selectedProfileLearner['learner_name']); ?>.</p>
+                            </div>
 
-                        <div class="table-shell">
-                            <table class="records-table learner-table">
-                                <thead>
-                                    <tr>
-                                        <th>Learner</th>
-                                        <th>LRN</th>
-                                        <th>Birthdate</th>
-                                        <th>Age</th>
-                                        <th>Mother Tongue</th>
-                                        <th>Religion</th>
-                                        <th>Address</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php if ($sectionLearners === []): ?>
-                                        <tr>
-                                            <td colspan="7" class="empty-row">No learners are assigned to your section yet.</td>
-                                        </tr>
-                                    <?php else: ?>
-                                        <?php foreach ($sectionLearners as $learner): ?>
-                                            <?php $learnerAge = learner_age_on_reference_date((string) ($learner['birthdate'] ?? ''), $ageReferenceDate); ?>
-                                            <tr>
-                                                <td>
-                                                    <a class="table-inline-link" href="<?php echo escape(teacher_module_url('learner_profiles', ['profile_learner_id' => (string) $learner['id']])); ?>">
-                                                        <?php echo escape($learner['learner_name']); ?>
-                                                    </a>
-                                                </td>
-                                                <td><?php echo escape($learner['lrn']); ?></td>
-                                                <td><?php echo escape(teacher_format_date($learner['birthdate'] ?? null)); ?></td>
-                                                <td><?php echo escape($learnerAge !== null ? (string) $learnerAge : '-'); ?></td>
-                                                <td><?php echo escape($learner['mother_tongue'] !== '' ? $learner['mother_tongue'] : '-'); ?></td>
-                                                <td><?php echo escape($learner['religion'] !== '' ? $learner['religion'] : '-'); ?></td>
-                                                <td><?php echo escape(teacher_profile_address($learner)); ?></td>
-                                            </tr>
-                                        <?php endforeach; ?>
-                                    <?php endif; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    </article>
+                            <?php if ($profileLearnerGradeHistory === []): ?>
+                                <div class="alert neutral">No grade records are available for this learner yet.</div>
+                            <?php else: ?>
+                                <div class="grade-history-stack">
+                                    <?php foreach ($profileLearnerGradeHistory as $gradeGroup): ?>
+                                        <?php $isSeniorHigh = grade_is_senior_high((string) $gradeGroup['grade_level']); ?>
+                                        <?php $usesSeniorGradeLayout = $isSeniorHigh; ?>
+                                        <section class="grade-history-section">
+                                            <div class="monthly-report-info large-report-info">
+                                                <p><strong>School Year:</strong> <?php echo escape($gradeGroup['school_year_label']); ?></p>
+                                                <p><strong>Grade:</strong> <?php echo escape($gradeGroup['grade_level']); ?></p>
+                                                <p><strong>Section:</strong> <?php echo escape($gradeGroup['section_name']); ?></p>
+                                                <p><strong>Grand Average:</strong> <?php echo escape($gradeGroup['grand_average'] !== null ? (string) $gradeGroup['grand_average'] : '-'); ?></p>
+                                            </div>
+
+                                            <div class="table-shell">
+                                                <?php if ($usesSeniorGradeLayout): ?>
+                                                    <table class="records-table report-table">
+                                                        <thead>
+                                                        <tr>
+                                                            <th colspan="4">First Semester</th>
+                                                        </tr>
+                                                        <tr>
+                                                            <th>Subject</th>
+                                                            <th>Q1</th>
+                                                            <th>Q2</th>
+                                                            <th>1st Sem Avg</th>
+                                                        </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                        <?php foreach ($gradeGroup['rows'] as $gradeRow): ?>
+                                                            <tr>
+                                                                <td><?php echo escape($gradeRow['subject_name']); ?></td>
+                                                                <td><?php echo escape($gradeRow['quarter_1_grade'] ?? '-'); ?></td>
+                                                                <td><?php echo escape($gradeRow['quarter_2_grade'] ?? '-'); ?></td>
+                                                                <td><?php echo escape($gradeRow['first_semester_average'] ?? '-'); ?></td>
+                                                            </tr>
+                                                        <?php endforeach; ?>
+                                                        </tbody>
+                                                    </table>
+                                                    <table class="records-table report-table grade-semester-table">
+                                                        <thead>
+                                                        <tr>
+                                                            <th colspan="6">Second Semester</th>
+                                                        </tr>
+                                                        <tr>
+                                                            <th>Subject</th>
+                                                            <th>Q3</th>
+                                                            <th>Q4</th>
+                                                            <th>2nd Sem Avg</th>
+                                                            <th>Final Avg</th>
+                                                            <th>Remarks</th>
+                                                        </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                        <?php foreach ($gradeGroup['rows'] as $gradeRow): ?>
+                                                            <tr>
+                                                                <td><?php echo escape($gradeRow['subject_name']); ?></td>
+                                                                <td><?php echo escape($gradeRow['quarter_3_grade'] ?? '-'); ?></td>
+                                                                <td><?php echo escape($gradeRow['quarter_4_grade'] ?? '-'); ?></td>
+                                                                <td><?php echo escape($gradeRow['second_semester_average'] ?? '-'); ?></td>
+                                                                <td><?php echo escape($gradeRow['final_average'] ?? '-'); ?></td>
+                                                                <td><?php echo escape($gradeRow['remarks'] ?? '-'); ?></td>
+                                                            </tr>
+                                                        <?php endforeach; ?>
+                                                        </tbody>
+                                                    </table>
+                                                <?php else: ?>
+                                                    <table class="records-table report-table">
+                                                        <thead>
+                                                        <tr>
+                                                            <th>Subject</th>
+                                                            <th>Q1</th>
+                                                            <th>Q2</th>
+                                                            <th>Q3</th>
+                                                            <th>Q4</th>
+                                                            <th>Average</th>
+                                                            <th>Final Avg</th>
+                                                            <th>Remarks</th>
+                                                        </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                        <?php foreach ($gradeGroup['rows'] as $gradeRow): ?>
+                                                            <tr>
+                                                                <td><?php echo escape($gradeRow['subject_name']); ?></td>
+                                                                <td><?php echo escape($gradeRow['quarter_1_grade'] ?? '-'); ?></td>
+                                                                <td><?php echo escape($gradeRow['quarter_2_grade'] ?? '-'); ?></td>
+                                                                <td><?php echo escape($gradeRow['quarter_3_grade'] ?? '-'); ?></td>
+                                                                <td><?php echo escape($gradeRow['quarter_4_grade'] ?? '-'); ?></td>
+                                                                <?php $quarterAverage = grade_quarter_average($gradeRow); ?>
+                                                                <td><?php echo escape($quarterAverage !== null ? (string) $quarterAverage : '-'); ?></td>
+                                                                <td><?php echo escape($gradeRow['final_average'] ?? '-'); ?></td>
+                                                                <td><?php echo escape($gradeRow['remarks'] ?? '-'); ?></td>
+                                                            </tr>
+                                                        <?php endforeach; ?>
+                                                        </tbody>
+                                                    </table>
+                                                <?php endif; ?>
+                                            </div>
+                                        </section>
+                                    <?php endforeach; ?>
+                                </div>
+                            <?php endif; ?>
+                        </article>
+                    <?php endif; ?>
                 <?php elseif ($module === 'announcements'): ?>
                     <section>
                         <article class="admin-module-card">
@@ -1541,6 +1764,35 @@ $pageMeta = $allowedModules[$module];
                             <div class="template-actions">
                                  <a href="<?php echo escape(route_url('change_password.php')); ?>" class="secondary-link">Change Password</a>
                             </div>
+                        </article>
+                        <article class="teacher-panel-card">
+                            <div class="panel-heading compact-heading">
+                                <h2>Report an Issue</h2>
+                                <p>Encountered a problem? Let us know!</p>
+                            </div>
+                            <form method="post" class="learner-form-grid">
+                                <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
+                                <input type="hidden" name="form_action" value="report_issue">
+
+                                <div class="teacher-form-grid-full">
+                                    <label for="issue_subject">Subject</label>
+                                    <input
+                                        id="issue_subject"
+                                        name="subject"
+                                        type="text"
+                                        value="<?php echo escape($issueForm['subject']); ?>"
+                                        required
+                                    >
+                                </div>
+                                <div class="teacher-form-grid-full">
+                                    <label for="issue_description">Description</label>
+                                    <textarea id="issue_description" name="description" rows="5" required><?php echo escape($issueForm['description']); ?></textarea>
+                                </div>
+
+                                <div class="learner-form-actions teacher-form-grid-full">
+                                    <button type="submit" class="primary-button">Submit Issue</button>
+                                </div>
+                            </form>
                         </article>
                     </section>
                 <?php endif; ?>

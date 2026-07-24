@@ -476,11 +476,18 @@ function teacher_save(array $payload): void
                 ]);
             }
 
+            $schoolYearIds = array_values(array_unique(array_map(
+                static fn (array $section): int => (int) $section['school_year_id'],
+                $sections
+            )));
+
             $deleteAssignmentStatement = $pdo->prepare(
-                'DELETE FROM teacher_section_assignments
-                 WHERE teacher_user_id = :teacher_user_id'
+                'DELETE FROM teacher_section_assignments WHERE teacher_user_id = ? AND school_year_id IN (' . implode(', ', array_fill(0, count($schoolYearIds), '?')) . ')'
             );
-            $deleteAssignmentStatement->execute(['teacher_user_id' => $teacherUserId]);
+            $deleteAssignmentStatement->execute(array_merge(
+                [$teacherUserId],
+                $schoolYearIds
+            ));
         }
 
         $assignmentStatement = $pdo->prepare(
@@ -562,6 +569,24 @@ function teacher_assigned_section(int $userId): ?array
     $sections = teacher_assigned_sections($userId);
 
     return $sections[0] ?? null;
+}
+
+function teacher_historical_school_years(int $userId): array
+{
+    teacher_management_bootstrap();
+
+    $statement = database()->prepare(
+        'SELECT DISTINCT
+            sy.id,
+            sy.label
+         FROM teacher_section_assignments tsa
+         INNER JOIN school_years sy ON sy.id = tsa.school_year_id
+         WHERE tsa.teacher_user_id = :teacher_user_id
+         ORDER BY sy.start_date DESC'
+    );
+    $statement->execute(['teacher_user_id' => $userId]);
+
+    return $statement->fetchAll();
 }
 
 function teacher_section_learners(int $userId): array

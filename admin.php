@@ -11,7 +11,9 @@ require_once __DIR__ . '/app/reports.php';
 require_once __DIR__ . '/app/sections.php';
 require_once __DIR__ . '/app/teachers.php';
 require_once __DIR__ . '/app/announcements.php';
+require_once __DIR__ . '/app/issues.php';
 require_once __DIR__ . '/app/theme_settings.php';
+require_once __DIR__ . '/app/password_resets.php';
 
 function format_report_time(?string $value): string
 {
@@ -117,6 +119,8 @@ $allowedModules = [
     'teacher_management' => 'Teacher Management',
     'attendance_reports' => 'Attendance Reports',
     'announcements' => 'Announcements',
+    'reported_issues' => 'Reported Issues',
+    'password_resets' => 'Password Resets',
     'settings' => 'Settings',
 ];
 
@@ -177,14 +181,21 @@ $teacherEditId = isset($_GET['edit_teacher_id']) ? (int) $_GET['edit_teacher_id'
 $announcementFlash = flash_get('announcements_management');
 $announcementForm = ['id' => null, 'title' => '', 'content' => '', 'is_published' => 0];
 $announcementRows = [];
+$issueFlash = flash_get('admin_issues');
+$issueRows = [];
+$issueForm = issue_form_defaults();
+$issueEditId = isset($_GET['edit_issue_id']) ? (int) $_GET['edit_issue_id'] : null;
 $announcementEditId = isset($_GET['edit_announcement_id']) ? (int) $_GET['edit_announcement_id'] : null;
 $settingsFlash = flash_get('admin_settings');
+$passwordResetFlash = flash_get('admin_password_resets');
+$pendingPasswordResets = [];
 $themeColors = [];
 $activeThemeKey = 'default';
 $systemLoginLogs = [];
 
 announcements_bootstrap();
 theme_settings_bootstrap();
+
 
 if ($module === 'learner_management') {
     try {
@@ -359,6 +370,66 @@ if ($module === 'announcements') {
     }
 }
 
+if ($module === 'reported_issues') {
+    try {
+        issue_bootstrap();
+
+        if (is_post()) {
+            if (!verify_csrf_token($_POST['csrf_token'] ?? null)) {
+                throw new RuntimeException('Invalid form token. Please refresh the page.');
+            }
+
+            $formAction = (string) ($_POST['form_action'] ?? '');
+
+            if ($formAction === 'update_issue_status') {
+                issue_update_status((int) ($_POST['issue_id'] ?? 0), (string) ($_POST['status'] ?? 'open'));
+                flash_set('admin_issues', 'Issue status updated successfully.');
+                redirect('admin.php?module=reported_issues');
+            }
+        }
+
+        $issueRows = issue_list_for_admin();
+        if ($issueEditId !== null) {
+            $issueForm = issue_find($issueEditId) ?? issue_form_defaults();
+        }
+    } catch (Throwable $exception) {
+        $issueFlash = [
+            'type' => 'error',
+            'message' => $exception->getMessage(),
+        ];
+    }
+}
+
+if ($module === 'password_resets') {
+    try {
+        password_resets_bootstrap();
+
+        if (is_post()) {
+            if (!verify_csrf_token($_POST['csrf_token'] ?? null)) {
+                throw new RuntimeException('Invalid form token. Please refresh the page.');
+            }
+
+            $formAction = (string) ($_POST['form_action'] ?? '');
+            $requestId = (int) ($_POST['request_id'] ?? 0);
+
+            if ($formAction === 'approve_reset') {
+                $newPassword = approve_password_reset($requestId, (int) $user['id']);
+                flash_set('admin_password_resets', 'Password has been reset. The new password is: ' . $newPassword);
+                redirect('admin.php?module=password_resets');
+            }
+
+            if ($formAction === 'deny_reset') {
+                deny_password_reset($requestId, (int) $user['id']);
+                flash_set('admin_password_resets', 'Password reset request has been denied.');
+                redirect('admin.php?module=password_resets');
+            }
+        }
+
+        $pendingPasswordResets = get_pending_password_requests();
+    } catch (Throwable $exception) {
+        $passwordResetFlash = ['type' => 'error', 'message' => $exception->getMessage()];
+    }
+}
 if ($module === 'settings') {
     try {
         if (is_post() && ($_POST['form_action'] ?? '') === 'save_theme') {
@@ -598,10 +669,14 @@ foreach ($attendanceGradeRows as $row) {
                         <a href="<?php echo escape(route_url('admin.php?module=sections_management')); ?>" class="submenu-link<?php echo $module === 'sections_management' ? ' active' : ''; ?>">Sections Management</a>
                         <a href="<?php echo escape(route_url('admin.php?module=teacher_management')); ?>" class="submenu-link<?php echo $module === 'teacher_management' ? ' active' : ''; ?>">Teacher Management</a>
                         <a href="<?php echo escape(route_url('admin.php?module=attendance_reports')); ?>" class="submenu-link<?php echo $module === 'attendance_reports' ? ' active' : ''; ?>">Attendance Reports</a>
-                        <a href="<?php echo escape(route_url('admin.php?module=announcements')); ?>" class="submenu-link<?php echo $module === 'announcements' ? ' active' : ''; ?>">Announcements</a>
+                        
+                        
                     </div>
                     <div class="menu-group">
                         <p class="menu-group-title">System</p>
+                        <a href="<?php echo escape(route_url('admin.php?module=announcements')); ?>" class="submenu-link<?php echo $module === 'announcements' ? ' active' : ''; ?>">Announcements</a>
+                        <a href="<?php echo escape(route_url('admin.php?module=reported_issues')); ?>" class="submenu-link<?php echo $module === 'reported_issues' ? ' active' : ''; ?>">Reported Issues</a>
+                        <a href="<?php echo escape(route_url('admin.php?module=password_resets')); ?>" class="submenu-link<?php echo $module === 'password_resets' ? ' active' : ''; ?>">Password Resets</a>
                         <a href="<?php echo escape(route_url('admin.php?module=settings')); ?>" class="submenu-link<?php echo $module === 'settings' ? ' active' : ''; ?>">Settings</a>
                         <a href="<?php echo escape(route_url('change_password.php')); ?>" class="submenu-link">Change Password</a>
                     </div>
@@ -1285,10 +1360,11 @@ foreach ($attendanceGradeRows as $row) {
                                         <option value="">Select section</option>
                                         <?php foreach ($teacherSections as $section): ?>
                                             <?php
-                                            $isSelectedSection = (string) $section['id'] === (string) $teacherForm['section_id'];
+                                            $isSelectedSection = (string) $section['id'] === (string) ($teacherForm['section_id'] ?? '');
                                             $assignedTeacherUsername = (string) ($section['assigned_teacher_username'] ?? '');
                                             $assignedTeacherName = trim((string) ($section['assigned_teacher_name'] ?? ''));
-                                            $sectionSuffix = $assignedTeacherUsername !== '' && !$isSelectedSection
+                                            $isAssignedToOther = $assignedTeacherUsername !== '' && $assignedTeacherUsername !== $teacherForm['username'];
+                                            $sectionSuffix = $isAssignedToOther
                                                 ? 'Assigned to ' . ($assignedTeacherName !== '' ? $assignedTeacherName : $assignedTeacherUsername)
                                                 : 'Available';
                                             $sectionLabel = $section['school_year_label'] . ' - ' . $section['grade_level'] . ' - ' . $section['name'] . ' (' . $sectionSuffix . ')';
@@ -1296,7 +1372,7 @@ foreach ($attendanceGradeRows as $row) {
                                             <option
                                                 value="<?php echo escape((string) $section['id']); ?>"
                                                 <?php echo $isSelectedSection ? ' selected' : ''; ?>
-                                                <?php echo $assignedTeacherUsername !== '' && !$isSelectedSection ? ' disabled' : ''; ?>
+                                                <?php echo $isAssignedToOther ? ' disabled' : ''; ?>
                                             >
                                                 <?php echo escape($sectionLabel); ?>
                                             </option>
@@ -1803,6 +1879,145 @@ foreach ($attendanceGradeRows as $row) {
                             </table>
                         </div>
                     </section>
+                <?php elseif ($module === 'reported_issues'): ?>
+                    <header class="admin-page-header admin-page-header-reported-issues">
+                        <div class="admin-page-title">
+                            <img class="school-logo header-logo" src="<?php echo escape(school_logo_url()); ?>" alt="School logo">
+                            <div class="header-copy">
+                                <p class="eyebrow">System</p>
+                                <h2>Reported Issues</h2>
+                                <p>Review and manage issues reported by teachers.</p>
+                            </div>
+                        </div>
+                    </header>
+
+                    <?php if ($issueFlash !== null): ?>
+                        <div class="alert <?php echo escape($issueFlash['type']); ?>"><?php echo escape($issueFlash['message']); ?></div>
+                    <?php endif; ?>
+
+                    <article class="admin-module-card">
+                        <div class="panel-heading compact-heading">
+                            <h2>Reported Issues List</h2>
+                            <p>All issues reported by teachers.</p>
+                        </div>
+
+                        <div class="table-shell reported-issues-table-shell">
+                            <table class="records-table learner-table">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Subject</th>
+                                        <th>Description</th>
+                                        <th>Reported By</th>
+                                        <th>Status</th>
+                                        <th>Reported On</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php if ($issueRows === []): ?>
+                                        <tr>
+                                            <td colspan="7" class="empty-row">No issues have been reported yet.</td>
+                                        </tr>
+                                    <?php else: ?>
+                                        <?php foreach ($issueRows as $issue): ?>
+                                            <tr>
+                                                <td><?php echo escape((string) $issue['id']); ?></td>
+                                                <td><?php echo escape($issue['subject']); ?></td>
+                                                <td><?php echo escape(substr($issue['description'], 0, 100)) . (strlen($issue['description']) > 100 ? '...' : ''); ?></td>
+                                                <td><?php echo escape($issue['reporter_name'] . ' (' . $issue['username'] . ')'); ?></td>
+                                                <td><span class="table-status"><?php echo escape(ucfirst($issue['status'])); ?></span></td>
+                                                <td><?php echo escape(date('M j, Y H:i', strtotime($issue['created_at']))); ?></td>
+                                                <td>
+                                                    <div class="table-actions">
+                                                        <form method="post" class="inline-form">
+                                                            <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
+                                                            <input type="hidden" name="form_action" value="update_issue_status">
+                                                            <input type="hidden" name="issue_id" value="<?php echo escape((string) $issue['id']); ?>">
+                                                            <select name="status" onchange="this.form.submit()">
+                                                                <option value="open"<?php echo $issue['status'] === 'open' ? ' selected' : ''; ?>>Open</option>
+                                                                <option value="in_progress"<?php echo $issue['status'] === 'in_progress' ? ' selected' : ''; ?>>In Progress</option>
+                                                                <option value="resolved"<?php echo $issue['status'] === 'resolved' ? ' selected' : ''; ?>>Resolved</option>
+                                                                <option value="closed"<?php echo $issue['status'] === 'closed' ? ' selected' : ''; ?>>Closed</option>
+                                                            </select>
+                                                        </form>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </article>
+                <?php elseif ($module === 'password_resets'): ?>
+                    <header class="admin-page-header">
+                        <div class="admin-page-title">
+                            <img class="school-logo header-logo" src="<?php echo escape(school_logo_url()); ?>" alt="School logo">
+                            <div class="header-copy">
+                                <p class="eyebrow">System</p>
+                                <h2>Password Resets</h2>
+                                <p>Approve or deny user requests for password resets.</p>
+                            </div>
+                        </div>
+                    </header>
+
+                    <?php if ($passwordResetFlash !== null): ?>
+                        <div class="alert <?php echo escape($passwordResetFlash['type']); ?>"><?php echo escape($passwordResetFlash['message']); ?></div>
+                    <?php endif; ?>
+
+                    <article class="admin-module-card">
+                        <div class="panel-heading compact-heading">
+                            <h2>Pending Requests</h2>
+                            <p>Approving a request will generate a new temporary password.</p>
+                        </div>
+
+                        <div class="table-shell">
+                            <table class="records-table learner-table">
+                                <thead>
+                                    <tr>
+                                        <th>Requested At</th>
+                                        <th>Username</th>
+                                        <th>Email</th>
+                                        <th>Role</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php if ($pendingPasswordResets === []): ?>
+                                        <tr>
+                                            <td colspan="5" class="empty-row">No pending password reset requests.</td>
+                                        </tr>
+                                    <?php else: ?>
+                                        <?php foreach ($pendingPasswordResets as $request): ?>
+                                            <tr>
+                                                <td><?php echo escape(date('M j, Y H:i', strtotime($request['requested_at']))); ?></td>
+                                                <td><?php echo escape($request['username']); ?></td>
+                                                <td><?php echo escape($request['email']); ?></td>
+                                                <td><?php echo escape(ucfirst($request['role'])); ?></td>
+                                                <td>
+                                                    <div class="table-actions">
+                                                        <form method="post" class="inline-form" onsubmit="return confirm('Approve this request and reset the password?');">
+                                                            <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
+                                                            <input type="hidden" name="form_action" value="approve_reset">
+                                                            <input type="hidden" name="request_id" value="<?php echo escape((string) $request['id']); ?>">
+                                                            <button type="submit" class="primary-button small-link">Approve</button>
+                                                        </form>
+                                                        <form method="post" class="inline-form" onsubmit="return confirm('Deny this password reset request?');">
+                                                            <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
+                                                            <input type="hidden" name="form_action" value="deny_reset">
+                                                            <input type="hidden" name="request_id" value="<?php echo escape((string) $request['id']); ?>">
+                                                            <button type="submit" class="danger-button">Deny</button>
+                                                        </form>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </article>
                 <?php elseif ($module === 'settings'): ?>
                     <header class="admin-page-header">
                         <div class="admin-page-title">
