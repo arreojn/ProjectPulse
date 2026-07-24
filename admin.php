@@ -13,7 +13,7 @@ require_once __DIR__ . '/app/teachers.php';
 require_once __DIR__ . '/app/announcements.php';
 require_once __DIR__ . '/app/issues.php';
 require_once __DIR__ . '/app/theme_settings.php';
-require_once __DIR__ . '/app/password_resets.php';
+require_once __DIR__ . '/password_resets.php';
 
 function format_report_time(?string $value): string
 {

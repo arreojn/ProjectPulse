@@ -12,11 +12,11 @@ function password_resets_bootstrap(): void
 
     database()->exec(
         'CREATE TABLE IF NOT EXISTS password_reset_requests (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            user_id INT NOT NULL,
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            user_id INT UNSIGNED NOT NULL,
             status VARCHAR(20) NOT NULL DEFAULT \'pending\', -- pending, approved, denied
             requested_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            reviewed_by_admin_id INT NULL,
+            reviewed_by_admin_id INT UNSIGNED NULL,
             reviewed_at DATETIME NULL,
             new_password_snapshot VARCHAR(255) NULL,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,

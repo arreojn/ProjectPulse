@@ -51,6 +51,7 @@ if (is_post() && $databaseConnectionOk) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo escape(APP_NAME); ?> Login</title>
+    <?php echo theme_stylesheet_markup(); ?>
     <style>
         @import url("https://fonts.googleapis.com/css2?family=Open+Sans:wght@200;300;400;500;600;700&display=swap");
         * {
@@ -77,13 +78,51 @@ if (is_post() && $databaseConnectionOk) {
           background-size: cover;
         }
         .wrapper {
-          width: 400px;
+          width: 100%; /* Adjust for flex container */
+          max-width: 400px; /* Keep original max width */
           border-radius: 8px;
           padding: 30px;
           text-align: center;
           border: 1px solid rgba(255, 255, 255, 0.5);
           backdrop-filter: blur(9px);
           -webkit-backdrop-filter: blur(9px);
+          z-index: 1; /* Ensure it's above the background */
+        }
+        .login-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-evenly;
+            width: 100%;
+            max-width: 1200px;
+            gap: 50px; /* Space between logo/title and form */
+            z-index: 1;
+            flex-wrap: wrap; /* Allow wrapping on smaller screens */
+            padding: 20px;
+        }
+        .login-branding {
+            text-align: center;
+            color: #fff;
+            max-width: 450px; /* Limit width of branding section */
+        }
+        .login-branding img {
+            width: 250px; /* Adjusted logo for better balance */
+            height: auto;
+            margin-bottom: 20px;
+        }
+        .login-branding h1 {
+            font-size: 3rem; /* Adjusted title size */
+            font-weight: 600;
+            margin-bottom: 10px; /* Space between title and tagline */
+            letter-spacing: 1px;
+        }
+        .login-branding h1 strong {
+            font-weight: 800; /* Emphasize the acronym */
+        }
+        .branding-tagline {
+            font-size: 1.1rem;
+            font-weight: 300;
+            line-height: 1.5;
+            opacity: 0.9;
         }
         form {
           display: flex;
@@ -91,7 +130,7 @@ if (is_post() && $databaseConnectionOk) {
         }
         h2 {
           font-size: 2rem;
-          margin-bottom: 20px;
+          margin-bottom: 20px; /* Keep for form title */
           color: #fff;
         }
         .input-field {
@@ -167,6 +206,11 @@ if (is_post() && $databaseConnectionOk) {
           border-color: #fff;
           background: rgba(255, 255, 255, 0.15);
         }
+        .register {
+          text-align: center;
+          margin-top: 30px;
+          color: #fff;
+        }
         .alert.error {
             padding: 1rem;
             margin-bottom: 1rem;
@@ -180,7 +224,14 @@ if (is_post() && $databaseConnectionOk) {
     </style>
 </head>
 <body>
-    <div class="wrapper">
+    <div class="login-container">
+        <div class="login-branding">
+            <img src="<?php echo escape(asset_url('assets/images/pulselogo.png')); ?>" alt="<?php echo escape(APP_NAME); ?> Logo" class="login-logo">
+            <h1>Project <strong>PULSE</strong></h1>
+            <p class="branding-tagline">Portal for Unified Learner Monitoring,<br>School Records and Engagement</p>
+        </div>
+
+        <div class="wrapper">
         <form method="post">
             <h2>Login</h2>
             <?php if ($errorMessage !== null): ?>
@@ -205,7 +256,11 @@ if (is_post() && $databaseConnectionOk) {
                 <a href="<?php echo escape(route_url('forgot_password.php')); ?>">Forgot password?</a>
             </div>
             <button type="submit" <?php echo !$databaseConnectionOk ? 'disabled' : ''; ?>>Log In</button>
+            <div class="register">
+                <p>Don't have an account? <a href="#">Register</a></p>
+            </div>
         </form>
+        </div> <!-- End of .wrapper -->
     </div>
 </body>
 </html>
