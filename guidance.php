@@ -8,15 +8,52 @@ require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/app/auth.php';
 require_once __DIR__ . '/app/announcements.php';
 require_once __DIR__ . '/app/guidance.php';
+require_once __DIR__ . '/app/theme_settings.php';
 
 try {
     announcements_bootstrap();
+    theme_settings_bootstrap();
 } catch (Throwable $exception) {
     // Keep the portal available even if table creation fails.
 }
 
 $user = require_roles(['guidance']);
 $flash = flash_get('guidance_portal');
+
+// Handle theme change
+if (is_post() && isset($_POST['action']) && $_POST['action'] === 'change_theme') {
+    // A list of allowed themes to prevent arbitrary values.
+    $allowedThemes = ['default', 'light', 'dark'];
+    $selectedTheme = (string) ($_POST['theme'] ?? 'default');
+    if (in_array($selectedTheme, $allowedThemes, true)) {
+        $_SESSION['theme'] = $selectedTheme;
+    }
+    // Redirect to the same page with existing GET parameters to avoid form resubmission.
+    redirect('guidance.php?' . http_build_query($_GET));
+}
+
+// Handle password change
+if (is_post() && isset($_POST['action']) && $_POST['action'] === 'change_password') {
+    try {
+        if (!verify_csrf_token($_POST['csrf_token'] ?? null)) {
+            throw new RuntimeException('Invalid form token. Please refresh the page.');
+        }
+
+        $currentPassword = (string) ($_POST['current_password'] ?? '');
+        $newPassword = (string) ($_POST['new_password'] ?? '');
+        $confirmPassword = (string) ($_POST['confirm_password'] ?? '');
+
+        if ($newPassword !== $confirmPassword) {
+            throw new RuntimeException('New password confirmation does not match.');
+        }
+
+        auth_change_password((int) $user['id'], $currentPassword, $newPassword);
+        flash_set('guidance_portal', 'Password changed successfully.');
+        redirect('guidance.php?module=settings');
+    } catch (Throwable $exception) {
+        $flash = ['type' => 'error', 'message' => $exception->getMessage()];
+    }
+}
 
 $allowedModules = [
     'dashboard' => [
@@ -43,6 +80,11 @@ $allowedModules = [
         'eyebrow' => 'Guidance Reports',
         'title' => 'Reporting',
         'description' => 'Generate and print case summary reports.',
+    ],
+    'settings' => [
+        'eyebrow' => 'Portal Settings',
+        'title' => 'Theme & Account',
+        'description' => 'Customize the portal appearance and manage your account security.',
     ],
 ];
 
@@ -134,7 +176,24 @@ if ($module === 'case_detail' && $editingCase === null) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo escape(APP_NAME); ?> Guidance Counselor Portal</title>
+    <?php echo theme_stylesheet_markup(); ?>
     <link rel="stylesheet" href="<?php echo escape(asset_url('assets/css/app.css')); ?>">
+    <style>
+        .sidebar-theme-form {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 1.5rem;
+            margin-bottom: 1rem;
+        }
+        .sidebar-theme-form label {
+            color: var(--text-muted, #6c757d);
+            font-size: 0.9rem;
+        }
+        .sidebar-theme-form select {
+            border-radius: 4px;
+        }
+    </style>
 </head>
 <body class="dashboard-body admin-dashboard">
     <button
@@ -177,11 +236,10 @@ if ($module === 'case_detail' && $editingCase === null) {
                     </div>
                 </nav>
                 <div class="sidebar-footer">
-                    <a href="<?php echo escape(route_url('change_password.php')); ?>" class="secondary-link full-width-link">Change Password</a>
+                    <a href="<?php echo escape(route_url('guidance.php?module=settings')); ?>" class="secondary-link full-width-link">Settings</a>
                     <a href="<?php echo escape(route_url('logout.php')); ?>" class="secondary-link full-width-link">Sign Out</a>
                 </div>
             </aside>
-
             <section class="admin-main-panel teacher-main-panel">
                 <header class="admin-page-header">
                     <div class="admin-page-title">
@@ -193,9 +251,15 @@ if ($module === 'case_detail' && $editingCase === null) {
                         </div>
                     </div>
                 </header>
-
             <?php if ($flash !== null): ?>
                 <div class="alert <?php echo escape($flash['type']); ?>"><?php echo escape($flash['message']); ?></div>
+            <?php else: ?>
+                <article class="teacher-panel-card">
+                    <div class="panel-heading">
+                        <h2>Guidance Portal</h2>
+                    </div>
+                    <p>Use the navigation to open the dashboard, review guidance cases, or create a new case.</p>
+                </article>
             <?php endif; ?>
 
             <?php if ($module === 'dashboard'): ?>
@@ -280,17 +344,24 @@ if ($module === 'case_detail' && $editingCase === null) {
                                 </tr>
                             </thead>
                             <tbody>
-                                <?php foreach (array_slice($cases, 0, 5) as $case): ?>
+                                <?php if (empty($cases)): ?>
                                     <tr>
-                                        <td><?php echo escape((string) ($case['case_number'] ?? '')); ?></td>
-                                        <td><?php echo escape(guidance_full_name($case)); ?></td>
-                                        <td><?php echo escape((string) ($case['case_status'] ?? 'Open')); ?></td>
-                                        <td><?php echo escape((string) ($case['date_opened'] ?? '')); ?></td>
-                                        <td>
-                                            <a href="<?php echo escape(route_url('guidance.php?module=case_detail&case_id=' . urlencode((string) $case['id']))); ?>" class="table-inline-link">Open</a>
-                                        </td>
+                                        <td colspan="6" class="empty-row">No recent guidance cases found.</td>
                                     </tr>
-                                <?php endforeach; ?>
+                                <?php else: ?>
+                                    <?php foreach (array_slice($cases, 0, 5) as $case): ?>
+                                        <tr>
+                                            <td><?php echo escape((string) ($case['case_number'] ?? '')); ?></td>
+                                            <td><?php echo escape(guidance_full_name($case)); ?></td>
+                                            <td><?php echo escape((string) ($case['case_status'] ?? 'Open')); ?></td>
+                                            <td><?php echo escape((string) ($case['date_opened'] ?? '')); ?></td>
+                                            <td><?php echo escape((string) ($case['follow_up_schedule'] ?? '-')); ?></td>
+                                            <td>
+                                                <a href="<?php echo escape(route_url('guidance.php?module=case_detail&case_id=' . urlencode((string) $case['id']))); ?>" class="table-inline-link">Open Case</a>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
                             </tbody>
                         </table>
                     </div>
@@ -317,7 +388,7 @@ if ($module === 'case_detail' && $editingCase === null) {
                                         <option value="<?php echo escape((string) $learner['id']); ?>" <?php echo ($editingCase !== null && (int) $editingCase['learner_id'] === (int) $learner['id']) ? 'selected' : ''; ?>><?php echo escape(guidance_full_name($learner)); ?> (<?php echo escape((string) ($learner['learner_number'] ?? '')); ?>)</option>
                                     <?php endforeach; ?>
                                 </select>
-                            </label>
+                            </div>
 
                             <?php if ($editingCase !== null): ?>
                                 <div class="teacher-readonly-field">
@@ -543,19 +614,20 @@ if ($module === 'case_detail' && $editingCase === null) {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <?php foreach ($caseSessions as $session): ?>
-                                        <?php if ($caseSessions === []): ?>
-                                            <tr>
-                                                <td colspan="4" class="empty-row">No counseling sessions recorded for this case.</td>
-                                            </tr>
-                                        <?php endif; ?>
+                                    <?php if ($caseSessions === []): ?>
+                                        <tr>
+                                            <td colspan="4" class="empty-row">No counseling sessions recorded for this case.</td>
+                                        </tr>
+                                    <?php else: ?>
+                                        <?php foreach ($caseSessions as $session): ?>
                                         <tr>
                                             <td><?php echo escape((string) ($session['session_date'] ?? '')); ?></td>
                                             <td><?php echo escape((string) ($session['session_type'] ?? '')); ?></td>
                                             <td><?php echo !empty($session['follow_up_required']) ? 'Yes' : 'No'; ?></td>
                                             <td><?php echo escape((string) ($session['notes'] ?? '')); ?></td>
                                         </tr>
-                                    <?php endforeach; ?>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
                                 </tbody>
                             </table>
                         </div>
@@ -571,19 +643,20 @@ if ($module === 'case_detail' && $editingCase === null) {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <?php foreach ($caseReferrals as $referral): ?>
-                                        <?php if ($caseReferrals === []): ?>
-                                            <tr>
-                                                <td colspan="4" class="empty-row">No referrals recorded for this case.</td>
-                                            </tr>
-                                        <?php endif; ?>
+                                    <?php if ($caseReferrals === []): ?>
+                                        <tr>
+                                            <td colspan="4" class="empty-row">No referrals recorded for this case.</td>
+                                        </tr>
+                                    <?php else: ?>
+                                        <?php foreach ($caseReferrals as $referral): ?>
                                         <tr>
                                             <td><?php echo escape((string) ($referral['referred_on'] ?? '')); ?></td>
                                             <td><?php echo escape((string) ($referral['source_role'] ?? '')); ?></td>
                                             <td><?php echo escape((string) ($referral['status'] ?? 'Pending')); ?></td>
                                             <td><?php echo escape((string) ($referral['referral_reason'] ?? '')); ?></td>
                                         </tr>
-                                    <?php endforeach; ?>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
                                 </tbody>
                             </table>
                         </div>
@@ -599,19 +672,20 @@ if ($module === 'case_detail' && $editingCase === null) {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <?php foreach ($caseInterventions as $intervention): ?>
-                                        <?php if ($caseInterventions === []): ?>
-                                            <tr>
-                                                <td colspan="4" class="empty-row">No interventions recorded for this case.</td>
-                                            </tr>
-                                        <?php endif; ?>
+                                    <?php if ($caseInterventions === []): ?>
+                                        <tr>
+                                            <td colspan="4" class="empty-row">No interventions recorded for this case.</td>
+                                        </tr>
+                                    <?php else: ?>
+                                        <?php foreach ($caseInterventions as $intervention): ?>
                                         <tr>
                                             <td><?php echo escape((string) ($intervention['intervention_title'] ?? '')); ?></td>
                                             <td><?php echo escape((string) ($intervention['intervention_type'] ?? '')); ?></td>
                                             <td><?php echo escape((string) ($intervention['scheduled_on'] ?? '')); ?></td>
                                             <td><?php echo escape((string) ($intervention['status'] ?? 'Planned')); ?></td>
                                         </tr>
-                                    <?php endforeach; ?>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
                                 </tbody>
                             </table>
                         </div>
@@ -764,6 +838,57 @@ if ($module === 'case_detail' && $editingCase === null) {
                         </table>
                     </div>
                 </article>
+            <?php elseif ($module === 'settings'): ?>
+                <section class="teacher-overview-grid">
+                    <article class="teacher-panel-card">
+                        <div class="panel-heading">
+                            <h2>Theme Selection</h2>
+                            <p>Choose a visual theme for the portal.</p>
+                        </div>
+                        <form method="post">
+                            <input type="hidden" name="action" value="change_theme">
+                            <div class="teacher-form-grid">
+                                <div class="teacher-form-grid-full">
+                                    <label for="theme-select">Theme</label>
+                                    <select name="theme" id="theme-select" onchange="this.form.submit()" class="form-input">
+                                        <?php
+                                        $availableThemes = ['default', 'light', 'dark'];
+                                        $currentTheme = $_SESSION['theme'] ?? 'default';
+                                        foreach ($availableThemes as $theme) : ?>
+                                            <option value="<?php echo escape($theme); ?>" <?php echo $theme === $currentTheme ? 'selected' : ''; ?>>
+                                                <?php echo escape(ucfirst($theme)); ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                            </div>
+                        </form>
+                    </article>
+
+                    <article class="teacher-panel-card">
+                        <div class="panel-heading">
+                            <h2>Change Password</h2>
+                            <p>Update your account password.</p>
+                        </div>
+                        <form method="post" class="auth-form">
+                            <input type="hidden" name="action" value="change_password">
+                            <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
+
+                            <label for="current_password">Current Password</label>
+                            <input id="current_password" name="current_password" type="password" autocomplete="current-password" required>
+
+                            <label for="new_password">New Password</label>
+                            <input id="new_password" name="new_password" type="password" autocomplete="new-password" minlength="6" required>
+
+                            <label for="confirm_password">Confirm New Password</label>
+                            <input id="confirm_password" name="confirm_password" type="password" autocomplete="new-password" minlength="6" required>
+
+                            <div class="password-form-actions">
+                                <button type="submit" class="primary-button">Save Password</button>
+                            </div>
+                        </form>
+                    </article>
+                </section>
             <?php else: ?>
                 <article class="teacher-panel-card">
                     <div class="panel-heading">
@@ -775,7 +900,6 @@ if ($module === 'case_detail' && $editingCase === null) {
             </section>
         </section>
     </main>
-
     <script src="<?php echo escape(asset_url('assets/js/admin.js')); ?>"></script>
 </body>
 </html>
