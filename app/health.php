@@ -367,6 +367,9 @@ function health_learner_rows(array $filters): array
             l.middle_name,
             l.last_name,
             l.sex,
+            l.has_disability,
+            l.disability_basis,
+            l.disability_type,
             le.grade_level,
             COALESCE(s.name, \'Unassigned\') AS section_name,
             hm.height_cm,
@@ -691,6 +694,40 @@ function health_save_measurement(int $learnerEnrollmentId, ?string $heightCm, ?s
         'height_cm' => $height,
         'weight_kg' => $weight,
         'recorded_on' => date('Y-m-d'),
+    ]);
+}
+
+function health_update_learner_disability(int $learnerEnrollmentId, mixed $hasDisability, mixed $disabilityBasis, mixed $disabilityType): void
+{
+    if ($learnerEnrollmentId <= 0 || !health_learner_enrollment_exists($learnerEnrollmentId)) {
+        throw new RuntimeException('The selected learner enrollment could not be found for the current school year.');
+    }
+
+    $hasDisability = learner_normalize_disability_status($hasDisability);
+    $disabilityBasis = learner_normalize_disability_basis($disabilityBasis);
+    $disabilityType = trim((string) $disabilityType);
+
+    if ($hasDisability === '1' && ($disabilityBasis === '' || $disabilityType === '')) {
+        throw new RuntimeException('Select whether the disability is based on a diagnosis or manifestation and specify its type.');
+    }
+
+    $schoolYear = require_current_school_year();
+    $statement = database()->prepare(
+        'UPDATE learners l
+         INNER JOIN learner_enrollments le ON le.learner_id = l.id
+         SET l.has_disability = :has_disability,
+             l.disability_basis = :disability_basis,
+             l.disability_type = :disability_type,
+             l.updated_at = CURRENT_TIMESTAMP
+         WHERE le.id = :learner_enrollment_id
+           AND le.school_year_id = :school_year_id'
+    );
+    $statement->execute([
+        'has_disability' => $hasDisability === '1' ? 1 : 0,
+        'disability_basis' => $hasDisability === '1' ? $disabilityBasis : null,
+        'disability_type' => $hasDisability === '1' ? $disabilityType : null,
+        'learner_enrollment_id' => $learnerEnrollmentId,
+        'school_year_id' => (int) $schoolYear['id'],
     ]);
 }
 

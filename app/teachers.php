@@ -612,6 +612,9 @@ function teacher_section_learners(int $userId): array
             l.address_barangay,
             l.address_city_municipality,
             l.address_province,
+            l.has_disability,
+            l.disability_basis,
+            l.disability_type,
             l.sex,
             l.current_status,
             le.grade_level,
@@ -643,6 +646,9 @@ function teacher_section_learners(int $userId): array
             l.address_barangay,
             l.address_city_municipality,
             l.address_province,
+            l.has_disability,
+            l.disability_basis,
+            l.disability_type,
             l.sex,
             l.current_status,
             le.grade_level,
@@ -719,6 +725,9 @@ function teacher_accessible_learner(int $userId, int $learnerId): ?array
             l.address_barangay,
             l.address_city_municipality,
             l.address_province,
+            l.has_disability,
+            l.disability_basis,
+            l.disability_type,
             le.grade_level,
             COALESCE(s.name, \'Unassigned\') AS section_name
          FROM teacher_section_assignments tsa
@@ -798,6 +807,9 @@ function teacher_update_learner_profile(int $teacherUserId, array $payload): voi
              address_barangay = :address_barangay,
              address_city_municipality = :address_city_municipality,
              address_province = :address_province,
+             has_disability = :has_disability,
+             disability_basis = :disability_basis,
+             disability_type = :disability_type,
              updated_at = CURRENT_TIMESTAMP
          WHERE id = :learner_id'
     );
@@ -809,6 +821,9 @@ function teacher_update_learner_profile(int $teacherUserId, array $payload): voi
         'address_barangay' => $payload['address_barangay'] !== '' ? $payload['address_barangay'] : null,
         'address_city_municipality' => $payload['address_city_municipality'] !== '' ? $payload['address_city_municipality'] : learner_default_city_municipality(),
         'address_province' => $payload['address_province'] !== '' ? $payload['address_province'] : learner_default_province(),
+        'has_disability' => $payload['has_disability'] === '1' ? 1 : 0,
+        'disability_basis' => $payload['has_disability'] === '1' ? $payload['disability_basis'] : null,
+        'disability_type' => $payload['has_disability'] === '1' ? $payload['disability_type'] : null,
         'learner_id' => (int) $payload['learner_id'],
     ]);
 }

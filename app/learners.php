@@ -16,6 +16,9 @@ function learner_management_bootstrap(): void
     learner_ensure_column('learners', 'address_barangay', 'VARCHAR(120) NULL AFTER address_house_number');
     learner_ensure_column('learners', 'address_city_municipality', 'VARCHAR(120) NULL AFTER address_barangay');
     learner_ensure_column('learners', 'address_province', 'VARCHAR(120) NULL AFTER address_city_municipality');
+    learner_ensure_column('learners', 'has_disability', 'TINYINT(1) NOT NULL DEFAULT 0 AFTER address_province');
+    learner_ensure_column('learners', 'disability_basis', "ENUM('diagnosis', 'manifestation') NULL AFTER has_disability");
+    learner_ensure_column('learners', 'disability_type', 'VARCHAR(255) NULL AFTER disability_basis');
 
     $bootstrapped = true;
 }
@@ -84,6 +87,17 @@ function learner_religion_options_with_selected(?string $selectedReligion): arra
     return $options;
 }
 
+function learner_normalize_disability_status(mixed $value): string
+{
+    return in_array(strtolower(trim((string) $value)), ['1', 'yes', 'true'], true) ? '1' : '0';
+}
+
+function learner_normalize_disability_basis(mixed $value): string
+{
+    $value = strtolower(trim((string) $value));
+    return in_array($value, ['diagnosis', 'manifestation'], true) ? $value : '';
+}
+
 function learner_form_defaults(array $overrides = []): array
 {
     return array_merge([
@@ -99,6 +113,9 @@ function learner_form_defaults(array $overrides = []): array
         'address_barangay' => '',
         'address_city_municipality' => learner_default_city_municipality(),
         'address_province' => learner_default_province(),
+        'has_disability' => '0',
+        'disability_basis' => '',
+        'disability_type' => '',
         'sex' => '',
         'current_status' => 'active',
         'grade_level' => '',
@@ -119,6 +136,9 @@ function learner_profile_form_defaults(array $overrides = []): array
         'address_barangay' => '',
         'address_city_municipality' => learner_default_city_municipality(),
         'address_province' => learner_default_province(),
+        'has_disability' => '0',
+        'disability_basis' => '',
+        'disability_type' => '',
     ], $overrides);
 }
 
@@ -295,6 +315,9 @@ function learner_list(array $filters): array
             l.address_barangay,
             l.address_city_municipality,
             l.address_province,
+            l.has_disability,
+            l.disability_basis,
+            l.disability_type,
             l.sex,
             l.current_status,
             le.grade_level,
@@ -335,6 +358,9 @@ function learner_find(int $learnerId): ?array
             l.address_barangay,
             l.address_city_municipality,
             l.address_province,
+            l.has_disability,
+            l.disability_basis,
+            l.disability_type,
             l.sex,
             l.current_status,
             COALESCE(le.grade_level, \'\') AS grade_level,
@@ -379,6 +405,9 @@ function learner_normalize_payload(array $input): array
         'address_province' => trim((string) ($input['address_province'] ?? '')) !== ''
             ? trim((string) ($input['address_province'] ?? ''))
             : learner_default_province(),
+        'has_disability' => learner_normalize_disability_status($input['has_disability'] ?? '0'),
+        'disability_basis' => learner_normalize_disability_basis($input['disability_basis'] ?? ''),
+        'disability_type' => trim((string) ($input['disability_type'] ?? '')),
         'sex' => learner_normalize_sex((string) ($input['sex'] ?? '')),
         'current_status' => learner_normalize_status((string) ($input['current_status'] ?? 'active')),
         'grade_level' => trim((string) ($input['grade_level'] ?? '')),
@@ -416,6 +445,10 @@ function learner_validate_payload(array $payload): array
         $errors[] = 'Current status is invalid.';
     }
 
+    if ($payload['has_disability'] === '1' && ($payload['disability_basis'] === '' || $payload['disability_type'] === '')) {
+        $errors[] = 'Select whether the disability is based on a diagnosis or manifestation and specify its type.';
+    }
+
     return $errors;
 }
 
@@ -436,6 +469,9 @@ function learner_profile_normalize_payload(array $input): array
         'address_province' => trim((string) ($input['address_province'] ?? '')) !== ''
             ? trim((string) ($input['address_province'] ?? ''))
             : learner_default_province(),
+        'has_disability' => learner_normalize_disability_status($input['has_disability'] ?? '0'),
+        'disability_basis' => learner_normalize_disability_basis($input['disability_basis'] ?? ''),
+        'disability_type' => trim((string) ($input['disability_type'] ?? '')),
     ]);
 }
 
@@ -449,6 +485,10 @@ function learner_profile_validate_payload(array $payload): array
 
     if ($payload['birthdate'] !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $payload['birthdate']) !== 1) {
         $errors[] = 'Birthdate must use YYYY-MM-DD format.';
+    }
+
+    if ($payload['has_disability'] === '1' && ($payload['disability_basis'] === '' || $payload['disability_type'] === '')) {
+        $errors[] = 'Select whether the disability is based on a diagnosis or manifestation and specify its type.';
     }
 
     return $errors;
@@ -465,6 +505,9 @@ function learner_profile_import_template_headers(): array
         'address_barangay',
         'address_city_municipality',
         'address_province',
+        'has_disability',
+        'disability_basis',
+        'disability_type',
     ];
 }
 
@@ -485,6 +528,9 @@ function learner_profile_normalize_import_row(array $row): array
         'address_province' => learner_import_clean_string((string) ($row['address_province'] ?? '')) !== ''
             ? learner_import_clean_string((string) ($row['address_province'] ?? ''))
             : learner_default_province(),
+        'has_disability' => learner_normalize_disability_status($row['has_disability'] ?? '0'),
+        'disability_basis' => learner_normalize_disability_basis($row['disability_basis'] ?? ''),
+        'disability_type' => learner_import_clean_string((string) ($row['disability_type'] ?? '')),
     ]);
 
     if ($payload['lrn'] === '' || strlen($payload['lrn']) !== 12) {
@@ -583,6 +629,9 @@ function learner_save(array $payload): void
 
     try {
         $sectionId = $payload['section_id'] !== '' ? (int) $payload['section_id'] : null;
+        $hasDisability = $payload['has_disability'] === '1' ? 1 : 0;
+        $disabilityBasis = $hasDisability === 1 ? $payload['disability_basis'] : null;
+        $disabilityType = $hasDisability === 1 ? $payload['disability_type'] : null;
 
         if ($payload['id'] === null) {
             $generatedLearnerNumber = learner_generate_number();
@@ -600,6 +649,9 @@ function learner_save(array $payload): void
                     address_barangay,
                     address_city_municipality,
                     address_province,
+                    has_disability,
+                    disability_basis,
+                    disability_type,
                     sex,
                     current_status
                  ) VALUES (
@@ -615,6 +667,9 @@ function learner_save(array $payload): void
                     :address_barangay,
                     :address_city_municipality,
                     :address_province,
+                    :has_disability,
+                    :disability_basis,
+                    :disability_type,
                     :sex,
                     :current_status
                  )'
@@ -632,6 +687,9 @@ function learner_save(array $payload): void
                 'address_barangay' => $payload['address_barangay'] !== '' ? $payload['address_barangay'] : null,
                 'address_city_municipality' => $payload['address_city_municipality'] !== '' ? $payload['address_city_municipality'] : learner_default_city_municipality(),
                 'address_province' => $payload['address_province'] !== '' ? $payload['address_province'] : learner_default_province(),
+                'has_disability' => $hasDisability,
+                'disability_basis' => $disabilityBasis,
+                'disability_type' => $disabilityType,
                 'sex' => $payload['sex'] !== '' ? $payload['sex'] : null,
                 'current_status' => $payload['current_status'],
             ]);
@@ -662,6 +720,9 @@ function learner_save(array $payload): void
                      address_barangay = :address_barangay,
                      address_city_municipality = :address_city_municipality,
                      address_province = :address_province,
+                     has_disability = :has_disability,
+                     disability_basis = :disability_basis,
+                     disability_type = :disability_type,
                      sex = :sex,
                      current_status = :current_status,
                      updated_at = CURRENT_TIMESTAMP
@@ -680,6 +741,9 @@ function learner_save(array $payload): void
                 'address_barangay' => $payload['address_barangay'] !== '' ? $payload['address_barangay'] : null,
                 'address_city_municipality' => $payload['address_city_municipality'] !== '' ? $payload['address_city_municipality'] : learner_default_city_municipality(),
                 'address_province' => $payload['address_province'] !== '' ? $payload['address_province'] : learner_default_province(),
+                'has_disability' => $hasDisability,
+                'disability_basis' => $disabilityBasis,
+                'disability_type' => $disabilityType,
                 'sex' => $payload['sex'] !== '' ? $payload['sex'] : null,
                 'current_status' => $payload['current_status'],
                 'id' => $payload['id'],

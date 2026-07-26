@@ -992,6 +992,28 @@ foreach ($attendanceGradeRows as $row) {
                                 </div>
 
                                 <div>
+                                    <label for="has_disability">Learner with disability</label>
+                                    <select id="has_disability" name="has_disability">
+                                        <option value="0"<?php echo (string) $learnerForm['has_disability'] !== '1' ? ' selected' : ''; ?>>No</option>
+                                        <option value="1"<?php echo (string) $learnerForm['has_disability'] === '1' ? ' selected' : ''; ?>>Yes</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label for="disability_basis">Basis</label>
+                                    <select id="disability_basis" name="disability_basis">
+                                        <option value="">Select basis</option>
+                                        <option value="diagnosis"<?php echo $learnerForm['disability_basis'] === 'diagnosis' ? ' selected' : ''; ?>>With diagnosis</option>
+                                        <option value="manifestation"<?php echo $learnerForm['disability_basis'] === 'manifestation' ? ' selected' : ''; ?>>With manifestation</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label for="disability_type">Disability type / details</label>
+                                    <input id="disability_type" name="disability_type" type="text" maxlength="255" value="<?php echo escape($learnerForm['disability_type']); ?>" placeholder="e.g., visual impairment">
+                                </div>
+
+                                <div>
                                     <label for="sex">Sex</label>
                                     <select id="sex" name="sex">
                                         <option value="">Select sex</option>
@@ -1130,6 +1152,7 @@ foreach ($attendanceGradeRows as $row) {
                                         <th>Age</th>
                                         <th>Mother Tongue</th>
                                         <th>Religion</th>
+                                        <th>Disability</th>
                                         <th>Grade</th>
                                         <th>Section</th>
                                         <th>Status</th>
@@ -1139,7 +1162,7 @@ foreach ($attendanceGradeRows as $row) {
                                 <tbody>
                                     <?php if ($learnerRows === []): ?>
                                         <tr>
-                                            <td colspan="11" class="empty-row">No learners matched the current filter.</td>
+                                            <td colspan="12" class="empty-row">No learners matched the current filter.</td>
                                         </tr>
                                     <?php else: ?>
                                         <?php foreach ($learnerRows as $learner): ?>
@@ -1155,6 +1178,7 @@ foreach ($attendanceGradeRows as $row) {
                                                 <td><?php $rowAge = learner_age_for_school_year($learner['birthdate'] ?? null, $learnerSchoolYear); echo escape($rowAge !== null ? (string) $rowAge : '-'); ?></td>
                                                 <td><?php echo escape(trim((string) ($learner['mother_tongue'] ?? '')) !== '' ? (string) $learner['mother_tongue'] : '-'); ?></td>
                                                 <td><?php echo escape(trim((string) ($learner['religion'] ?? '')) !== '' ? (string) $learner['religion'] : '-'); ?></td>
+                                                <td><?php echo (int) ($learner['has_disability'] ?? 0) === 1 ? escape(ucfirst((string) $learner['disability_basis']) . ': ' . $learner['disability_type']) : 'No'; ?></td>
                                                 <td><?php echo escape($learner['grade_level'] ?? '-'); ?></td>
                                                 <td><?php echo escape($learner['section_name'] ?? '-'); ?></td>
                                                 <td><?php echo escape(ucfirst($learner['current_status'])); ?></td>

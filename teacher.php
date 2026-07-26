@@ -495,6 +495,9 @@ if (!$profileFormFromPost && $selectedProfileLearner !== null) {
         'address_barangay' => (string) ($selectedProfileLearner['address_barangay'] ?? ''),
         'address_city_municipality' => (string) (($selectedProfileLearner['address_city_municipality'] ?? '') !== '' ? $selectedProfileLearner['address_city_municipality'] : learner_default_city_municipality()),
         'address_province' => (string) (($selectedProfileLearner['address_province'] ?? '') !== '' ? $selectedProfileLearner['address_province'] : learner_default_province()),
+        'has_disability' => (string) ($selectedProfileLearner['has_disability'] ?? '0'),
+        'disability_basis' => (string) ($selectedProfileLearner['disability_basis'] ?? ''),
+        'disability_type' => (string) ($selectedProfileLearner['disability_type'] ?? ''),
     ]);
 }
 
@@ -843,6 +846,11 @@ $pageMeta = $allowedModules[$module];
                                     <div><dt>Age</dt><dd><?php echo escape($detailAge === null ? '-' : (string) $detailAge); ?></dd></div>
                                     <div><dt>Mother Tongue</dt><dd><?php echo escape($selectedDashboardLearner['mother_tongue'] ?: '-'); ?></dd></div>
                                     <div><dt>Religion</dt><dd><?php echo escape($selectedDashboardLearner['religion'] ?: '-'); ?></dd></div>
+                                    <div><dt>Learner with disability</dt><dd><?php echo (int) ($selectedDashboardLearner['has_disability'] ?? 0) === 1 ? 'Yes' : 'No'; ?></dd></div>
+                                    <?php if ((int) ($selectedDashboardLearner['has_disability'] ?? 0) === 1): ?>
+                                        <div><dt>Disability basis</dt><dd><?php echo escape(ucfirst((string) $selectedDashboardLearner['disability_basis'])); ?></dd></div>
+                                        <div class="teacher-detail-wide"><dt>Disability type / details</dt><dd><?php echo escape($selectedDashboardLearner['disability_type'] ?: '-'); ?></dd></div>
+                                    <?php endif; ?>
                                     <div class="teacher-detail-wide"><dt>Address</dt><dd><?php echo escape(teacher_profile_address($selectedDashboardLearner)); ?></dd></div>
                                 </dl>
                             </article>
@@ -1489,6 +1497,28 @@ $pageMeta = $allowedModules[$module];
                                             <option value="<?php echo escape($option); ?>"<?php echo $profileForm['religion'] === $option ? ' selected' : ''; ?>><?php echo escape($option); ?></option>
                                         <?php endforeach; ?>
                                     </select>
+                                </div>
+
+                                <div>
+                                    <label for="profile_has_disability">Learner with disability</label>
+                                    <select id="profile_has_disability" name="has_disability">
+                                        <option value="0"<?php echo (string) $profileForm['has_disability'] !== '1' ? ' selected' : ''; ?>>No</option>
+                                        <option value="1"<?php echo (string) $profileForm['has_disability'] === '1' ? ' selected' : ''; ?>>Yes</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label for="profile_disability_basis">Basis</label>
+                                    <select id="profile_disability_basis" name="disability_basis">
+                                        <option value="">Select basis</option>
+                                        <option value="diagnosis"<?php echo $profileForm['disability_basis'] === 'diagnosis' ? ' selected' : ''; ?>>With diagnosis</option>
+                                        <option value="manifestation"<?php echo $profileForm['disability_basis'] === 'manifestation' ? ' selected' : ''; ?>>With manifestation</option>
+                                    </select>
+                                </div>
+
+                                <div class="teacher-form-grid-full">
+                                    <label for="profile_disability_type">Disability type / details</label>
+                                    <input id="profile_disability_type" name="disability_type" type="text" maxlength="255" value="<?php echo escape($profileForm['disability_type']); ?>" placeholder="e.g., visual impairment">
                                 </div>
 
                                 <div>

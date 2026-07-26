@@ -167,7 +167,13 @@ if (is_post()) {
                 $_POST['height_cm'] ?? null,
                 $_POST['weight_kg'] ?? null
             );
-            flash_set('health_portal', 'Learner height and weight updated successfully.');
+            health_update_learner_disability(
+                (int) ($_POST['learner_enrollment_id'] ?? 0),
+                $_POST['has_disability'] ?? '0',
+                $_POST['disability_basis'] ?? '',
+                $_POST['disability_type'] ?? ''
+            );
+            flash_set('health_portal', 'Learner health and disability information updated successfully.');
             redirect('health.php?' . http_build_query(array_merge(['module' => $redirectModule], $postFilters)));
         }
 
@@ -703,6 +709,7 @@ $filterLabel = health_portal_filter_label($filters, $allSectionDropdownOptions);
                                         <th>Complete Name</th>
                                         <th>Grade and Section</th>
                                         <th>Sex</th>
+                                        <th>Disability information</th>
                                         <th>Height (cm)</th>
                                         <th>Weight (kg)</th>
                                         <th>BMI</th>
@@ -713,7 +720,7 @@ $filterLabel = health_portal_filter_label($filters, $allSectionDropdownOptions);
                                 <tbody>
                                     <?php if ($learnerRows === []): ?>
                                         <tr>
-                                            <td colspan="9" class="empty-row">No learners matched the selected filters.</td>
+                                            <td colspan="10" class="empty-row">No learners matched the selected filters.</td>
                                         </tr>
                                     <?php else: ?>
                                         <?php foreach ($learnerRows as $learner): ?>
@@ -723,6 +730,18 @@ $filterLabel = health_portal_filter_label($filters, $allSectionDropdownOptions);
                                                 <td><?php echo escape($learner['complete_name']); ?></td>
                                                 <td><?php echo escape($learner['grade_level'] . ' - ' . $learner['section_name']); ?></td>
                                                 <td><?php echo escape(health_portal_sex_label($learner['sex'] ?? null)); ?></td>
+                                                <td>
+                                                    <select form="<?php echo escape($formId); ?>" name="has_disability" class="table-input-slim">
+                                                        <option value="0"<?php echo (int) ($learner['has_disability'] ?? 0) !== 1 ? ' selected' : ''; ?>>No</option>
+                                                        <option value="1"<?php echo (int) ($learner['has_disability'] ?? 0) === 1 ? ' selected' : ''; ?>>Yes</option>
+                                                    </select>
+                                                    <select form="<?php echo escape($formId); ?>" name="disability_basis" class="table-input-slim">
+                                                        <option value="">Basis</option>
+                                                        <option value="diagnosis"<?php echo ($learner['disability_basis'] ?? '') === 'diagnosis' ? ' selected' : ''; ?>>Diagnosis</option>
+                                                        <option value="manifestation"<?php echo ($learner['disability_basis'] ?? '') === 'manifestation' ? ' selected' : ''; ?>>Manifestation</option>
+                                                    </select>
+                                                    <input form="<?php echo escape($formId); ?>" name="disability_type" type="text" maxlength="255" value="<?php echo escape((string) ($learner['disability_type'] ?? '')); ?>" placeholder="Type / details" class="table-input-slim">
+                                                </td>
                                                 <td>
                                                     <input form="<?php echo escape($formId); ?>" name="height_cm" type="number" min="30" max="250" step="0.01" value="<?php echo escape($learner['height_cm'] !== null ? (string) $learner['height_cm'] : ''); ?>" class="table-input-slim">
                                                 </td>
@@ -816,6 +835,7 @@ $filterLabel = health_portal_filter_label($filters, $allSectionDropdownOptions);
                                         <th>Complete Name</th>
                                         <th>Grade and Section</th>
                                         <th>Sex</th>
+                                        <th>Disability information</th>
                                         <th>Height</th>
                                         <th>Weight</th>
                                         <th>BMI</th>
@@ -825,7 +845,7 @@ $filterLabel = health_portal_filter_label($filters, $allSectionDropdownOptions);
                                 <tbody>
                                     <?php if ($bmiReportRows === []): ?>
                                         <tr>
-                                            <td colspan="8" class="empty-row">No learners matched the selected filters.</td>
+                                            <td colspan="9" class="empty-row">No learners matched the selected filters.</td>
                                         </tr>
                                     <?php else: ?>
                                         <?php foreach ($bmiReportRows as $learner): ?>
@@ -834,6 +854,7 @@ $filterLabel = health_portal_filter_label($filters, $allSectionDropdownOptions);
                                                 <td><?php echo escape($learner['complete_name']); ?></td>
                                                 <td><?php echo escape($learner['grade_level'] . ' - ' . $learner['section_name']); ?></td>
                                                 <td><?php echo escape(health_portal_sex_label($learner['sex'] ?? null)); ?></td>
+                                                <td><?php echo (int) ($learner['has_disability'] ?? 0) === 1 ? escape(ucfirst((string) $learner['disability_basis']) . ': ' . (string) $learner['disability_type']) : 'No'; ?></td>
                                                 <td><?php echo escape(health_portal_format_metric($learner['height_cm'], 2, ' cm')); ?></td>
                                                 <td><?php echo escape(health_portal_format_metric($learner['weight_kg'], 2, ' kg')); ?></td>
                                                 <td><?php echo escape($learner['bmi'] !== null ? number_format((float) $learner['bmi'], 2) : '-'); ?></td>
