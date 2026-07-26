@@ -68,7 +68,7 @@ if (is_post() && $databaseConnectionOk) {
 
             <?php if ($databaseConnectionOk): ?>
                 <div class="auth-note">
-                    <p><strong>Demo Access:</strong><br>You can log in with <code>admin@projectpulse.com</code> or <code>teacher@projectpulse.com</code>. The password for all demo accounts is <code>password</code>.</p>
+                    <p><strong>Project PULSE (Portal for Unified Learner Monitoring, School Records and Engagement)</strong> is an integrated school information system developed to enhance the management of learner information, attendance, academic records, health services, and communication among administrators, teachers, parents, guidance counselors, and health coordinators. It provides a centralized, secure, and efficient platform that supports data-driven decision-making and promotes improved educational services.</p>
                 </div>
             <?php endif; ?>
         </div>
