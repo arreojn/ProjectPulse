@@ -547,6 +547,7 @@ function teacher_assigned_sections(int $userId): array
             s.id,
             s.name,
             s.grade_level,
+            tsa.school_year_id,
             sy.label AS school_year_label,
             sy.start_date AS school_year_start_date,
             sy.end_date AS school_year_end_date,

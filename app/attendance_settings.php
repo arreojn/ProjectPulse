@@ -124,26 +124,17 @@ function attendance_record_summary(
     ?string $pmTimeIn,
     ?string $pmTimeOut
 ): array {
-    if ($attendanceCode === 'E') {
-        return [
-            'code' => 'E', 'label' => 'Excused', 'present_units' => 0.0,
-            'absent_units' => 0.0, 'is_late' => false,
-        ];
-    }
-
     $amComplete = !empty($amTimeIn) && !empty($amTimeOut);
     $pmComplete = !empty($pmTimeIn) && !empty($pmTimeOut);
     $presentUnits = ($amComplete ? 0.5 : 0.0) + ($pmComplete ? 0.5 : 0.0);
-    $isLate = (!empty($amTimeIn) && $amTimeIn > '07:30:00')
-        || (!empty($pmTimeIn) && $pmTimeIn > '13:00:00');
 
     if ($presentUnits >= 1.0) {
         return [
-            'code' => $isLate ? 'L' : 'P',
-            'label' => $isLate ? 'Late' : 'Present',
+            'code' => 'P',
+            'label' => 'Present',
             'present_units' => 1.0,
             'absent_units' => 0.0,
-            'is_late' => $isLate,
+            'is_late' => false,
         ];
     }
 
@@ -156,13 +147,9 @@ function attendance_record_summary(
 
     $absentUnits = 1.0 - $presentUnits;
     $label = $absentUnits === 0.5 ? 'Absent (0.5)' : 'Absent';
-    if ($isLate) {
-        $label .= ' / Late';
-    }
 
     return [
-        'code' => 'A', 'label' => $label, 'present_units' => $presentUnits,
-        'absent_units' => $absentUnits, 'is_late' => $isLate,
+        'code' => 'A', 'label' => $label, 'present_units' => $presentUnits, 'absent_units' => $absentUnits, 'is_late' => false,
     ];
 }
 

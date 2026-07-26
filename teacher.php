@@ -1226,7 +1226,16 @@ $pageMeta = $allowedModules[$module];
                             </header>
 
                             <div class="table-shell sf2-table-shell">
-                                <table class="records-table monthly-report-table sf2-table">
+                                <table class="records-table monthly-report-table sf2-table" style="table-layout: fixed;">
+                                    <colgroup>
+                                        <col style="width: 40px;">
+                                        <col style="width: 200px;">
+                                        <?php foreach ($sectionAttendanceReport['days_in_month'] as $dayNumber): ?>
+                                            <col style="width: 38px;">
+                                        <?php endforeach; ?>
+                                        <col style="width: 50px;">
+                                        <col style="width: 50px;">
+                                    </colgroup>
                                     <thead>
                                         <tr>
                                             <th rowspan="2">No.</th>
@@ -1276,7 +1285,180 @@ $pageMeta = $allowedModules[$module];
                                     <?php endif; ?>
                                 </table>
                             </div>
-                            <div class="sf2-legend"><strong>Legend:</strong> P - Present; A - Absent; A (0.5) - Half-day absent; L - Late; E - Excused.</div>
+                            <div class="sf2-legend"><strong>Legend:</strong> P - Present; A - Absent; A (0.5) - Half-day absent.</div>
+                        </article>
+
+                        <?php
+                        $registeredLearners = ['male' => 0, 'female' => 0, 'total' => 0];
+                        $totalPresentDaysBySex = ['male' => 0, 'female' => 0, 'total' => 0];
+
+                        foreach ($sectionAttendanceReport['rows'] as $learner) {
+                            $sex = strtolower((string) $learner['sex']);
+                            if ($sex === 'male') {
+                                $registeredLearners['male']++;
+                                $totalPresentDaysBySex['male'] += $learner['total_present_days'];
+                            } elseif ($sex === 'female') {
+                                $registeredLearners['female']++;
+                                $totalPresentDaysBySex['female'] += $learner['total_present_days'];
+                            }
+                            $registeredLearners['total']++;
+                            $totalPresentDaysBySex['total'] += $learner['total_present_days'];
+                        }
+
+                        $daysInMonthCount = count($sectionAttendanceReport['days_in_month']);
+                        $totalPossibleAttendanceDays = $registeredLearners['total'] * $daysInMonthCount;
+
+                        // Percentage of Enrolment as of end of month (assuming 100% for the section's registered learners)
+                        $percentageEnrollment = [
+                            'male' => $registeredLearners['male'] > 0 ? 100.0 : 0.0,
+                            'female' => $registeredLearners['female'] > 0 ? 100.0 : 0.0,
+                            'total' => $registeredLearners['total'] > 0 ? 100.0 : 0.0,
+                        ];
+
+                        // Average Daily Attendance
+                        $averageDailyAttendance = [
+                            'male' => $daysInMonthCount > 0 ? round($totalPresentDaysBySex['male'] / $daysInMonthCount) : 0,
+                            'female' => $daysInMonthCount > 0 ? round($totalPresentDaysBySex['female'] / $daysInMonthCount) : 0,
+                            'total' => $daysInMonthCount > 0 ? round($totalPresentDaysBySex['total'] / $daysInMonthCount) : 0,
+                        ];
+
+                        // Percentage of Attendance for the month
+                        $percentageAttendance = [
+                            'male' => ($registeredLearners['male'] * $daysInMonthCount) > 0 ? round(($totalPresentDaysBySex['male'] / ($registeredLearners['male'] * $daysInMonthCount)) * 100) : 0,
+                            'female' => ($registeredLearners['female'] * $daysInMonthCount) > 0 ? round(($totalPresentDaysBySex['female'] / ($registeredLearners['female'] * $daysInMonthCount)) * 100) : 0,
+                            'total' => $totalPossibleAttendanceDays > 0 ? round(($totalPresentDaysBySex['total'] / $totalPossibleAttendanceDays) * 100) : 0,
+                        ];
+
+                        // Number of students absent for 5 consecutive days
+                        $absent5Consecutive = ['male' => 0, 'female' => 0, 'total' => 0];
+                        foreach ($sectionAttendanceReport['rows'] as $learner) {
+                            $consecutiveAbsentCount = 0;
+                            $has5ConsecutiveAbsences = false;
+                            for ($i = 1; $i <= $daysInMonthCount; $i++) {
+                                $dayCode = strtolower((string) ($learner['days'][$i] ?? ''));
+                                if ($dayCode === 'a' || $dayCode === 'a (0.5)') {
+                                    $consecutiveAbsentCount++;
+                                    if ($consecutiveAbsentCount >= 5) {
+                                        $has5ConsecutiveAbsences = true;
+                                        break;
+                                    }
+                                } else {
+                                    $consecutiveAbsentCount = 0;
+                                }
+                            }
+                            if ($has5ConsecutiveAbsences) {
+                                $sex = strtolower((string) $learner['sex']);
+                                if ($sex === 'male') {
+                                    $absent5Consecutive['male']++;
+                                } elseif ($sex === 'female') {
+                                    $absent5Consecutive['female']++;
+                                }
+                                $absent5Consecutive['total']++;
+                            }
+                        }
+
+                        // Dropped out, Transferred out, Transferred in
+                        $statusCounts = [
+                            'dropped_out' => ['male' => 0, 'female' => 0, 'total' => 0],
+                            'transferred_out' => ['male' => 0, 'female' => 0, 'total' => 0],
+                            'transferred_in' => ['male' => 0, 'female' => 0, 'total' => 0],
+                        ];
+                        if ($section !== null) {
+                            $pdo = database();
+                            $stmt = $pdo->prepare(
+                                'SELECT l.sex, l.current_status
+                                 FROM learners l
+                                 INNER JOIN learner_enrollments le ON l.id = le.learner_id
+                                 WHERE le.section_id = :section_id
+                                   AND le.school_year_id = :school_year_id
+                                   AND l.current_status IN (\'dropped_out\', \'transferred_out\', \'transferred_in\')'
+                            );
+                            $stmt->execute([
+                                'section_id' => (int) $section['id'],
+                                'school_year_id' => (int) $section['school_year_id'],
+                            ]);
+                            $statusLearners = $stmt->fetchAll();
+                            foreach ($statusLearners as $sl) {
+                                $sex = strtolower((string) $sl['sex']);
+                                $status = (string) $sl['current_status'];
+                                if (isset($statusCounts[$status])) {
+                                    if ($sex === 'male') {
+                                        $statusCounts[$status]['male']++;
+                                    } elseif ($sex === 'female') {
+                                        $statusCounts[$status]['female']++;
+                                    }
+                                    $statusCounts[$status]['total']++;
+                                }
+                            }
+                        }
+                        ?>
+                        <article class="teacher-panel-card report-print-area sf2-report" style="margin-top: 20px;">
+                            <div class="panel-heading compact-heading">
+                                <h2>Summary of Attendance and Enrollment</h2>
+                                <p>For the month of <?php echo escape($sectionAttendanceReport['month_label'] . ' ' . $sectionAttendanceReport['year_label']); ?></p>
+                            </div>
+                            <div class="table-shell">
+                                <table class="records-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Metric</th>
+                                            <th>Male</th>
+                                            <th>Female</th>
+                                            <th>Total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>Registered Learners as of end of month</td>
+                                            <td><?php echo escape((string) $registeredLearners['male']); ?></td>
+                                            <td><?php echo escape((string) $registeredLearners['female']); ?></td>
+                                            <td><?php echo escape((string) $registeredLearners['total']); ?></td>
+                                        </tr>
+                                        <tr>
+                                            <td>Percentage of Enrolment as of end of month</td>
+                                            <td><?php echo escape(number_format($percentageEnrollment['male'], 2) . '%'); ?></td>
+                                            <td><?php echo escape(number_format($percentageEnrollment['female'], 2) . '%'); ?></td>
+                                            <td><?php echo escape(number_format($percentageEnrollment['total'], 2) . '%'); ?></td>
+                                        </tr>
+                                        <tr>
+                                            <td>Average Daily Attendance</td>
+                                            <td><?php echo escape((string) $averageDailyAttendance['male']); ?></td>
+                                            <td><?php echo escape((string) $averageDailyAttendance['female']); ?></td>
+                                            <td><?php echo escape((string) $averageDailyAttendance['total']); ?></td>
+                                        </tr>
+                                        <tr>
+                                            <td>Percentage of Attendance for the month</td>
+                                            <td><?php echo escape((string) $percentageAttendance['male'] . '%'); ?></td>
+                                            <td><?php echo escape((string) $percentageAttendance['female'] . '%'); ?></td>
+                                            <td><?php echo escape((string) $percentageAttendance['total'] . '%'); ?></td>
+                                        </tr>
+                                        <tr>
+                                            <td>Number of students absent for 5 consecutive days</td>
+                                            <td><?php echo escape((string) $absent5Consecutive['male']); ?></td>
+                                            <td><?php echo escape((string) $absent5Consecutive['female']); ?></td>
+                                            <td><?php echo escape((string) $absent5Consecutive['total']); ?></td>
+                                        </tr>
+                                        <tr>
+                                            <td>Dropped out</td>
+                                            <td><?php echo escape((string) $statusCounts['dropped_out']['male']); ?></td>
+                                            <td><?php echo escape((string) $statusCounts['dropped_out']['female']); ?></td>
+                                            <td><?php echo escape((string) $statusCounts['dropped_out']['total']); ?></td>
+                                        </tr>
+                                        <tr>
+                                            <td>Transferred out</td>
+                                            <td><?php echo escape((string) $statusCounts['transferred_out']['male']); ?></td>
+                                            <td><?php echo escape((string) $statusCounts['transferred_out']['female']); ?></td>
+                                            <td><?php echo escape((string) $statusCounts['transferred_out']['total']); ?></td>
+                                        </tr>
+                                        <tr>
+                                            <td>Transferred in</td>
+                                            <td><?php echo escape((string) $statusCounts['transferred_in']['male']); ?></td>
+                                            <td><?php echo escape((string) $statusCounts['transferred_in']['female']); ?></td>
+                                            <td><?php echo escape((string) $statusCounts['transferred_in']['total']); ?></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
                         </article>
                     <?php endif; ?>
 
