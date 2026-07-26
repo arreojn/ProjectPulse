@@ -181,9 +181,10 @@ function guidance_intervention_status_options(): array
 function guidance_learner_options(): array
 {
     $statement = database()->prepare(
-        'SELECT id, learner_number, first_name, middle_name, last_name
+        'SELECT id, lrn, learner_number, first_name, middle_name, last_name
          FROM learners
-         ORDER BY first_name, last_name, id'
+         WHERE lrn IS NOT NULL AND lrn != ""
+         ORDER BY last_name, first_name, middle_name, id'
     );
     $statement->execute();
 
@@ -199,6 +200,23 @@ function guidance_full_name(array $learner): string
     ], static fn ($value): bool => $value !== '');
 
     return $parts === [] ? (string) ($learner['learner_number'] ?? '') : implode(' ', $parts);
+}
+
+function guidance_learner_select_label(array $learner): string
+{
+    $lastName = trim((string) ($learner['last_name'] ?? ''));
+    $firstName = trim((string) ($learner['first_name'] ?? ''));
+    $middleName = trim((string) ($learner['middle_name'] ?? ''));
+
+    $name = $lastName;
+    if ($firstName !== '') {
+        $name .= ($name !== '' ? ', ' : '') . $firstName;
+    }
+    if ($middleName !== '') {
+        $name .= ' ' . strtoupper(substr($middleName, 0, 1)) . '.';
+    }
+
+    return trim($name) . ' [' . trim((string) ($learner['lrn'] ?? '')) . ']';
 }
 
 function guidance_dashboard_stats(): array
@@ -262,6 +280,7 @@ function guidance_case_by_id(int $id): ?array
     $schoolYear = current_school_year();
     $sql = 'SELECT
                 gc.*,
+                l.lrn,
                 l.learner_number,
                 l.first_name,
                 l.middle_name,
@@ -342,13 +361,20 @@ function guidance_upcoming_followups(int $limit = 5): array
 function guidance_save_case(array $data, ?int $userId = null): int
 {
     $pdo = database();
-    $learnerId = isset($data['learner_id']) ? (int) $data['learner_id'] : 0;
+    $lrn = trim((string) ($data['lrn'] ?? ''));
+    $learnerId = 0;
+
+    if ($lrn !== '') {
+        $learnerStatement = $pdo->prepare('SELECT id FROM learners WHERE lrn = :lrn LIMIT 1');
+        $learnerStatement->execute(['lrn' => $lrn]);
+        $learnerId = (int) $learnerStatement->fetchColumn();
+    }
     $caseId = isset($data['id']) ? (int) $data['id'] : 0;
     $caseNumber = trim((string) ($data['case_number'] ?? ''));
     $dateOpened = trim((string) ($data['date_opened'] ?? ''));
 
     if ($learnerId <= 0 || $caseNumber === '' || $dateOpened === '') {
-        throw new RuntimeException('Please provide the learner, case number, and open date.');
+        throw new RuntimeException('Please provide a valid learner LRN, case number, and open date.');
     }
 
     $caseNumber = $caseNumber !== '' ? $caseNumber : 'GC-' . date('Ymd');

@@ -1409,6 +1409,11 @@ textarea:focus {
     align-items: stretch;
 }
 
+.guidance-dashboard-stack {
+    display: grid;
+    gap: 14px;
+}
+
 .teacher-dashboard-chart-grid {
     display: grid;
     grid-template-columns: minmax(220px, 0.9fr) minmax(0, 1.1fr);

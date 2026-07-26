@@ -286,45 +286,7 @@ if ($module === 'case_detail' && $editingCase === null) {
                         </article>
                 </section>
 
-                <section class="teacher-overview-grid">
-                    <article class="teacher-panel-card">
-                        <div class="panel-heading compact-heading">
-                            <h2>Upcoming Follow-ups</h2>
-                            <p>Scheduled follow-up dates for active cases.</p>
-                        </div>
-
-                        <div class="table-shell">
-                            <table class="records-table">
-                                <thead>
-                                    <tr>
-                                        <th>Follow-up Date</th>
-                                        <th>Case #</th>
-                                        <th>Learner</th>
-                                        <th>Action</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php if ($upcomingFollowups === []): ?>
-                                        <tr>
-                                            <td colspan="4" class="empty-row">No upcoming follow-ups are scheduled.</td>
-                                        </tr>
-                                    <?php else: ?>
-                                        <?php foreach ($upcomingFollowups as $followup): ?>
-                                            <tr>
-                                                <td><?php echo escape((string) ($followup['follow_up_schedule'] ?? '')); ?></td>
-                                                <td><?php echo escape((string) ($followup['case_number'] ?? '')); ?></td>
-                                                <td><?php echo escape(guidance_full_name($followup)); ?></td>
-                                                <td>
-                                                    <a href="<?php echo escape(route_url('guidance.php?module=case_detail&case_id=' . urlencode((string) $followup['id']))); ?>" class="table-inline-link">Open Case</a>
-                                                </td>
-                                            </tr>
-                                        <?php endforeach; ?>
-                                    <?php endif; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    </article>
-
+                <section class="guidance-dashboard-stack">
                     <article class="teacher-panel-card">
                         <div class="panel-heading compact-heading">
                             <h2>Recent Guidance Cases</h2>
@@ -366,6 +328,44 @@ if ($module === 'case_detail' && $editingCase === null) {
                         </table>
                     </div>
                     </article>
+
+                    <article class="teacher-panel-card">
+                        <div class="panel-heading compact-heading">
+                            <h2>Upcoming Follow-ups</h2>
+                            <p>Scheduled follow-up dates for active cases.</p>
+                        </div>
+
+                        <div class="table-shell">
+                            <table class="records-table">
+                                <thead>
+                                    <tr>
+                                        <th>Follow-up Date</th>
+                                        <th>Case #</th>
+                                        <th>Learner</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php if ($upcomingFollowups === []): ?>
+                                        <tr>
+                                            <td colspan="4" class="empty-row">No upcoming follow-ups are scheduled.</td>
+                                        </tr>
+                                    <?php else: ?>
+                                        <?php foreach ($upcomingFollowups as $followup): ?>
+                                            <tr>
+                                                <td><?php echo escape((string) ($followup['follow_up_schedule'] ?? '')); ?></td>
+                                                <td><?php echo escape((string) ($followup['case_number'] ?? '')); ?></td>
+                                                <td><?php echo escape(guidance_full_name($followup)); ?></td>
+                                                <td>
+                                                    <a href="<?php echo escape(route_url('guidance.php?module=case_detail&case_id=' . urlencode((string) $followup['id']))); ?>" class="table-inline-link">Open Case</a>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </article>
                 </section>
             <?php elseif ($module === 'new_case' || $module === 'case_detail'): ?>
                 <article class="teacher-panel-card">
@@ -381,11 +381,11 @@ if ($module === 'case_detail' && $editingCase === null) {
                         <?php endif; ?>
 
                             <div class="teacher-form-grid-full">
-                                <label for="learner_id">Learner</label>
-                                <select name="learner_id" required>
-                                    <option value="">Select learner</option>
+                                <label for="learner_id">Learner LRN</label>
+                                <select id="learner_id" name="learner_id" required>
+                                    <option value="">Select Learner</option>
                                     <?php foreach ($learnerOptions as $learner): ?>
-                                        <option value="<?php echo escape((string) $learner['id']); ?>" <?php echo ($editingCase !== null && (int) $editingCase['learner_id'] === (int) $learner['id']) ? 'selected' : ''; ?>><?php echo escape(guidance_full_name($learner)); ?> (<?php echo escape((string) ($learner['learner_number'] ?? '')); ?>)</option>
+                                        <option value="<?php echo escape((string) $learner['id']); ?>" <?php echo ($editingCase !== null && (int) $editingCase['learner_id'] === (int) $learner['id']) ? 'selected' : ''; ?>><?php echo escape((string) ($learner['learner_number'] ?? '')); ?> — <?php echo escape(guidance_full_name($learner)); ?></option>
                                     <?php endforeach; ?>
                                 </select>
                             </div>
