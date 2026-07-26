@@ -11,6 +11,7 @@ require_once __DIR__ . '/app/parents.php';
 require_once __DIR__ . '/app/teachers.php';
 require_once __DIR__ . '/app/grades.php';
 require_once __DIR__ . '/app/health.php';
+require_once __DIR__ . '/app/reports.php';
 require_once __DIR__ . '/app/announcements.php';
 require_once __DIR__ . '/app/issues.php';
 require_once __DIR__ . '/app/theme_settings.php';
@@ -179,6 +180,11 @@ $allowedModules = [
         'eyebrow' => 'Grades',
         'title' => 'Import Grades',
         'description' => 'Upload subject grades for learners inside your assigned section and review imported records.',
+    ],
+    'section_attendance' => [
+        'eyebrow' => 'Attendance',
+        'title' => 'Section Attendance',
+        'description' => 'Review and print the monthly SF2-style attendance register for your assigned section.',
     ],
     'learner_profiles' => [
         'eyebrow' => 'Learner Profile',
@@ -370,6 +376,18 @@ if ($selectedGradeSchoolYearId === 0 && !empty($historicalSchoolYears)) {
 }
 
 $sectionLearners = $section === null ? [] : teacher_section_learners((int) $user['id']);
+$attendanceMonth = trim((string) ($_GET['attendance_month'] ?? date('Y-m')));
+if (preg_match('/^\d{4}-\d{2}$/', $attendanceMonth) !== 1) {
+    $attendanceMonth = date('Y-m');
+}
+$sectionAttendanceReport = null;
+if ($module === 'section_attendance' && $section !== null) {
+    $sectionAttendanceReport = attendance_report_monthly_summary([
+        'section_id' => (string) $section['id'],
+        'learner_id' => '',
+        'report_month' => $attendanceMonth,
+    ]);
+}
 $parentLinks = $section === null ? [] : teacher_section_parent_links((int) $user['id']);
 $gradeRows = $selectedGradeSchoolYearId > 0 ? grade_teacher_rows_for_school_year((int) $user['id'], $selectedGradeSchoolYearId) : [];
 $bmiRemarkRows = teacher_section_bmi_remarks_rows($sectionLearners);
@@ -553,6 +571,11 @@ $pageMeta = $allowedModules[$module];
                     <div class="menu-group">
                         <p class="menu-group-title">Grades</p>
                         <a href="<?php echo escape(teacher_module_url('grades_import')); ?>" class="submenu-link<?php echo $module === 'grades_import' ? ' active' : ''; ?>">Import Grades</a>
+                    </div>
+
+                    <div class="menu-group">
+                        <p class="menu-group-title">Attendance</p>
+                        <a href="<?php echo escape(teacher_module_url('section_attendance')); ?>" class="submenu-link<?php echo $module === 'section_attendance' ? ' active' : ''; ?>">Section Attendance</a>
                     </div>
 
                     <div class="menu-group">
@@ -1167,6 +1190,96 @@ $pageMeta = $allowedModules[$module];
                             </table>
                         </div>
                     </article>
+                <?php elseif ($module === 'section_attendance'): ?>
+                    <article class="teacher-panel-card no-print">
+                        <div class="panel-heading compact-heading">
+                            <h2>School Form 2 - Daily Attendance Report</h2>
+                            <p>Select a month to display your assigned section's attendance register.</p>
+                        </div>
+                        <form method="get" class="report-filter-grid">
+                            <input type="hidden" name="module" value="section_attendance">
+                            <div class="report-filter-field report-filter-field-wide">
+                                <label for="attendance_month">Report month</label>
+                                <input id="attendance_month" name="attendance_month" type="month" value="<?php echo escape($attendanceMonth); ?>">
+                            </div>
+                            <div class="report-actions">
+                                <button type="submit" class="primary-button">Load Attendance</button>
+                                <button type="button" class="ghost-button" onclick="window.print()">Print SF2</button>
+                            </div>
+                        </form>
+                    </article>
+
+                    <?php if ($sectionAttendanceReport === null): ?>
+                        <div class="alert neutral">No section is assigned to your account yet.</div>
+                    <?php else: ?>
+                        <article class="teacher-panel-card report-print-area sf2-report">
+                            <header class="sf2-header">
+                                <h2>School Form 2 (SF2) Daily Attendance Report of Learners</h2>
+                                <p>(Monthly attendance register for the assigned advisory section)</p>
+                                <div class="sf2-meta">
+                                    <span><strong>School: Candon City Information Technology National High School </strong></span>
+                                    <span><strong>School Year:</strong> <?php echo escape((string) ($section['school_year_label'] ?? '-')); ?></span>
+                                    <span><strong>Report for the Month of:</strong> <?php echo escape($sectionAttendanceReport['month_label'] . ' ' . $sectionAttendanceReport['year_label']); ?></span>
+                                    <span><strong>Grade Level:</strong> <?php echo escape((string) ($section['grade_level'] ?? '-')); ?></span>
+                                    <span><strong>Section:</strong> <?php echo escape((string) ($section['name'] ?? '-')); ?></span>
+                                </div>
+                            </header>
+
+                            <div class="table-shell sf2-table-shell">
+                                <table class="records-table monthly-report-table sf2-table">
+                                    <thead>
+                                        <tr>
+                                            <th rowspan="2">No.</th>
+                                            <th rowspan="2">Name<br><small>(Last Name, First Name)</small></th>
+                                            <th colspan="<?php echo escape((string) count($sectionAttendanceReport['days_in_month'])); ?>">Day of the Month</th>
+                                            <th colspan="2">Total for the Month</th>
+                                        </tr>
+                                        <tr>
+                                            <?php foreach ($sectionAttendanceReport['days_in_month'] as $dayNumber): ?>
+                                                <?php $dayDate = $attendanceMonth . '-' . str_pad((string) $dayNumber, 2, '0', STR_PAD_LEFT); ?>
+                                                <th title="<?php echo escape(date('l, F j, Y', strtotime($dayDate))); ?>">
+                                                    <?php echo escape((string) $dayNumber); ?><small><?php echo escape(date('D', strtotime($dayDate))); ?></small>
+                                                </th>
+                                            <?php endforeach; ?>
+                                            <th>Absent</th>
+                                            <th>Present</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php if ($sectionAttendanceReport['rows'] === []): ?>
+                                            <tr><td colspan="<?php echo escape((string) (count($sectionAttendanceReport['days_in_month']) + 4)); ?>" class="empty-row">No learners are enrolled in your assigned section for this school year.</td></tr>
+                                        <?php else: ?>
+                                            <?php foreach ($sectionAttendanceReport['rows'] as $row): ?>
+                                                <tr>
+                                                    <td><?php echo escape((string) $row['no']); ?></td>
+                                                    <td class="sf2-learner-name"><?php echo escape($row['learner_name']); ?><small><?php echo escape(ucfirst((string) ($row['sex'] ?? ''))); ?></small></td>
+                                                    <?php foreach ($sectionAttendanceReport['days_in_month'] as $dayNumber): ?>
+                                                        <td class="sf2-code sf2-code-<?php echo escape(strtolower(str_replace([' ', '(', ')', '.'], '-', (string) ($row['days'][$dayNumber] ?? 'blank')))); ?>"><?php echo escape((string) ($row['days'][$dayNumber] ?? '')); ?></td>
+                                                    <?php endforeach; ?>
+                                                    <td><?php echo escape((string) $row['total_absences']); ?></td>
+                                                    <td><?php echo escape((string) $row['total_present_days']); ?></td>
+                                                </tr>
+                                            <?php endforeach; ?>
+                                        <?php endif; ?>
+                                    </tbody>
+                                    <?php if ($sectionAttendanceReport['rows'] !== []): ?>
+                                        <tfoot>
+                                            <tr>
+                                                <th colspan="2">Total Present Per Day</th>
+                                                <?php foreach ($sectionAttendanceReport['days_in_month'] as $dayNumber): ?>
+                                                    <th><?php echo escape((string) ($sectionAttendanceReport['day_totals'][$dayNumber] ?? 0)); ?></th>
+                                                <?php endforeach; ?>
+                                                <th><?php echo escape((string) $sectionAttendanceReport['overall_absences']); ?></th>
+                                                <th><?php echo escape((string) $sectionAttendanceReport['overall_present_days']); ?></th>
+                                            </tr>
+                                        </tfoot>
+                                    <?php endif; ?>
+                                </table>
+                            </div>
+                            <div class="sf2-legend"><strong>Legend:</strong> P - Present; A - Absent; A (0.5) - Half-day absent; L - Late; E - Excused.</div>
+                        </article>
+                    <?php endif; ?>
+
                 <?php elseif ($module === 'grades_import'): ?>
                     <article class="teacher-panel-card">
                         <div class="panel-heading">

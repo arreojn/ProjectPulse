@@ -2018,6 +2018,94 @@ textarea:focus {
     color: var(--accent-strong);
 }
 
+.sf2-report {
+    overflow: hidden;
+}
+
+.sf2-header {
+    text-align: center;
+    padding-bottom: 14px;
+    border-bottom: 2px solid var(--ink);
+}
+
+.sf2-header h2,
+.sf2-header p {
+    margin: 0;
+}
+
+.sf2-header h2 {
+    font-size: 1.12rem;
+}
+
+.sf2-header p {
+    color: var(--muted);
+    font-size: 0.82rem;
+    margin-top: 4px;
+}
+
+.sf2-meta {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px 20px;
+    margin-top: 14px;
+    font-size: 0.78rem;
+    text-align: left;
+}
+
+.sf2-table-shell {
+    margin-top: 14px;
+}
+
+.sf2-table th,
+.sf2-table td {
+    min-width: 28px;
+    padding: 5px 3px;
+    font-size: 0.68rem;
+    border-color: #9ca3af;
+}
+
+.sf2-table thead th {
+    background: #e5e7eb;
+    color: #111827;
+}
+
+.sf2-table thead small,
+.sf2-learner-name small {
+    display: block;
+    font-size: 0.58rem;
+    font-weight: 500;
+    color: #4b5563;
+}
+
+.sf2-table .sf2-learner-name {
+    min-width: 185px;
+    text-align: left;
+    white-space: normal;
+}
+
+.sf2-code-a,
+.sf2-code-a--0-5- {
+    color: #b91c1c;
+    font-weight: 700;
+}
+
+.sf2-code-e {
+    color: #92400e;
+    font-weight: 700;
+}
+
+.sf2-code-l {
+    color: #1d4ed8;
+    font-weight: 700;
+}
+
+.sf2-legend {
+    padding-top: 10px;
+    font-size: 0.75rem;
+    color: var(--muted);
+}
+
 .small-link {
     padding: 7px 12px;
     font-size: 0.8rem;
