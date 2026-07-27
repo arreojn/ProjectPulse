@@ -1,5 +1,4 @@
 <?php
-
 declare(strict_types=1);
 
 require_once __DIR__ . '/config/config.php';
@@ -8,100 +7,150 @@ require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/app/auth.php';
 require_once __DIR__ . '/app/theme_settings.php';
 
-try {
-    theme_settings_bootstrap();
-} catch (Throwable $exception) {
-    // Keep the login screen available even if demo account seeding cannot run.
-}
+try { theme_settings_bootstrap(); } catch (Throwable $e) {}
 
 start_session();
-$databaseWarning = null;
 
 if (current_user() !== null) {
     redirect(dashboard_path_for_role(current_user()['role'] ?? null));
 }
 
+$databaseWarning = null;
 $databaseConnectionOk = true;
+
 try {
     if (!auth_table_exists('users')) {
-        $databaseWarning = 'The database schema is not imported yet. Import `database/schema.sql` into MySQL, then reload this page.';
+        $databaseWarning = 'Database schema is not imported yet.';
     }
-} catch (Throwable $exception) {
+} catch (Throwable $e) {
     $databaseConnectionOk = false;
-    $databaseWarning = 'Unable to connect to the database right now. Check your XAMPP MySQL service and database import.';
+    $databaseWarning = 'Unable to connect to the database.';
 }
 
 $errorMessage = null;
 $submittedIdentity = '';
 
 if (is_post() && $databaseConnectionOk) {
-    $submittedIdentity = trim((string) ($_POST['identity'] ?? ''));
-    $password = (string) ($_POST['password'] ?? '');
+    $submittedIdentity = trim((string)($_POST['identity'] ?? ''));
+    $password = (string)($_POST['password'] ?? '');
 
     if (attempt_login($submittedIdentity, $password)) {
         redirect(dashboard_path_for_role(current_user()['role'] ?? null));
-    } else {
-        $errorMessage = 'Invalid username or password.';
     }
+
+    $errorMessage = 'Invalid username or password.';
 }
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?php echo escape(APP_NAME); ?> Login</title>
-    <?php echo theme_stylesheet_markup(); ?>
-    <link rel="stylesheet" href="<?php echo escape(asset_url('assets/css/app.css')); ?>">
-    <style>
-        .auth-logo {
-            width: 250px;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title><?= escape(APP_NAME) ?></title>
+
+<link rel="stylesheet" href="<?= escape(asset_url('vendor/bootstrap/css/bootstrap.min.css')) ?>">
+<link rel="stylesheet" href="<?= escape(asset_url('loginassets/fonts/font-awesome-4.7.0/css/font-awesome.min.css')) ?>">
+<link rel="stylesheet" href="<?= escape(asset_url('loginassets/vendor/animate/animate.css')) ?>">
+<link rel="stylesheet" href="<?= escape(asset_url('loginassets/vendor/css-hamburgers/hamburgers.min.css')) ?>">
+<link rel="stylesheet" href="<?= escape(asset_url('loginassets/vendor/select2/select2.min.css')) ?>">
+<link rel="stylesheet" href="<?= escape(asset_url('loginassets/css/util.css')) ?>">
+<link rel="stylesheet" href="<?= escape(asset_url('loginassets/css/main.css')) ?>">
+
+<style>
+.auth-logo{width:180px;margin-bottom:20px}
+.project-title{font-size:48px;font-weight:700;color:#2E2A47}
+.project-subtitle{font-size:17px;color:#666;margin-bottom:25px}
+.about-card{margin-top:25px;padding:20px;background:#fafafa;border:1px solid #ddd;border-radius:12px}
+.about-card h4{margin-bottom:10px}
+.about-card p{font-size:14px;line-height:1.7;color:#555}
+.login-subtitle{text-align:center;margin-top:-20px;margin-bottom:30px;color:#666}
+.alert.error{background:#fdecea;border:1px solid #f5c2c7;color:#842029;padding:10px;border-radius:6px;margin-bottom:15px}
+.forgot-link{display:block;text-align:center;margin-top:20px}
+</style>
 </head>
-<body class="auth-body">
-    <main class="auth-shell">
-        <div class="auth-hero">
-            <img src="<?php echo escape(asset_url('assets/images/pulselogo.png')); ?>" alt="<?php echo escape(APP_NAME); ?> Logo" class="auth-logo">
-            <h1>Project <strong>PULSE</strong></h1>
-            <p class="lead">Portal for Unified Learner Monitoring, School Records and Engagement</p>
+<body>
 
-            <?php if ($databaseConnectionOk): ?>
-                <div class="auth-note">
-                    <p><strong>Project PULSE (Portal for Unified Learner Monitoring, School Records and Engagement)</strong> is an integrated school information system developed to enhance the management of learner information, attendance, academic records, health services, and communication among administrators, teachers, parents, guidance counselors, and health coordinators. It provides a centralized, secure, and efficient platform that supports data-driven decision-making and promotes improved educational services.</p>
-                </div>
-            <?php endif; ?>
-        </div>
+<div class="limiter">
+<div class="container-login100">
+<div class="wrap-login100">
 
-        <div class="auth-panel">
-            <div class="panel-heading">
-                <h2>Login to Your Account</h2>
-                <p>Enter your credentials to access the portal.</p>
-            </div>
+<div class="login100-pic js-tilt" data-tilt>
+<img src="<?= escape(asset_url('assets/images/pulselogo.png')) ?>" class="auth-logo" alt="Project PULSE">
 
-             <?php if ($errorMessage !== null): ?>
-                 <div class="alert error"><?php echo escape($errorMessage); ?></div>
-             <?php endif; ?>
-             <?php if ($databaseWarning !== null): ?>
-                 <div class="alert error"><?php echo escape($databaseWarning); ?></div>
-             <?php endif; ?>
+<h1 class="project-title">Project PULSE</h1>
 
-            <form method="post" class="auth-form">
-                <div>
-                    <label for="identity">Username or Email</label>
-                    <input id="identity" name="identity" type="text" value="<?php echo escape($submittedIdentity); ?>" required>
-                </div>
-                <div>
-                    <label for="password">Password</label>
-                    <input id="password" name="password" type="password" required>
-                </div>
+<p class="project-subtitle">
+Portal for Unified Learner Monitoring,<br>
+School Records and Engagement
+</p>
 
-                <div class="password-form-actions">
-                    <button type="submit" class="primary-button" <?php echo !$databaseConnectionOk ? 'disabled' : ''; ?>>Log In</button>
-                    <a href="<?php echo escape(route_url('forgot_password.php')); ?>" class="secondary-link">Forgot password?</a>
-                </div>
-            </form>
-        </div>
-    </main>
+<div class="about-card">
+<h4>About Project PULSE</h4>
+<p>
+Project PULSE is an integrated school information system that centralizes learner records,
+attendance, academic performance, health monitoring, and stakeholder engagement through
+secure role-based access for administrators, teachers, parents, guidance counselors,
+and health coordinators.
+</p>
+</div>
+
+</div>
+
+<form method="post" class="login100-form validate-form">
+
+<span class="login100-form-title">Login to Your Account</span>
+
+<p class="login-subtitle">Enter your credentials to access the portal.</p>
+
+<?php if ($errorMessage): ?>
+<div class="alert error"><?= escape($errorMessage) ?></div>
+<?php endif; ?>
+
+<?php if ($databaseWarning): ?>
+<div class="alert error"><?= escape($databaseWarning) ?></div>
+<?php endif; ?>
+
+<div class="wrap-input100">
+<input class="input100" type="text" id="identity" name="identity"
+placeholder="Username or Email"
+value="<?= escape($submittedIdentity) ?>" required>
+<span class="focus-input100"></span>
+<span class="symbol-input100"><i class="fa fa-user"></i></span>
+</div>
+
+<div class="wrap-input100">
+<input class="input100" type="password" id="password" name="password"
+placeholder="Password" required>
+<span class="focus-input100"></span>
+<span class="symbol-input100"><i class="fa fa-lock"></i></span>
+</div>
+
+<div class="container-login100-form-btn">
+<button class="login100-form-btn" type="submit" <?= !$databaseConnectionOk ? 'disabled' : '' ?>>
+Log In
+</button>
+</div>
+
+<div class="text-center p-t-12">
+<a class="txt2" href="<?= escape(route_url('forgot_password.php')) ?>">
+Forgot Password?
+</a>
+</div>
+
+</form>
+
+</div>
+</div>
+</div>
+
+<script src="<?= escape(asset_url('loginassets/vendor/jquery/jquery-3.2.1.min.js')) ?>"></script>
+<script src="<?= escape(asset_url('loginassets/vendor/bootstrap/js/popper.js')) ?>"></script>
+<script src="<?= escape(asset_url('loginassets/vendor/bootstrap/js/bootstrap.min.js')) ?>"></script>
+<script src="<?= escape(asset_url('loginassets/vendor/select2/select2.min.js')) ?>"></script>
+<script src="<?= escape(asset_url('loginassets/vendor/tilt/tilt.jquery.min.js')) ?>"></script>
+<script>
+$('.js-tilt').tilt({scale:1.05});
+</script>
+
 </body>
 </html>
