@@ -85,6 +85,81 @@ function verify_csrf_token(?string $token): bool
     return isset($_SESSION['csrf_token']) && is_string($token) && hash_equals($_SESSION['csrf_token'], $token);
 }
 
+function face_recognition_python(): string
+{
+    $configuredPython = getenv('PROJECTPULSE_FACE_PYTHON') ?: getenv('AI_ATTENDANCE_PYTHON');
+
+    if (is_string($configuredPython) && $configuredPython !== '') {
+        return $configuredPython;
+    }
+
+    // Windows' per-user Python 3.11 location provides a useful XAMPP-local
+    // fallback while deployments can still configure PROJECTPULSE_FACE_PYTHON.
+    $localAppData = getenv('LOCALAPPDATA');
+    if (is_string($localAppData) && $localAppData !== '') {
+        $python311 = rtrim($localAppData, "\\/") . '/Programs/Python/Python311/python.exe';
+        if (is_file($python311)) {
+            return $python311;
+        }
+    }
+
+    return 'python';
+}
+
+function face_recognition_service_request(string $path, ?string $body = null): ?array
+{
+    if (!extension_loaded('curl')) {
+        return null;
+    }
+
+    $serviceUrl = rtrim((string) (getenv('PROJECTPULSE_FACE_SERVICE_URL') ?: 'http://127.0.0.1:8765'), '/');
+    $curl = curl_init($serviceUrl . '/' . ltrim($path, '/'));
+    curl_setopt_array($curl, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CONNECTTIMEOUT_MS => 300,
+        CURLOPT_TIMEOUT_MS => 4000,
+    ]);
+
+    if ($body !== null) {
+        curl_setopt($curl, CURLOPT_POST, true);
+        curl_setopt($curl, CURLOPT_POSTFIELDS, $body);
+        curl_setopt($curl, CURLOPT_HTTPHEADER, ['Content-Type: image/jpeg', 'Content-Length: ' . strlen($body)]);
+    }
+
+    $response = curl_exec($curl);
+    $status = (int) curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
+    curl_close($curl);
+    $payload = is_string($response) ? json_decode($response, true) : null;
+
+    return is_array($payload) ? ['status' => $status, 'payload' => $payload] : null;
+}
+
+function face_recognition_start_service(): bool
+{
+    if (face_recognition_service_request('health') !== null) {
+        return true;
+    }
+
+    $script = realpath(__DIR__ . '/../ai_scanner/recognition_service.py');
+    if ($script === false) {
+        return false;
+    }
+
+    $command = 'cmd /c start "" /B ' . escapeshellarg(face_recognition_python()) . ' ' . escapeshellarg($script) . ' --port 8765';
+    $output = [];
+    $exitCode = 0;
+    exec($command, $output, $exitCode);
+
+    for ($attempt = 0; $attempt < 12; $attempt++) {
+        usleep(150000);
+        if (face_recognition_service_request('health') !== null) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 function flash_set(string $key, string $message, string $type = 'success'): void
 {
     start_session();

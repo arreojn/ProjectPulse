@@ -32,50 +32,33 @@ try {
         throw new RuntimeException('No image data received.', 422);
     }
 
-    // --- OpenCV Logic ---
-    $cascadePath = realpath(__DIR__ . '/opencv_models/haarcascade_frontalface_default.xml');
-    $recognizerPath = realpath(__DIR__ . '/opencv_models/recognizer.yml');
-    $labelsPath = realpath(__DIR__ . '/opencv_models/labels.json');
-
-    if (!extension_loaded('opencv')) {
-        throw new RuntimeException('The php-opencv extension is not installed or enabled.');
+    if (!is_string($imageDataUrl) || !preg_match('#^data:image/(?:jpeg|jpg|png);base64,([A-Za-z0-9+/=]+)$#', $imageDataUrl, $matches)) {
+        throw new RuntimeException('A JPEG or PNG camera frame is required.', 422);
     }
 
-    if (!$cascadePath || !$recognizerPath || !$labelsPath) {
-        throw new RuntimeException('Required OpenCV model or label files are missing. Please run the training script.');
+    $imageData = base64_decode($matches[1], true);
+    if ($imageData === false || strlen($imageData) > 5 * 1024 * 1024) {
+        throw new RuntimeException('The camera frame is invalid or too large.', 422);
     }
 
-    $imgData = base64_decode(preg_replace('#^data:image/\w+;base64,#i', '', $imageDataUrl));
-    $img = cv\imdecode($imgData, cv\IMREAD_GRAYSCALE);
-
-    $faceCascade = new cv\CascadeClassifier($cascadePath);
-    $recognizer = cv\Face\LBPHFaceRecognizer::create();
-    $recognizer->read($recognizerPath);
-    $labelMap = json_decode(file_get_contents($labelsPath), true);
-
-    $faces = [];
-    $faceCascade->detectMultiScale($img, $faces);
-
-    if (empty($faces)) {
-        throw new RuntimeException('No face detected.', 404);
+    if (!face_recognition_start_service()) {
+        throw new RuntimeException('Fast recognition service could not be started. Train the face model and try again.', 503);
     }
 
-    $faceRect = $faces[0];
-    $faceROI = $img->getImageROI($faceRect);
-
-    $label = -1;
-    $confidence = 0.0;
-    $recognizer->predict($faceROI, $label, $confidence);
-
-    // Confidence threshold: lower is better. This value requires tuning.
-    if ($label === -1 || $confidence > 80) {
-        throw new RuntimeException('Face not recognized.', 404);
+    $serviceResponse = face_recognition_service_request('recognize', $imageData);
+    $recognition = $serviceResponse['payload'] ?? null;
+    if (!is_array($recognition) || !($recognition['ok'] ?? false)) {
+        throw new RuntimeException(is_array($recognition) ? (string) ($recognition['error'] ?? 'Recognition process failed.') : 'Recognition service is unavailable.', 503);
     }
 
-    $lrn = $labelMap[$label] ?? null;
-    if ($lrn === null) {
-        throw new RuntimeException("Recognized label {$label} not found in label map.");
+    $matches = is_array($recognition['matches'] ?? null) ? $recognition['matches'] : [];
+    if ($matches === []) {
+        throw new RuntimeException('No registered face was recognized.', 404);
     }
+
+    // The lowest LBPH confidence is the strongest match. Recording stays one learner per
+    // scan so the existing AM/PM slot rules remain unambiguous.
+    $lrn = (string) ($matches[0]['lrn'] ?? '');
 
     // --- Attendance Logic (adapted from api/attendance_event.php) ---
     $currentTime = date('H:i:s');

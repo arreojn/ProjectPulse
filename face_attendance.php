@@ -23,13 +23,64 @@ theme_settings_bootstrap();
     <style>
         #video-feed {
             width: 100%;
-            height: auto;
+            max-width: 620px;
+            aspect-ratio: 4 / 3;
+            object-fit: cover;
             border-radius: 18px;
             transform: scaleX(-1); /* Mirror view for a more natural feel */
             background: #000;
         }
-        .scanner-panel.expanded {
-            grid-template-rows: auto minmax(0, 1fr);
+        .face-attendance-layout {
+            display: grid;
+            grid-template-columns: minmax(390px, 0.85fr) minmax(0, 1.15fr);
+            gap: 16px;
+            align-items: start;
+        }
+        .today-attendance-panel {
+            max-height: calc(100vh - 160px);
+            overflow: hidden;
+        }
+        .today-attendance-panel .table-shell {
+            max-height: calc(100vh - 270px);
+            overflow: auto;
+        }
+        .camera-station {
+            display: grid;
+            gap: 14px;
+            justify-items: center;
+        }
+        .camera-station .scan-head,
+        .camera-station .scan-mode-panel,
+        .camera-station #scan-feedback {
+            width: min(100%, 620px);
+        }
+        .camera-station .scan-head {
+            align-items: center;
+        }
+        .camera-station .clock-panel {
+            min-width: 210px;
+            padding: 12px 16px;
+        }
+        .camera-station .clock-value {
+            font-size: 1.45rem;
+        }
+        .camera-station .scan-mode-panel {
+            justify-content: center;
+            padding: 10px;
+        }
+        .attendance-time-table th:not(:first-child),
+        .attendance-time-table td:not(:first-child) {
+            text-align: center;
+            white-space: nowrap;
+        }
+        .learner-name-cell strong,
+        .learner-name-cell small {
+            display: block;
+        }
+        .learner-name-cell small { color: var(--muted); margin-top: 3px; }
+        @media (max-width: 980px) {
+            .face-attendance-layout { grid-template-columns: 1fr; }
+            .today-attendance-panel, .today-attendance-panel .table-shell { max-height: none; }
         }
     </style>
 </head>
@@ -53,77 +104,49 @@ theme_settings_bootstrap();
             </div>
         </header>
 
-        <section class="dashboard-grid expanded">
-            <article class="status-panel compact">
-                <div class="picture-box">
-                    <img
-                        id="learner-photo"
-                        class="learner-photo"
-                        src="<?php echo escape(asset_url('assets/images/learners/logorotate.gif')); ?>"
-                        alt="Learner photo"
-                    >
+        <section class="face-attendance-layout">
+            <article class="admin-module-card today-attendance-panel">
+                <div class="panel-heading compact-heading">
+                    <h2>Today’s Learners</h2>
+                    <p>Live time-in and time-out records.</p>
                 </div>
-
-                <div class="clock-panel">
-                    <p class="meta-label">Current Time</p>
-                    <p id="live-time" class="clock-value"><?php echo escape(date('h:i:s A')); ?></p>
-                    <p id="live-date" class="date-value"><?php echo escape(date('l, F j, Y')); ?></p>
+                <div class="table-shell">
+                    <table class="records-table attendance-time-table">
+                        <thead>
+                            <tr>
+                                <th>Learner</th>
+                                <th>AM In</th>
+                                <th>AM Out</th>
+                                <th>PM In</th>
+                                <th>PM Out</th>
+                            </tr>
+                        </thead>
+                        <tbody id="today-attendance-body">
+                            <tr><td colspan="5" class="empty-row">No attendance records for today yet.</td></tr>
+                        </tbody>
+                    </table>
                 </div>
-
-                <div id="scan-feedback" class="alert neutral" style="margin: 0; text-align: center;">Awaiting scan...</div>
             </article>
 
-            <article class="scanner-panel expanded">
+            <article class="admin-module-card camera-station">
                 <section class="scan-head">
                     <div class="panel-heading no-gap">
                         <h2>Live Camera Feed</h2>
                         <p>Position face in the frame to log attendance automatically.</p>
                     </div>
+                    <div class="clock-panel">
+                        <p class="meta-label">Current Time</p>
+                        <p id="live-time" class="clock-value"><?php echo escape(date('h:i:s A')); ?></p>
+                        <p id="live-date" class="date-value"><?php echo escape(date('l, F j, Y')); ?></p>
+                    </div>
                 </section>
 
                 <section class="scan-mode-panel">
-                     <video id="video-feed" autoplay playsinline muted></video>
-                     <canvas id="capture-canvas" style="display:none;"></canvas>
+                    <video id="video-feed" autoplay playsinline muted></video>
+                    <canvas id="capture-canvas" style="display:none;"></canvas>
                 </section>
 
-                <section id="learner-card" class="learner-card full-panel is-empty">
-                    <div class="learner-header-row">
-                        <div class="learner-summary">
-                            <h3 id="learner-name">No learner selected</h3>
-                            <p id="learner-lrn">System is ready to recognize faces.</p>
-                        </div>
-                    </div>
-
-                    <dl class="detail-grid wide">
-                        <div><dt>Grade Level</dt><dd id="learner-grade">-</dd></div>
-                        <div><dt>Section</dt><dd id="learner-section">-</dd></div>
-                        <div><dt>Today's Status</dt><dd id="learner-status">No record yet</dd></div>
-                        <div><dt>Last Scan</dt><dd id="learner-last-scan">-</dd></div>
-                    </dl>
-
-                    <div class="record-grid">
-                        <section class="record-panel">
-                            <div class="panel-heading compact-heading">
-                                <h2>Recent Attendance Logs</h2>
-                                <p>The latest records from all stations.</p>
-                            </div>
-                            <div class="table-shell">
-                                <table class="records-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Time</th>
-                                            <th>Learner</th>
-                                            <th>Log Entry</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="attendance-logs-body">
-                                        <tr><td colspan="3" class="empty-row">No attendance records to display yet.</td></tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </section>
-                    </div>
-                </section>
+                <div id="scan-feedback" class="alert neutral" style="margin: 0; text-align: center;">Awaiting scan...</div>
             </article>
         </section>
     </main>
@@ -132,9 +155,7 @@ theme_settings_bootstrap();
         window.ProjectPulse = {
             csrfToken: '<?php echo escape(csrf_token()); ?>',
             faceApiUrl: '<?php echo escape(route_url('face_attendance_event.php')); ?>',
-            attendanceLogsUrl: '<?php echo escape(route_url('api/attendance_logs.php')); ?>',
-            learnerPhotoBaseUrl: '<?php echo escape(asset_url('assets/images/learners/')); ?>',
-            defaultLearnerPhotoUrl: '<?php echo escape(asset_url('assets/images/learners/logorotate.gif')); ?>'
+            attendanceSummaryUrl: '<?php echo escape(route_url('api/face_attendance_summary.php')); ?>'
         };
     </script>
     <script>
@@ -143,14 +164,7 @@ theme_settings_bootstrap();
         const canvas = document.getElementById('capture-canvas');
         const context = canvas.getContext('2d');
         const feedbackEl = document.getElementById('scan-feedback');
-        const learnerPhotoEl = document.getElementById('learner-photo');
-        const learnerNameEl = document.getElementById('learner-name');
-        const learnerLrnEl = document.getElementById('learner-lrn');
-        const learnerGradeEl = document.getElementById('learner-grade');
-        const learnerSectionEl = document.getElementById('learner-section');
-        const learnerStatusEl = document.getElementById('learner-status');
-        const learnerLastScanEl = document.getElementById('learner-last-scan');
-        const logsBody = document.getElementById('attendance-logs-body');
+        const attendanceBody = document.getElementById('today-attendance-body');
         let isProcessing = false;
 
         function setFeedback(message, type = 'neutral') {
@@ -180,7 +194,7 @@ theme_settings_bootstrap();
             isProcessing = true;
 
             context.drawImage(video, 0, 0, canvas.width, canvas.height);
-            const imageDataUrl = canvas.toDataURL('image/jpeg');
+            const imageDataUrl = canvas.toDataURL('image/jpeg', 0.72);
 
             try {
                 const response = await fetch(window.ProjectPulse.faceApiUrl, {
@@ -193,15 +207,6 @@ theme_settings_bootstrap();
 
                 if (response.ok && result.success) {
                     setFeedback(result.message, 'success');
-                    const learner = result.learner;
-                    learnerNameEl.textContent = learner.name;
-                    learnerLrnEl.textContent = `LRN: ${learner.lrn}`;
-                    learnerGradeEl.textContent = learner.grade_level;
-                    learnerSectionEl.textContent = learner.section_name;
-                    learnerStatusEl.textContent = result.slot_label;
-                    learnerLastScanEl.textContent = new Date().toLocaleTimeString();
-                    // Note: This assumes the learner photo is a .jpg. The system supports other formats, but this requires a more complex lookup.
-                    learnerPhotoEl.src = `${window.ProjectPulse.learnerPhotoBaseUrl}${learner.lrn}.jpg`; 
                 } else if (response.status !== 404) { // 404 is "not found", which is normal
                     setFeedback(result.message, 'error');
                 } else {
@@ -210,42 +215,53 @@ theme_settings_bootstrap();
             } catch (error) {
                 setFeedback('API connection error.', 'error');
             } finally {
-                updateLogs();
-                setTimeout(() => { isProcessing = false; }, 2000); // Cooldown period
+                updateAttendanceList();
+                setTimeout(() => { isProcessing = false; }, 700); // Service is kept warm between frames.
             }
         }
 
-        function renderLogs(logs) {
-            if (logs.length === 0) {
-                logsBody.innerHTML = '<tr><td colspan="3" class="empty-row">No attendance records to display yet.</td></tr>';
+        function renderAttendanceList(records) {
+            if (records.length === 0) {
+                attendanceBody.innerHTML = '<tr><td colspan="5" class="empty-row">No attendance records for today yet.</td></tr>';
                 return;
             }
 
-            const rowsHtml = logs.map(log => `
+            const rowsHtml = records.map(record => `
                 <tr>
-                    <td>${escapeHtml(log.log_time)}</td>
-                    <td>${escapeHtml(log.learner_name)}</td>
-                    <td><span class="table-status">${escapeHtml(log.log_entry)}</span></td>
+                    <td class="learner-name-cell"><strong>${escapeHtml(record.learner_name)}</strong><small>LRN ${escapeHtml(record.lrn)}</small></td>
+                    <td>${escapeHtml(record.am_time_in)}</td>
+                    <td>${escapeHtml(record.am_time_out)}</td>
+                    <td>${escapeHtml(record.pm_time_in)}</td>
+                    <td>${escapeHtml(record.pm_time_out)}</td>
                 </tr>
             `).join('');
 
-            logsBody.innerHTML = rowsHtml;
+            attendanceBody.innerHTML = rowsHtml;
         }
 
-        function updateLogs() {
-            fetch(window.ProjectPulse.attendanceLogsUrl)
+        function updateAttendanceList() {
+            fetch(window.ProjectPulse.attendanceSummaryUrl)
                 .then(response => response.json())
                 .then(data => {
-                    if (data.success && Array.isArray(data.logs)) {
-                        renderLogs(data.logs);
+                    if (data.success && Array.isArray(data.records)) {
+                        renderAttendanceList(data.records);
                     }
                 })
-                .catch(() => { /* Ignore log update errors */ });
+                .catch(() => { /* Keep the most recently rendered list. */ });
+        }
+
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('live-time').textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            document.getElementById('live-date').textContent = now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
         }
 
         startWebcam();
-        updateLogs();
-        setInterval(processFrame, 2500); // Attempt recognition every 2.5 seconds
+        updateClock();
+        updateAttendanceList();
+        setInterval(updateClock, 1000);
+        setInterval(updateAttendanceList, 15000);
+        setInterval(processFrame, 1200); // Fast worker supports more responsive scans.
     })();
     </script>
 </body>

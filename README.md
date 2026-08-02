@@ -151,6 +151,35 @@ The system automates attendance monitoring, academic record management, health p
 - Chart.js
 - DataTables
 - SweetAlert2
+- Python OpenCV and `face-recognition` (facial attendance)
+
+### Facial Attendance Setup
+
+The face-recognition station is integrated with the ProjectPulse database and
+learner records. It does not use the separate `attendance_db` from the source
+repository. Learner face registrations are stored as
+`assets/images/learners/<12-digit-LRN>.jpg` and attendance is written to the
+existing `attendance_records` and `attendance_scan_logs` tables.
+
+1. Install Python 3.11 (recommended by the source attendance project) and the
+   scanner dependencies with the same Python executable Apache will use:
+   `C:\\Path\\To\\Python311\\python.exe -m pip install -r ai_scanner/requirements.txt`
+2. If Apache cannot find Python, set `PROJECTPULSE_FACE_PYTHON` (or the legacy
+   `AI_ATTENDANCE_PYTHON`) to the full path of that Python executable and
+   restart Apache.
+3. In the administrator portal, open **Face Enrollment**, capture a clear
+   photo for each learner, then select **Train Face Recognition Model** to
+   rebuild the local encoding cache.
+4. Open **Face Recognition Station** using an Attendance or Administrator
+   account and allow browser camera access.
+
+The recognition model is rebuilt by the training action after enrollment.
+
+For responsive scanning, ProjectPulse starts a localhost recognition worker on
+the first facial-attendance scan. The worker keeps the OpenCV detector and
+trained model in memory, so subsequent frames do not start Python or reload
+the model. It listens only on `127.0.0.1:8765`; set
+`PROJECTPULSE_FACE_SERVICE_URL` only when using a different local port.
 
 ---
 

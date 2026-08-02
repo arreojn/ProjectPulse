@@ -11,72 +11,31 @@ function train_face_recognizer(): array
     $outputLog = [];
 
     try {
-        if (!extension_loaded('opencv')) {
-            throw new RuntimeException('The php-opencv extension is not installed or enabled.');
+        $script = realpath(__DIR__ . '/ai_scanner/identify_face.py');
+        if ($script === false) {
+            throw new RuntimeException('Recognition script is missing.');
         }
 
-        // 1. Define paths
-        $learnersPhotoPath = realpath(__DIR__ . '/assets/images/learners');
-        $modelsPath = realpath(__DIR__ . '/opencv_models');
-        $cascadePath = $modelsPath . '/haarcascade_frontalface_default.xml';
-        $recognizerFile = $modelsPath . '/recognizer.yml';
-        $labelsFile = $modelsPath . '/labels.json';
+        $python = face_recognition_python();
+        $command = escapeshellarg($python) . ' ' . escapeshellarg($script) . ' --rebuild-cache 2>&1';
+        $commandOutput = [];
+        $exitCode = 0;
+        exec($command, $commandOutput, $exitCode);
+        $result = json_decode(implode("\n", $commandOutput), true);
 
-        if (!$learnersPhotoPath || !$modelsPath || !file_exists($cascadePath)) {
-            throw new RuntimeException("Learner photos directory or OpenCV models directory/cascade file not found.");
+        if ($exitCode !== 0 || !is_array($result) || !($result['ok'] ?? false)) {
+            throw new RuntimeException(is_array($result) ? ($result['error'] ?? 'Recognition cache could not be built.') : 'Recognition process failed. Install the Python scanner requirements.');
         }
 
-        // 2. Initialize
-        $faceCascade = new cv\CascadeClassifier($cascadePath);
-        $recognizer = cv\Face\LBPHFaceRecognizer::create();
-        $trainingImages = [];
-        $trainingLabels = [];
-        $labelMap = [];
-        $currentLabelId = 0;
-
-        // 3. Get all learner images
-        $imageFiles = new DirectoryIterator($learnersPhotoPath);
-        $outputLog[] = "Processing learner images from: {$learnersPhotoPath}";
-
-        foreach ($imageFiles as $fileInfo) {
-            if ($fileInfo->isDot() || $fileInfo->isDir()) continue;
-
-            $lrn = $fileInfo->getBasename('.' . $fileInfo->getExtension());
-            if (!preg_match('/^\d{12}$/', $lrn)) {
-                $outputLog[] = "Skipping invalid file name: " . $fileInfo->getFilename();
-                continue;
-            }
-
-            $imagePath = $fileInfo->getPathname();
-            $img = cv\imread($imagePath, cv\IMREAD_GRAYSCALE);
-
-            $faces = [];
-            $faceCascade->detectMultiScale($img, $faces);
-
-            if (count($faces) !== 1) {
-                $outputLog[] = "Warning: Found " . count($faces) . " faces in {$fileInfo->getFilename()}. Skipping. (Expected 1 face per photo).";
-                continue;
-            }
-
-            $trainingImages[] = $img->getImageROI($faces[0]);
-            $trainingLabels[] = $currentLabelId;
-            $labelMap[$currentLabelId] = $lrn;
-            
-            $outputLog[] = "Processed: {$lrn}";
-            $currentLabelId++;
+        $outputLog[] = 'Face-encoding cache rebuilt.';
+        $outputLog[] = 'Usable learner registrations: ' . (string) ($result['registered'] ?? 0);
+        if (($result['registered'] ?? 0) === 0) {
+            throw new RuntimeException('No usable learner face registrations were found. Capture a clear learner photo first.');
         }
-
-        if (empty($trainingImages)) {
-            throw new RuntimeException("No valid training images found.");
+        if (face_recognition_start_service()) {
+            face_recognition_service_request('reload', '');
+            $outputLog[] = 'Fast recognition service is ready.';
         }
-
-        $outputLog[] = "\nTraining recognizer with " . count($trainingImages) . " images...";
-        $recognizer->train($trainingImages, $trainingLabels);
-
-        $recognizer->write($recognizerFile);
-        file_put_contents($labelsFile, json_encode($labelMap, JSON_PRETTY_PRINT));
-
-        $outputLog[] = "\nTraining complete! Model and labels saved.";
         return ['success' => true, 'log' => $outputLog];
     } catch (Throwable $e) {
         $outputLog[] = "\nAn error occurred: " . $e->getMessage();
