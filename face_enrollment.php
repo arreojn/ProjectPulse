@@ -7,11 +7,19 @@ require_once __DIR__ . '/app/helpers.php';
 require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/app/auth.php';
 require_once __DIR__ . '/app/learners.php';
+require_once __DIR__ . '/app/teachers.php';
 require_once __DIR__ . '/app/theme_settings.php';
 
-$user = require_roles(['admin']);
+$user = require_roles(['admin', 'teacher']);
 theme_settings_bootstrap();
-$learners = learner_list([]);
+
+$learners = [];
+if ($user['role'] === 'admin') {
+    $learners = learner_list([]);
+} elseif ($user['role'] === 'teacher') {
+    teacher_management_bootstrap();
+    $learners = teacher_section_learners((int) $user['id']);
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -37,7 +45,7 @@ $learners = learner_list([]);
         }
         .enrollment-grid {
             display: grid;
-            grid-template-columns: minmax(0, 1fr) minmax(340px, 0.7fr);
+            grid-template-columns: <?php echo $user['role'] === 'admin' ? 'minmax(0, 1fr) minmax(340px, 0.7fr)' : '1fr'; ?>;
             gap: 14px;
         }
         @media (max-width: 920px) {
@@ -59,7 +67,11 @@ $learners = learner_list([]);
                 </div>
             </div>
             <div class="topbar-actions">
-                <a href="<?php echo escape(route_url('admin.php')); ?>" class="secondary-link">Admin Panel</a>
+                <?php if ($user['role'] === 'admin'): ?>
+                    <a href="<?php echo escape(route_url('admin.php')); ?>" class="secondary-link">Admin Panel</a>
+                <?php else: ?>
+                    <a href="<?php echo escape(route_url('teacher.php')); ?>" class="secondary-link">Teacher Portal</a>
+                <?php endif; ?>
                 <a href="<?php echo escape(route_url('logout.php')); ?>" class="secondary-link">Logout</a>
             </div>
         </header>
@@ -75,13 +87,17 @@ $learners = learner_list([]);
                     <div class="report-filter-field report-filter-field-wide">
                         <label for="learner_id">Select Learner</label>
                         <select id="learner_id">
-                            <option value="">-- Select a learner --</option>
-                            <?php foreach ($learners as $learner): ?>
-                                <option value="<?php echo escape($learner['lrn']); ?>">
-                                    <?php echo escape(trim($learner['last_name'] . ', ' . $learner['first_name'])); ?>
-                                    (<?php echo escape($learner['lrn']); ?>)
-                                </option>
-                            <?php endforeach; ?>
+                            <?php if ($learners === []): ?>
+                                <option value="" disabled>No learners available in your section.</option>
+                            <?php else: ?>
+                                <option value="">-- Select a learner --</option>
+                                <?php foreach ($learners as $learner): ?>
+                                    <option value="<?php echo escape($learner['lrn']); ?>">
+                                        <?php echo escape($learner['learner_name'] ?? trim(($learner['last_name'] ?? '') . ', ' . ($learner['first_name'] ?? ''))); ?>
+                                        (<?php echo escape($learner['lrn']); ?>)
+                                    </option>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
                         </select>
                     </div>
                     <div class="report-actions" style="padding-top: 20px;">
@@ -98,15 +114,17 @@ $learners = learner_list([]);
                 </div>
             </article>
 
-            <article class="admin-module-card">
-                <div class="panel-heading">
-                    <h2>Train Model</h2>
-                    <p>After capturing new photos, retrain the model.</p>
-                </div>
-                <button id="train-btn" class="primary-button">Train Face Recognition Model</button>
-                <div id="train-feedback" class="alert neutral" style="margin-top: 12px; display: none;"></div>
-                <pre id="train-log" style="background: #f3f4f6; padding: 10px; border-radius: 8px; max-height: 400px; overflow-y: auto; display: none; margin-top: 12px;"></pre>
-            </article>
+            <?php if ($user['role'] === 'admin'): ?>
+                <article class="admin-module-card">
+                    <div class="panel-heading">
+                        <h2>Train Model</h2>
+                        <p>After capturing new photos, retrain the model.</p>
+                    </div>
+                    <button id="train-btn" class="primary-button">Train Face Recognition Model</button>
+                    <div id="train-feedback" class="alert neutral" style="margin-top: 12px; display: none;"></div>
+                    <pre id="train-log" style="background: #f3f4f6; padding: 10px; border-radius: 8px; max-height: 400px; overflow-y: auto; display: none; margin-top: 12px;"></pre>
+                </article>
+            <?php endif; ?>
         </section>
     </main>
 
@@ -177,32 +195,34 @@ $learners = learner_list([]);
             }
         });
 
-        trainBtn.addEventListener('click', async () => {
-            trainBtn.disabled = true;
-            trainLog.style.display = 'none';
-            setFeedback(trainFeedback, 'Training in progress... This may take a moment.', 'neutral');
+        if (trainBtn) {
+            trainBtn.addEventListener('click', async () => {
+                trainBtn.disabled = true;
+                trainLog.style.display = 'none';
+                setFeedback(trainFeedback, 'Training in progress... This may take a moment.', 'neutral');
 
-            try {
-                const formData = new FormData();
-                formData.append('csrf_token', csrfToken);
+                try {
+                    const formData = new FormData();
+                    formData.append('csrf_token', csrfToken);
 
-                const response = await fetch('<?php echo escape(route_url('train_model.php')); ?>', {
-                    method: 'POST',
-                    body: formData
-                });
-                const result = await response.json();
-                if (!response.ok || !result.success) throw new Error(result.message || result.error || 'Failed to train model.');
-                
-                setFeedback(trainFeedback, 'Training completed successfully!', 'success');
-                trainLog.textContent = result.log.join('\\n');
-                trainLog.style.display = 'block';
+                    const response = await fetch('<?php echo escape(route_url('train_model.php')); ?>', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const result = await response.json();
+                    if (!response.ok || !result.success) throw new Error(result.message || result.error || 'Failed to train model.');
+                    
+                    setFeedback(trainFeedback, 'Training completed successfully!', 'success');
+                    trainLog.textContent = result.log.join('\\n');
+                    trainLog.style.display = 'block';
 
-            } catch (error) {
-                setFeedback(trainFeedback, error.message, 'error');
-            } finally {
-                trainBtn.disabled = false;
-            }
-        });
+                } catch (error) {
+                    setFeedback(trainFeedback, error.message, 'error');
+                } finally {
+                    trainBtn.disabled = false;
+                }
+            });
+        }
 
         startWebcam();
     })();

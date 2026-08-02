@@ -576,6 +576,7 @@ $pageMeta = $allowedModules[$module];
                     <div class="menu-group">
                         <p class="menu-group-title">Attendance</p>
                         <a href="<?php echo escape(teacher_module_url('section_attendance')); ?>" class="submenu-link<?php echo $module === 'section_attendance' ? ' active' : ''; ?>">Section Attendance</a>
+                        <a href="<?php echo escape(route_url('face_enrollment.php')); ?>" class="submenu-link">Face Enrollment</a>
                     </div>
 
                     <div class="menu-group">

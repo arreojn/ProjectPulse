@@ -10,7 +10,7 @@ require_once __DIR__ . '/app/auth.php';
 header('Content-Type: application/json; charset=UTF-8');
 
 try {
-    $user = require_roles(['admin']);
+    $user = require_roles(['admin', 'teacher']);
 
     if (!is_post()) {
         throw new RuntimeException('Only POST requests are allowed.', 405);
