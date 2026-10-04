@@ -699,11 +699,11 @@ foreach ($attendanceGradeRows as $row) {
                             </div>
                         </div>
 
-                        <div class="topbar-actions">
+                        <!-- <div class="topbar-actions">
                             <a href="<?php echo escape(route_url('attendance.php')); ?>" class="primary-button">Open Attendance Station</a>
                             <a href="<?php echo escape(route_url('face_enrollment.php')); ?>" class="secondary-link">Face Enrollment</a>
                             <a href="<?php echo escape(route_url('face_attendance.php')); ?>" class="ghost-button">Face Recognition Station</a>
-                        </div>
+                        </div> -->
                     </header>
 
                     <?php if ($dataWarning !== null): ?>
