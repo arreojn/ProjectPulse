@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 function escape(?string $value): string
 {
-    return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
+    return htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
 function projectpulse_app_path_prefix(): string

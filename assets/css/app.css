@@ -1849,6 +1849,77 @@ textarea:focus {
     white-space: nowrap;
 }
 
+.learner-bmi-shell {
+    max-width: 100%;
+}
+
+.learner-bmi-table {
+    min-width: 1240px;
+    table-layout: fixed;
+}
+
+.learner-bmi-table th,
+.learner-bmi-table td {
+    white-space: normal;
+    vertical-align: top;
+    overflow-wrap: anywhere;
+    line-height: 1.35;
+}
+
+.learner-bmi-table .bmi-col-lrn {
+    width: 116px;
+}
+
+.learner-bmi-table .bmi-col-name {
+    width: 180px;
+}
+
+.learner-bmi-table .bmi-col-section {
+    width: 150px;
+}
+
+.learner-bmi-table .bmi-col-sex,
+.learner-bmi-table .bmi-col-bmi,
+.learner-bmi-table .bmi-col-action {
+    width: 78px;
+}
+
+.learner-bmi-table .bmi-col-disability {
+    width: 250px;
+}
+
+.learner-bmi-table .bmi-col-metric {
+    width: 106px;
+}
+
+.learner-bmi-table .bmi-col-remarks {
+    width: 140px;
+}
+
+.bmi-disability-fields {
+    display: grid;
+    grid-template-columns: minmax(70px, 0.7fr) minmax(120px, 1fr);
+    gap: 6px;
+    min-width: 0;
+}
+
+.bmi-disability-detail {
+    grid-column: 1 / -1;
+}
+
+.learner-bmi-table .table-input-slim {
+    min-width: 0;
+    padding: 8px 10px;
+    border-radius: 12px;
+    font-size: 0.78rem;
+}
+
+.learner-bmi-table .table-status {
+    display: inline-block;
+    max-width: 100%;
+    line-height: 1.3;
+}
+
 .report-card {
     display: grid;
     gap: 12px;

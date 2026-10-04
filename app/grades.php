@@ -397,79 +397,98 @@ function grade_import_file_for_teacher(int $teacherUserId, array $file): int
         throw new RuntimeException('The grade import file does not contain grade rows.');
     }
 
+    $pdo = database();
+    $pdo->beginTransaction();
     $importedCount = 0;
 
-    foreach ($rows as $row) {
-        if (implode('', array_map('strval', $row)) === '') {
-            continue;
-        }
-
-        $payload = grade_normalize_row($row);
-        $enrollment = grade_teacher_enrollment_for_lrn($teacherUserId, $payload['lrn'], $payload['school_year']);
-        $enrollmentId = null;
-
-        if ($enrollment !== null) {
-            if (!grade_school_year_matches((string) $enrollment['school_year_label'], $payload['school_year'])) {
-                throw new RuntimeException('LRN ' . $payload['lrn'] . ' is enrolled in school year ' . $enrollment['school_year_label'] . ', not ' . $payload['school_year'] . '.');
+    try {
+        foreach ($rows as $rowIndex => $row) {
+            if (implode('', array_map('strval', $row)) === '') {
+                continue;
             }
 
-            if (!grade_level_matches((string) $enrollment['grade_level'], $payload['grade_level'])) {
-                throw new RuntimeException('LRN ' . $payload['lrn'] . ' is enrolled as ' . $enrollment['grade_level'] . ', not ' . $payload['grade_level'] . '.');
-            }
+            try {
+                $payload = grade_normalize_row($row);
+                $enrollment = grade_teacher_enrollment_for_lrn($teacherUserId, $payload['lrn'], $payload['school_year']);
+                $enrollmentId = null;
 
-            $enrollmentId = (int) $enrollment['learner_enrollment_id'];
-        } else {
-            $learnerStatement = database()->prepare('SELECT id FROM learners WHERE lrn = :lrn LIMIT 1');
-            $learnerStatement->execute(['lrn' => $payload['lrn']]);
-            $learner = $learnerStatement->fetch();
+                if ($enrollment !== null) {
+                    if (!grade_school_year_matches((string) $enrollment['school_year_label'], $payload['school_year'])) {
+                        throw new RuntimeException('LRN ' . $payload['lrn'] . ' is enrolled in school year ' . $enrollment['school_year_label'] . ', not ' . $payload['school_year'] . '.');
+                    }
 
-            if ($learner === false) {
-                throw new RuntimeException('Learner with LRN ' . $payload['lrn'] . ' was not found in the system.');
-            }
+                    if (!grade_level_matches((string) $enrollment['grade_level'], $payload['grade_level'])) {
+                        throw new RuntimeException('LRN ' . $payload['lrn'] . ' is enrolled as ' . $enrollment['grade_level'] . ', not ' . $payload['grade_level'] . '.');
+                    }
 
-            $schoolYearStatement = database()->prepare('SELECT id FROM school_years WHERE label = :label LIMIT 1');
-            $schoolYearStatement->execute(['label' => $payload['school_year']]);
-            $schoolYear = $schoolYearStatement->fetch();
+                    $enrollmentId = (int) $enrollment['learner_enrollment_id'];
+                } else {
+                    $learnerStatement = database()->prepare('SELECT id FROM learners WHERE lrn = :lrn LIMIT 1');
+                    $learnerStatement->execute(['lrn' => $payload['lrn']]);
+                    $learner = $learnerStatement->fetch();
 
-            if ($schoolYear === false) {
-                $yearParts = explode('-', $payload['school_year']);
-                if (count($yearParts) !== 2 || !is_numeric($yearParts[0]) || !is_numeric($yearParts[1])) {
-                    throw new RuntimeException('School year label "' . $payload['school_year'] . '" is not in the expected YYYY-YYYY format.');
+                    if ($learner === false) {
+                        throw new RuntimeException('Learner with LRN ' . $payload['lrn'] . ' was not found in the system.');
+                    }
+
+                    $schoolYearStatement = database()->prepare('SELECT id FROM school_years WHERE label = :label LIMIT 1');
+                    $schoolYearStatement->execute(['label' => $payload['school_year']]);
+                    $schoolYear = $schoolYearStatement->fetch();
+
+                    if ($schoolYear === false) {
+                        $yearParts = explode('-', $payload['school_year']);
+                        if (count($yearParts) !== 2 || !is_numeric($yearParts[0]) || !is_numeric($yearParts[1])) {
+                            throw new RuntimeException('School year label "' . $payload['school_year'] . '" is not in the expected YYYY-YYYY format.');
+                        }
+
+                        $insertSchoolYear = $pdo->prepare(
+                            'INSERT INTO school_years (label, start_date, end_date, is_current)
+                             VALUES (:label, :start_date, :end_date, :is_current)'
+                        );
+                        $insertSchoolYear->execute([
+                            'label' => $payload['school_year'],
+                            'start_date' => ((int) $yearParts[0]) . '-06-01',
+                            'end_date' => ((int) $yearParts[1]) . '-05-31',
+                            'is_current' => 0,
+                        ]);
+
+                        $schoolYear = ['id' => (int) $pdo->lastInsertId()];
+                    }
+
+                    $insertEnrollment = $pdo->prepare(
+                        'INSERT INTO learner_enrollments (learner_id, school_year_id, grade_level, enrollment_status, enrolled_at)
+                         VALUES (:learner_id, :school_year_id, :grade_level, :enrollment_status, :enrolled_at)'
+                    );
+                    $insertEnrollment->execute([
+                        'learner_id' => (int) $learner['id'],
+                        'school_year_id' => (int) $schoolYear['id'],
+                        'grade_level' => $payload['grade_level'],
+                        'enrollment_status' => 'completed',
+                        'enrolled_at' => date('Y-m-d'),
+                    ]);
+
+                    $enrollmentId = (int) $pdo->lastInsertId();
                 }
 
-                $pdo = database();
-                $insertSchoolYear = $pdo->prepare(
-                    'INSERT INTO school_years (label, start_date, end_date, is_current)
-                     VALUES (:label, :start_date, :end_date, :is_current)'
+                grade_save_subject_grade($enrollmentId, $payload);
+                $importedCount++;
+            } catch (Throwable $exception) {
+                $message = trim($exception->getMessage());
+                throw new RuntimeException(
+                    'Row ' . ((int) $rowIndex + 2) . ': ' . ($message !== '' ? $message : 'Unable to import this grade row.'),
+                    0,
+                    $exception
                 );
-                $insertSchoolYear->execute([
-                    'label' => $payload['school_year'],
-                    'start_date' => ((int) $yearParts[0]) . '-06-01',
-                    'end_date' => ((int) $yearParts[1]) . '-05-31',
-                    'is_current' => 0,
-                ]);
-
-                $schoolYear = ['id' => (int) $pdo->lastInsertId()];
             }
-
-            $pdo = database();
-            $insertEnrollment = $pdo->prepare(
-                'INSERT INTO learner_enrollments (learner_id, school_year_id, grade_level, enrollment_status, enrolled_at)
-                 VALUES (:learner_id, :school_year_id, :grade_level, :enrollment_status, :enrolled_at)'
-            );
-            $insertEnrollment->execute([
-                'learner_id' => (int) $learner['id'],
-                'school_year_id' => (int) $schoolYear['id'],
-                'grade_level' => $payload['grade_level'],
-                'enrollment_status' => 'completed',
-                'enrolled_at' => date('Y-m-d'),
-            ]);
-
-            $enrollmentId = (int) $pdo->lastInsertId();
         }
 
-        grade_save_subject_grade($enrollmentId, $payload);
-        $importedCount++;
+        $pdo->commit();
+    } catch (Throwable $exception) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+
+        throw $exception;
     }
 
     return $importedCount;

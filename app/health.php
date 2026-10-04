@@ -404,11 +404,11 @@ function health_learner_rows(array $filters): array
     return $rows;
 }
 
-function health_dashboard_bmi_remarks_rows(): array
+function health_dashboard_bmi_remarks_rows(array $filters = []): array
 {
     $counts = array_fill_keys(health_bmi_remark_options(), 0);
 
-    foreach (health_learner_rows([]) as $row) {
+    foreach (health_learner_rows($filters) as $row) {
         $remarks = $row['bmi'] === null ? 'Not measured' : (string) $row['bmi_remarks'];
 
         if (!array_key_exists($remarks, $counts)) {

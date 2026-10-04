@@ -334,9 +334,10 @@ if (is_post()) {
             redirect('teacher.php?module=settings');
         }
     } catch (Throwable $exception) {
+        $errorMessage = trim($exception->getMessage());
         $teacherFlash = [
             'type' => 'error',
-            'message' => $exception->getMessage(),
+            'message' => $errorMessage !== '' ? $errorMessage : 'Unable to complete the request. Please check the form and try again.',
         ];
     }
 }

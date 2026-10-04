@@ -634,7 +634,7 @@ $filterLabel = health_portal_filter_label($filters, $allSectionDropdownOptions);
                             <p>Choose a grade level and section to focus the learner BMI list.</p>
                         </div>
 
-                        <form method="get" class="report-filter-grid">
+                        <form method="get" class="report-filter-grid" data-health-learner-filter>
                             <input type="hidden" name="module" value="learner_bmi">
 
                             <div class="report-filter-field report-filter-field-wide">
@@ -646,6 +646,12 @@ $filterLabel = health_portal_filter_label($filters, $allSectionDropdownOptions);
                                         </option>
                                     <?php endforeach; ?>
                                 </select>
+                            </div>
+
+                            <div class="report-filter-field report-filter-field-wide">
+                                <label for="learner_bmi_keyword">Search Learner</label>
+                                <input id="learner_bmi_keyword" name="keyword" type="search" value="<?php echo escape($filters['keyword']); ?>" placeholder="LRN, learner number, or name" autocomplete="off" data-health-learner-search>
+                                <p class="health-search-status" data-health-learner-search-status aria-live="polite"></p>
                             </div>
 
                             <div class="report-actions">
@@ -661,11 +667,12 @@ $filterLabel = health_portal_filter_label($filters, $allSectionDropdownOptions);
                             <p>Leave both fields blank and save to clear an existing measurement.</p>
                         </div>
 
-                        <?php if ($filters['section_id'] !== '' && $bmiRemarksForSelectedFilter['total_learners'] > 0): ?>
+                        <?php $bmiRemarksSelectedTotal = array_sum(array_column($bmiRemarksForSelectedFilter, 'total')); ?>
+                        <?php if ($filters['section_id'] !== '' && $bmiRemarksSelectedTotal > 0): ?>
                             <div class="chart-card" style="width: 100%; max-width: none; margin-bottom: 20px;">
                                 <h3 class="chart-title">BMI Remarks for Selected Section</h3>
                                 <?php
-                                    $bmiTotalFiltered = array_sum(array_column($bmiRemarksForSelectedFilter, 'total'));
+                                    $bmiTotalFiltered = $bmiRemarksSelectedTotal;
                                     $slice1Filtered = health_portal_percent($bmiRemarksForSelectedFilter[0]['total'] ?? 0, $bmiTotalFiltered);
                                     $slice2Filtered = $slice1Filtered + health_portal_percent($bmiRemarksForSelectedFilter[1]['total'] ?? 0, $bmiTotalFiltered);
                                     $slice3Filtered = $slice2Filtered + health_portal_percent($bmiRemarksForSelectedFilter[2]['total'] ?? 0, $bmiTotalFiltered);
@@ -691,7 +698,7 @@ $filterLabel = health_portal_filter_label($filters, $allSectionDropdownOptions);
                                     <?php endforeach; ?>
                                 </div>
                             </div>
-                        <?php elseif ($filters['grade_level'] !== '' && $bmiRemarksForSelectedFilter['total_learners'] > 0): ?>
+                        <?php elseif ($filters['grade_level'] !== '' && $bmiRemarksSelectedTotal > 0): ?>
                             <div class="alert neutral" style="margin-bottom: 20px;">
                                 Select a specific section to view BMI remarks distribution for that section.
                             </div>
@@ -701,8 +708,20 @@ $filterLabel = health_portal_filter_label($filters, $allSectionDropdownOptions);
 
                         <p class="import-note">BMI remarks use standard BMI bands as a quick screening view inside the portal.</p>
 
-                        <div class="table-shell">
-                            <table class="records-table learner-table">
+                        <div class="table-shell learner-bmi-shell">
+                            <table class="records-table learner-table learner-bmi-table">
+                                <colgroup>
+                                    <col class="bmi-col-lrn">
+                                    <col class="bmi-col-name">
+                                    <col class="bmi-col-section">
+                                    <col class="bmi-col-sex">
+                                    <col class="bmi-col-disability">
+                                    <col class="bmi-col-metric">
+                                    <col class="bmi-col-metric">
+                                    <col class="bmi-col-bmi">
+                                    <col class="bmi-col-remarks">
+                                    <col class="bmi-col-action">
+                                </colgroup>
                                 <thead>
                                     <tr>
                                         <th>LRN</th>
@@ -730,17 +749,19 @@ $filterLabel = health_portal_filter_label($filters, $allSectionDropdownOptions);
                                                 <td><?php echo escape($learner['complete_name']); ?></td>
                                                 <td><?php echo escape($learner['grade_level'] . ' - ' . $learner['section_name']); ?></td>
                                                 <td><?php echo escape(health_portal_sex_label($learner['sex'] ?? null)); ?></td>
-                                                <td>
-                                                    <select form="<?php echo escape($formId); ?>" name="has_disability" class="table-input-slim">
-                                                        <option value="0"<?php echo (int) ($learner['has_disability'] ?? 0) !== 1 ? ' selected' : ''; ?>>No</option>
-                                                        <option value="1"<?php echo (int) ($learner['has_disability'] ?? 0) === 1 ? ' selected' : ''; ?>>Yes</option>
-                                                    </select>
-                                                    <select form="<?php echo escape($formId); ?>" name="disability_basis" class="table-input-slim">
-                                                        <option value="">Basis</option>
-                                                        <option value="diagnosis"<?php echo ($learner['disability_basis'] ?? '') === 'diagnosis' ? ' selected' : ''; ?>>Diagnosis</option>
-                                                        <option value="manifestation"<?php echo ($learner['disability_basis'] ?? '') === 'manifestation' ? ' selected' : ''; ?>>Manifestation</option>
-                                                    </select>
-                                                    <input form="<?php echo escape($formId); ?>" name="disability_type" type="text" maxlength="255" value="<?php echo escape((string) ($learner['disability_type'] ?? '')); ?>" placeholder="Type / details" class="table-input-slim">
+                                                <td class="bmi-disability-cell">
+                                                    <div class="bmi-disability-fields">
+                                                        <select form="<?php echo escape($formId); ?>" name="has_disability" class="table-input-slim">
+                                                            <option value="0"<?php echo (int) ($learner['has_disability'] ?? 0) !== 1 ? ' selected' : ''; ?>>No</option>
+                                                            <option value="1"<?php echo (int) ($learner['has_disability'] ?? 0) === 1 ? ' selected' : ''; ?>>Yes</option>
+                                                        </select>
+                                                        <select form="<?php echo escape($formId); ?>" name="disability_basis" class="table-input-slim">
+                                                            <option value="">Basis</option>
+                                                            <option value="diagnosis"<?php echo ($learner['disability_basis'] ?? '') === 'diagnosis' ? ' selected' : ''; ?>>Diagnosis</option>
+                                                            <option value="manifestation"<?php echo ($learner['disability_basis'] ?? '') === 'manifestation' ? ' selected' : ''; ?>>Manifestation</option>
+                                                        </select>
+                                                        <input form="<?php echo escape($formId); ?>" name="disability_type" type="text" maxlength="255" value="<?php echo escape((string) ($learner['disability_type'] ?? '')); ?>" placeholder="Type / details" class="table-input-slim bmi-disability-detail">
+                                                    </div>
                                                 </td>
                                                 <td>
                                                     <input form="<?php echo escape($formId); ?>" name="height_cm" type="number" min="30" max="250" step="0.01" value="<?php echo escape($learner['height_cm'] !== null ? (string) $learner['height_cm'] : ''); ?>" class="table-input-slim">
@@ -775,7 +796,7 @@ $filterLabel = health_portal_filter_label($filters, $allSectionDropdownOptions);
                             <p>Select a grade and section, then print the BMI report for the current school year.</p>
                         </div>
 
-                        <form method="get" class="report-filter-grid">
+                        <form method="get" class="report-filter-grid" data-health-learner-filter>
                             <input type="hidden" name="module" value="bmi_reports">
 
                             <div class="report-filter-field report-filter-field-wide">
@@ -787,6 +808,12 @@ $filterLabel = health_portal_filter_label($filters, $allSectionDropdownOptions);
                                         </option>
                                     <?php endforeach; ?>
                                 </select>
+                            </div>
+
+                            <div class="report-filter-field report-filter-field-wide">
+                                <label for="bmi_report_keyword">Search Learner</label>
+                                <input id="bmi_report_keyword" name="keyword" type="search" value="<?php echo escape($filters['keyword']); ?>" placeholder="LRN, learner number, or name" autocomplete="off" data-health-learner-search>
+                                <p class="health-search-status" data-health-learner-search-status aria-live="polite"></p>
                             </div>
 
                             <div class="report-actions">
@@ -873,7 +900,7 @@ $filterLabel = health_portal_filter_label($filters, $allSectionDropdownOptions);
                             <p>Choose the grade and section before assigning deworming doses.</p>
                         </div>
 
-                        <form method="get" class="report-filter-grid">
+                        <form method="get" class="report-filter-grid" data-health-learner-filter>
                             <input type="hidden" name="module" value="deworming">
 
                             <div class="report-filter-field report-filter-field-wide">
@@ -885,6 +912,12 @@ $filterLabel = health_portal_filter_label($filters, $allSectionDropdownOptions);
                                         </option>
                                     <?php endforeach; ?>
                                 </select>
+                            </div>
+
+                            <div class="report-filter-field report-filter-field-wide">
+                                <label for="deworm_keyword">Search Learner</label>
+                                <input id="deworm_keyword" name="keyword" type="search" value="<?php echo escape($filters['keyword']); ?>" placeholder="LRN, learner number, or name" autocomplete="off" data-health-learner-search>
+                                <p class="health-search-status" data-health-learner-search-status aria-live="polite"></p>
                             </div>
 
                             <div class="report-actions">
@@ -1027,7 +1060,7 @@ $filterLabel = health_portal_filter_label($filters, $allSectionDropdownOptions);
                             <p>Choose the grade and section to build the feeding program list.</p>
                         </div>
 
-                        <form method="get" class="report-filter-grid">
+                        <form method="get" class="report-filter-grid" data-health-learner-filter>
                             <input type="hidden" name="module" value="feeding_program">
 
                             <div class="report-filter-field report-filter-field-wide">
@@ -1039,6 +1072,12 @@ $filterLabel = health_portal_filter_label($filters, $allSectionDropdownOptions);
                                         </option>
                                     <?php endforeach; ?>
                                 </select>
+                            </div>
+
+                            <div class="report-filter-field report-filter-field-wide">
+                                <label for="feeding_keyword">Search Learner</label>
+                                <input id="feeding_keyword" name="keyword" type="search" value="<?php echo escape($filters['keyword']); ?>" placeholder="LRN, learner number, or name" autocomplete="off" data-health-learner-search>
+                                <p class="health-search-status" data-health-learner-search-status aria-live="polite"></p>
                             </div>
 
                             <div class="report-actions">
