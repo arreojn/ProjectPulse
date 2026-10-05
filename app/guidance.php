@@ -19,36 +19,8 @@ function guidance_portal_bootstrap(): void
 
     auth_ensure_user_role('guidance');
 
-    $pdo = database();
-    $pdo->prepare(
-        'INSERT IGNORE INTO users (username, email, first_name, middle_name, last_name, password_hash, role, is_active)
-         VALUES (:username, :email, :first_name, :middle_name, :last_name, :password_hash, :role, :is_active)'
-    )->execute([
-        'username' => 'guidance_counselor',
-        'email' => 'guidance@projectpulse.local',
-        'first_name' => 'Guidance',
-        'middle_name' => null,
-        'last_name' => 'Counselor',
-        'password_hash' => password_hash('guidance123', PASSWORD_DEFAULT),
-        'role' => 'guidance',
-        'is_active' => 1,
-    ]);
-
-    $pdo->prepare(
-        'UPDATE users
-         SET first_name = :first_name,
-             middle_name = :middle_name,
-             last_name = :last_name,
-             updated_at = CURRENT_TIMESTAMP
-         WHERE username = :username
-           AND role = :role'
-    )->execute([
-        'first_name' => 'Guidance',
-        'middle_name' => null,
-        'last_name' => 'Counselor',
-        'username' => 'guidance_counselor',
-        'role' => 'guidance',
-    ]);
+    $bootstrapped = true;
+    return;
 
     if (!auth_table_exists('learners')) {
         $bootstrapped = true;

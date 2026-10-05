@@ -178,9 +178,75 @@ function auth_full_name(array $user): string
     return $parts === [] ? trim((string) ($user['username'] ?? '')) : implode(' ', $parts);
 }
 
+function auth_login_attempts_bootstrap(): void
+{
+    auth_bootstrap();
+
+    database()->exec(
+        'CREATE TABLE IF NOT EXISTS auth_login_attempts (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            identity_key VARCHAR(120) NOT NULL,
+            user_id INT UNSIGNED NULL,
+            ip_address VARCHAR(45) NULL,
+            user_agent VARCHAR(255) NULL,
+            success TINYINT(1) NOT NULL DEFAULT 0,
+            attempted_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_auth_attempts_identity (identity_key, attempted_at),
+            INDEX idx_auth_attempts_ip (ip_address, attempted_at),
+            CONSTRAINT fk_auth_login_attempts_user
+                FOREIGN KEY (user_id) REFERENCES users(id)
+                ON DELETE SET NULL
+        )'
+    );
+}
+
+function auth_login_attempt_limit(): int
+{
+    return 5;
+}
+
+function auth_login_attempt_window_seconds(): int
+{
+    return 900;
+}
+
+function auth_is_login_locked_out(string $identity, ?string $ipAddress = null): bool
+{
+    $identity = strtolower(trim($identity));
+    if ($identity === '') {
+        return false;
+    }
+
+    auth_login_attempts_bootstrap();
+
+    $ipAddress = trim((string) ($ipAddress ?? ($_SERVER['REMOTE_ADDR'] ?? '')));
+
+    $statement = database()->prepare(
+        'SELECT COUNT(*) AS total
+         FROM auth_login_attempts
+         WHERE success = 0
+           AND attempted_at >= DATE_SUB(NOW(), INTERVAL :window_seconds SECOND)
+           AND (identity_key = :identity_key OR ip_address = :ip_address)'
+    );
+    $statement->execute([
+        'window_seconds' => auth_login_attempt_window_seconds(),
+        'identity_key' => $identity,
+        'ip_address' => $ipAddress === '' ? null : $ipAddress,
+    ]);
+    $row = $statement->fetch();
+
+    return (int) ($row['total'] ?? 0) >= auth_login_attempt_limit();
+}
+
 function auth_log_login_attempt(string $identity, ?array $user, bool $isSuccess): void
 {
     auth_bootstrap();
+    auth_login_attempts_bootstrap();
+
+    $ipAddress = $_SERVER['REMOTE_ADDR'] ?? null;
+    $userAgent = isset($_SERVER['HTTP_USER_AGENT'])
+        ? substr((string) $_SERVER['HTTP_USER_AGENT'], 0, 255)
+        : null;
 
     $statement = database()->prepare(
         'INSERT INTO auth_login_logs (
@@ -212,11 +278,35 @@ function auth_log_login_attempt(string $identity, ?array $user, bool $isSuccess)
         'full_name_snapshot' => $user !== null ? auth_full_name($user) : null,
         'role_snapshot' => $user['role'] ?? null,
         'login_status' => $isSuccess ? 'success' : 'failed',
-        'ip_address' => $_SERVER['REMOTE_ADDR'] ?? null,
-        'user_agent' => isset($_SERVER['HTTP_USER_AGENT'])
-            ? substr((string) $_SERVER['HTTP_USER_AGENT'], 0, 255)
-            : null,
+        'ip_address' => $ipAddress,
+        'user_agent' => $userAgent,
         'logged_in_at' => date('Y-m-d H:i:s'),
+    ]);
+
+    $attemptStatement = database()->prepare(
+        'INSERT INTO auth_login_attempts (
+            identity_key,
+            user_id,
+            ip_address,
+            user_agent,
+            success,
+            attempted_at
+         ) VALUES (
+            :identity_key,
+            :user_id,
+            :ip_address,
+            :user_agent,
+            :success,
+            :attempted_at
+         )'
+    );
+    $attemptStatement->execute([
+        'identity_key' => strtolower(trim($identity)),
+        'user_id' => $user !== null ? (int) $user['id'] : null,
+        'ip_address' => $ipAddress,
+        'user_agent' => $userAgent,
+        'success' => $isSuccess ? 1 : 0,
+        'attempted_at' => date('Y-m-d H:i:s'),
     ]);
 }
 
@@ -245,12 +335,37 @@ function auth_recent_login_logs(int $limit = 20): array
     return $statement->fetchAll();
 }
 
+function auth_find_user_by_identity(string $identity): ?array
+{
+    $identity = trim($identity);
+
+    if ($identity === '') {
+        return null;
+    }
+
+    $statement = database()->prepare(
+        'SELECT id, username, email, first_name, middle_name, last_name, password_hash, role, is_active
+         FROM users
+         WHERE (username = :identity OR email = :identity)
+         LIMIT 1'
+    );
+    $statement->execute(['identity' => $identity]);
+    $user = $statement->fetch();
+
+    return is_array($user) ? $user : null;
+}
+
 function attempt_login(string $identity, string $password): bool
 {
     auth_bootstrap();
     $identity = trim($identity);
 
     if ($identity === '' || $password === '') {
+        return false;
+    }
+
+    if (auth_is_login_locked_out($identity, $_SERVER['REMOTE_ADDR'] ?? null)) {
+        auth_log_login_attempt($identity, null, false);
         return false;
     }
 
@@ -294,8 +409,8 @@ function auth_change_password(int $userId, string $currentPassword, string $newP
         throw new RuntimeException('Your login session is invalid. Please sign in again.');
     }
 
-    if (strlen($newPassword) < 6) {
-        throw new RuntimeException('New password must be at least 6 characters.');
+    if (strlen($newPassword) < 12) {
+        throw new RuntimeException('New password must be at least 12 characters long.');
     }
 
     $statement = database()->prepare(
@@ -384,11 +499,14 @@ function logout_user(): void
         setcookie(
             session_name(),
             '',
-            time() - 42000,
-            $params['path'],
-            $params['domain'],
-            $params['secure'],
-            $params['httponly']
+            [
+                'expires' => time() - 42000,
+                'path' => APP_BASE_PATH === '' ? '/' : APP_BASE_PATH,
+                'domain' => $params['domain'] ?? '',
+                'secure' => projectpulse_detect_scheme() === 'https',
+                'httponly' => true,
+                'samesite' => 'Lax',
+            ]
         );
     }
 

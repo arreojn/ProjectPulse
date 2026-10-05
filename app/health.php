@@ -19,37 +19,8 @@ function health_portal_bootstrap(): void
 
     auth_ensure_user_role('health');
 
-    $pdo = database();
-    $userStatement = $pdo->prepare(
-        'INSERT IGNORE INTO users (username, email, first_name, middle_name, last_name, password_hash, role, is_active)
-         VALUES (:username, :email, :first_name, :middle_name, :last_name, :password_hash, :role, :is_active)'
-    );
-    $userStatement->execute([
-        'username' => 'health_coordinator',
-        'email' => 'health@projectpulse.local',
-        'first_name' => 'Health',
-        'middle_name' => null,
-        'last_name' => 'Coordinator',
-        'password_hash' => password_hash('health123', PASSWORD_DEFAULT),
-        'role' => 'health',
-        'is_active' => 1,
-    ]);
-
-    $pdo->prepare(
-        'UPDATE users
-         SET first_name = :first_name,
-             middle_name = :middle_name,
-             last_name = :last_name,
-             updated_at = CURRENT_TIMESTAMP
-         WHERE username = :username
-           AND role = :role'
-    )->execute([
-        'first_name' => 'Health',
-        'middle_name' => null,
-        'last_name' => 'Coordinator',
-        'username' => 'health_coordinator',
-        'role' => 'health',
-    ]);
+    $bootstrapped = true;
+    return;
 
     if (!auth_table_exists('learner_enrollments') || !auth_table_exists('school_years')) {
         $bootstrapped = true;

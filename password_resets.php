@@ -18,11 +18,15 @@ function password_resets_bootstrap(): void
             requested_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             reviewed_by_admin_id INT UNSIGNED NULL,
             reviewed_at DATETIME NULL,
-            new_password_snapshot VARCHAR(255) NULL,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
             FOREIGN KEY (reviewed_by_admin_id) REFERENCES users(id) ON DELETE SET NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
     );
+
+    try {
+        database()->exec('ALTER TABLE password_reset_requests DROP COLUMN new_password_snapshot');
+    } catch (Throwable $exception) {
+    }
 
     $bootstrapped = true;
 }
@@ -31,6 +35,11 @@ function request_password_reset(string $identity): void
 {
     $identity = trim($identity);
     if ($identity === '') {
+        return;
+    }
+
+    $ipAddress = $_SERVER['REMOTE_ADDR'] ?? null;
+    if (auth_is_login_locked_out($identity, $ipAddress)) {
         return;
     }
 
@@ -50,6 +59,8 @@ function request_password_reset(string $identity): void
             $stmt->execute(['user_id' => (int) $user['id']]);
         }
     }
+
+    auth_log_login_attempt($identity, $user, false);
 }
 
 function get_pending_password_requests(): array
@@ -86,7 +97,7 @@ function approve_password_reset(int $requestId, int $adminId): string
             throw new RuntimeException('Password reset request not found or already processed.');
         }
 
-        $newPassword = bin2hex(random_bytes(4)); // 8-char hex password
+        $newPassword = bin2hex(random_bytes(4));
         $newPasswordHash = password_hash($newPassword, PASSWORD_DEFAULT);
 
         $updateUserStmt = $pdo->prepare(
@@ -101,13 +112,11 @@ function approve_password_reset(int $requestId, int $adminId): string
             'UPDATE password_reset_requests
              SET status = \'approved\',
                  reviewed_by_admin_id = :admin_id,
-                 reviewed_at = NOW(),
-                 new_password_snapshot = :new_password
+                 reviewed_at = NOW()
              WHERE id = :id'
         );
         $updateRequestStmt->execute([
             'admin_id' => $adminId,
-            'new_password' => 'Approved. New password: ' . $newPassword,
             'id' => $requestId,
         ]);
 

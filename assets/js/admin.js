@@ -248,8 +248,151 @@
         });
     }
 
+    function initAttendanceCharts() {
+        const dataElement = document.getElementById('attendance-dashboard-chart-data');
+
+        if (!dataElement) {
+            return;
+        }
+
+        let chartData;
+        try {
+            chartData = JSON.parse(dataElement.textContent || '{}');
+        } catch (error) {
+            console.error('Attendance chart data could not be parsed.', error);
+            return;
+        }
+
+        function fallbackValues(canvasId) {
+            if (canvasId === 'attendance-trend-chart') {
+                return (chartData.trend.labels || []).map((label, index) => label + ': ' + (chartData.trend.values[index] ?? 0));
+            }
+            if (canvasId === 'hourly-scan-chart') {
+                return (chartData.hourly.labels || []).map((label, index) => label + ': ' + (chartData.hourly.values[index] ?? 0));
+            }
+            if (canvasId === 'attendance-status-chart') {
+                return (chartData.status.labels || []).map((label, index) => label + ': ' + (chartData.status.values[index] ?? 0));
+            }
+            if (canvasId === 'grade-status-chart') {
+                return (chartData.gradeStatus.labels || []).map((gradeLabel, gradeIndex) => {
+                    const values = (chartData.gradeStatus.datasets || []).map(dataset =>
+                        dataset.label + ' ' + (dataset.data[gradeIndex] ?? 0)
+                    );
+                    return gradeLabel + ': ' + values.join(', ');
+                });
+            }
+            return [];
+        }
+
+        function showChartFallback(canvas, message) {
+            canvas.hidden = true;
+            const fallback = document.createElement('p');
+            fallback.className = 'chart-library-fallback';
+            fallback.textContent = message + ' ' + fallbackValues(canvas.id).join(' · ');
+            canvas.parentElement.insertAdjacentElement('afterend', fallback);
+        }
+
+        const canvases = Array.from(document.querySelectorAll('.dashboard-chart-wrap canvas, .status-donut-wrap canvas'));
+        if (canvases.length === 0) {
+            return;
+        }
+
+        if (typeof Chart === 'undefined') {
+            canvases.forEach(canvas => showChartFallback(canvas, 'Chart display is unavailable. Recorded values:'));
+            return;
+        }
+
+        const rootStyle = getComputedStyle(document.documentElement);
+        const ink = rootStyle.getPropertyValue('--ink').trim() || '#1f2933';
+        const muted = rootStyle.getPropertyValue('--muted').trim() || '#52606d';
+        const grid = 'rgba(82, 96, 109, 0.14)';
+        const success = rootStyle.getPropertyValue('--success').trim() || '#17663a';
+        const info = rootStyle.getPropertyValue('--info').trim() || '#2563eb';
+
+        Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+        Chart.defaults.color = muted;
+
+        const lineOptions = title => ({
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            interaction: {intersect: false, mode: 'index'},
+            plugins: {
+                legend: {display: false},
+                tooltip: {callbacks: {label: context => title + ': ' + context.parsed.y}},
+            },
+            scales: {
+                x: {grid: {display: false}, ticks: {maxRotation: 0, autoSkip: true, maxTicksLimit: 8}},
+                y: {beginAtZero: true, ticks: {precision: 0}, grid: {color: grid}, title: {display: true, text: title, color: muted}},
+            },
+        });
+
+        const chartDefinitions = [
+            {
+                id: 'attendance-trend-chart',
+                config: {
+                    type: 'line',
+                    data: {labels: chartData.trend.labels, datasets: [{label: 'Learners scanned', data: chartData.trend.values, borderColor: success, backgroundColor: 'rgba(23, 102, 58, 0.1)', borderWidth: 2, pointRadius: 2, pointHoverRadius: 5, fill: true, tension: 0.28}]},
+                    options: lineOptions('Learners scanned'),
+                },
+            },
+            {
+                id: 'hourly-scan-chart',
+                config: {
+                    type: 'line',
+                    data: {labels: chartData.hourly.labels, datasets: [{label: 'Scan events', data: chartData.hourly.values, borderColor: info, backgroundColor: 'rgba(37, 99, 235, 0.08)', borderWidth: 2, pointRadius: 3, pointHoverRadius: 5, fill: true, tension: 0.25}]},
+                    options: lineOptions('Scan events'),
+                },
+            },
+            {
+                id: 'attendance-status-chart',
+                config: {
+                    type: 'doughnut',
+                    data: {labels: chartData.status.labels, datasets: [{data: chartData.status.values, backgroundColor: chartData.status.colors, borderColor: '#ffffff', borderWidth: 2, hoverOffset: 5}]},
+                    options: {responsive: true, maintainAspectRatio: false, animation: false, cutout: '68%', plugins: {legend: {display: false}, tooltip: {callbacks: {label: context => context.label + ': ' + context.raw}}}},
+                },
+            },
+            {
+                id: 'grade-status-chart',
+                config: {
+                    type: 'bar',
+                    data: {
+                        labels: chartData.gradeStatus.labels,
+                        datasets: chartData.gradeStatus.datasets.map(dataset => ({label: dataset.label, data: dataset.data, backgroundColor: dataset.color, borderRadius: 3, borderSkipped: false, stack: 'status'})),
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        animation: false,
+                        indexAxis: 'y',
+                        plugins: {legend: {position: 'bottom', labels: {boxWidth: 10, boxHeight: 10, usePointStyle: true, padding: 14}}, tooltip: {callbacks: {label: context => context.dataset.label + ': ' + context.raw}}},
+                        scales: {
+                            x: {stacked: true, beginAtZero: true, ticks: {precision: 0}, grid: {color: grid}, title: {display: true, text: 'Saved records', color: muted}},
+                            y: {stacked: true, grid: {display: false}, ticks: {color: ink}},
+                        },
+                    },
+                },
+            },
+        ];
+
+        chartDefinitions.forEach(definition => {
+            const canvas = document.getElementById(definition.id);
+            if (!canvas) {
+                return;
+            }
+
+            try {
+                new Chart(canvas, definition.config);
+            } catch (error) {
+                console.error('Attendance chart failed to render: ' + definition.id, error);
+                showChartFallback(canvas, 'This chart could not be rendered. Recorded values:');
+            }
+        });
+    }
+
     initSidebar();
     initReportFilters();
     initAgeDisplays();
     initAnnouncementModal();
+    initAttendanceCharts();
 })();

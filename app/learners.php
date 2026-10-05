@@ -272,13 +272,10 @@ function learner_list_filters(): array
     ];
 }
 
-function learner_list(array $filters): array
+function learner_list_query_parts(array $filters): array
 {
-    learner_management_bootstrap();
-    $schoolYear = require_current_school_year();
-
     $conditions = ['1 = 1'];
-    $params = ['school_year_id' => $schoolYear['id']];
+    $params = [];
 
     if (!empty($filters['keyword'])) {
         $conditions[] = '(l.learner_number LIKE :keyword OR l.lrn LIKE :keyword OR l.first_name LIKE :keyword OR l.middle_name LIKE :keyword OR l.last_name LIKE :keyword)';
@@ -298,6 +295,23 @@ function learner_list(array $filters): array
     if (!empty($filters['section_id'])) {
         $conditions[] = 'COALESCE(le.section_id, 0) = :section_id';
         $params['section_id'] = (int) $filters['section_id'];
+    }
+
+    return [$conditions, $params];
+}
+
+function learner_list(array $filters, ?int $limit = null, int $offset = 0): array
+{
+    learner_management_bootstrap();
+    $schoolYear = require_current_school_year();
+    [$conditions, $params] = learner_list_query_parts($filters);
+    $params['school_year_id'] = (int) $schoolYear['id'];
+    $paginationSql = '';
+
+    if ($limit !== null) {
+        $safeLimit = max(1, $limit);
+        $safeOffset = max(0, $offset);
+        $paginationSql = ' LIMIT ' . $safeLimit . ' OFFSET ' . $safeOffset;
     }
 
     $statement = database()->prepare(
@@ -331,11 +345,31 @@ function learner_list(array $filters): array
          LEFT JOIN sections s ON s.id = le.section_id
          LEFT JOIN school_years sy ON sy.id = le.school_year_id
          WHERE ' . implode(' AND ', $conditions) . '
-         ORDER BY l.last_name ASC, l.first_name ASC, l.id ASC'
+         ORDER BY l.last_name ASC, l.first_name ASC, l.id ASC' . $paginationSql
     );
     $statement->execute($params);
 
     return $statement->fetchAll();
+}
+
+function learner_list_count(array $filters): int
+{
+    learner_management_bootstrap();
+    $schoolYear = require_current_school_year();
+    [$conditions, $params] = learner_list_query_parts($filters);
+    $params['school_year_id'] = (int) $schoolYear['id'];
+
+    $statement = database()->prepare(
+        'SELECT COUNT(*)
+         FROM learners l
+         LEFT JOIN learner_enrollments le
+            ON le.learner_id = l.id
+           AND le.school_year_id = :school_year_id
+         WHERE ' . implode(' AND ', $conditions)
+    );
+    $statement->execute($params);
+
+    return (int) $statement->fetchColumn();
 }
 
 function learner_find(int $learnerId): ?array

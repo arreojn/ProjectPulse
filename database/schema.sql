@@ -9,7 +9,7 @@ CREATE TABLE users (
     middle_name VARCHAR(100) NULL,
     last_name VARCHAR(100) NULL,
     password_hash VARCHAR(255) NOT NULL,
-    role ENUM('admin', 'attendance', 'teacher', 'parent', 'learner', 'health') NOT NULL,
+    role ENUM('admin', 'attendance', 'teacher', 'parent', 'learner', 'health', 'guidance') NOT NULL,
     is_active TINYINT(1) NOT NULL DEFAULT 1,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
@@ -326,14 +326,6 @@ INSERT IGNORE INTO attendance_legends (code, label, color_hex, counts_as_present
 ('A', 'Absent', '#C53030', 0),
 ('E', 'Excused', '#3182CE', 0);
 
-INSERT IGNORE INTO users (username, email, first_name, middle_name, last_name, password_hash, role, is_active) VALUES
-('attendance_admin', 'attendance@projectpulse.local', 'Attendance', NULL, 'Admin', '$2y$10$v7qjEmsTgoPzJGUOGr0aL.YGT1PAB6j/yuqMcg6evfkLSqrDwaDLC', 'admin', 1),
-('portal_admin', 'admin@projectpulse.local', 'Portal', NULL, 'Admin', '$2y$10$8vrYlwt9a/sRLnGWs01UDO5UYQ1iisGoy3m2LiOtne99.IuOR4n7G', 'admin', 1),
-('attendance_user', 'attendance-user@projectpulse.local', 'Attendance', NULL, 'User', '$2y$10$v7qjEmsTgoPzJGUOGr0aL.YGT1PAB6j/yuqMcg6evfkLSqrDwaDLC', 'attendance', 1),
-('health_coordinator', 'health@projectpulse.local', 'Health', NULL, 'Coordinator', '$2y$10$cLV/PRK6X6TVzrXWbGsRQe40bsHF6HXj./M8DLmLgIvln/.yDUHoS', 'health', 1),
-('teacher_mabini', 'teacher.mabini@projectpulse.local', 'Mabini', 'Demo', 'Teacher', '$2y$10$MowOCypAlH70pG7wAMix3.cddt8d.B66dIBvCfhptP958vYLiu5bi', 'teacher', 1),
-('demo_parent', 'parent@projectpulse.local', 'Ana', 'Santos', 'Dela Cruz', '$2y$10$bRKpueTjVab73zPzrBUyBe.3iRircjMowF66LfB1UuA/QZv4Vw9T.', 'parent', 1);
-
 INSERT IGNORE INTO school_years (label, start_date, end_date, is_current) VALUES
 ('2026-2027', '2026-06-01', '2027-03-31', 1);
 
@@ -345,57 +337,9 @@ SELECT 'Mabini', 'Grade 7', sy.id, 'Adviser Demo'
 FROM school_years sy
 WHERE sy.label = '2026-2027';
 
-INSERT IGNORE INTO teacher_section_assignments (
-    teacher_user_id,
-    section_id,
-    school_year_id
-)
-SELECT
-    u.id,
-    s.id,
-    sy.id
-FROM users u
-INNER JOIN school_years sy ON sy.label = '2026-2027'
-INNER JOIN sections s ON s.name = 'Mabini' AND s.school_year_id = sy.id
-WHERE u.username = 'teacher_mabini';
-
 INSERT IGNORE INTO learners (learner_number, lrn, first_name, middle_name, last_name, current_status) VALUES
 ('LP-0001', '123456789012', 'Juan', 'Santos', 'Dela Cruz', 'active'),
 ('LP-0002', '987654321098', 'Maria', 'Reyes', 'Lopez', 'active');
-
-INSERT IGNORE INTO parents (
-    user_id,
-    first_name,
-    middle_name,
-    last_name,
-    contact_number,
-    address
-)
-SELECT
-    u.id,
-    'Ana',
-    'Santos',
-    'Dela Cruz',
-    '09171234567',
-    'ProjectPulse Demo Household'
-FROM users u
-WHERE u.username = 'demo_parent';
-
-INSERT IGNORE INTO parent_learner_links (
-    parent_id,
-    learner_id,
-    relationship,
-    is_primary_contact
-)
-SELECT
-    p.id,
-    l.id,
-    'Mother',
-    CASE WHEN l.lrn = '123456789012' THEN 1 ELSE 0 END
-FROM parents p
-INNER JOIN learners l ON l.lrn IN ('123456789012', '987654321098')
-INNER JOIN users u ON u.id = p.user_id
-WHERE u.username = 'demo_parent';
 
 INSERT IGNORE INTO learner_enrollments (
     learner_id,

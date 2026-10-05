@@ -42,58 +42,6 @@ function teacher_management_bootstrap(): void
         ['idx_teacher_assignment_teacher_user_id']
     );
 
-    $userStatement = $pdo->prepare(
-        'INSERT IGNORE INTO users (username, email, first_name, middle_name, last_name, password_hash, role, is_active)
-         VALUES (:username, :email, :first_name, :middle_name, :last_name, :password_hash, :role, :is_active)'
-    );
-    $userStatement->execute([
-        'username' => 'teacher_mabini',
-        'email' => 'teacher.mabini@projectpulse.local',
-        'first_name' => 'Mabini',
-        'middle_name' => 'Demo',
-        'last_name' => 'Teacher',
-        'password_hash' => '$2y$10$MowOCypAlH70pG7wAMix3.cddt8d.B66dIBvCfhptP958vYLiu5bi',
-        'role' => 'teacher',
-        'is_active' => 1,
-    ]);
-    $pdo->prepare(
-        'UPDATE users
-         SET first_name = :first_name,
-             middle_name = :middle_name,
-             last_name = :last_name,
-             updated_at = CURRENT_TIMESTAMP
-         WHERE username = :username
-           AND role = :role'
-    )->execute([
-        'first_name' => 'Mabini',
-        'middle_name' => 'Demo',
-        'last_name' => 'Teacher',
-        'username' => 'teacher_mabini',
-        'role' => 'teacher',
-    ]);
-
-    $assignmentSeedStatement = $pdo->prepare(
-        'INSERT IGNORE INTO teacher_section_assignments (
-            teacher_user_id,
-            section_id,
-            school_year_id
-         )
-         SELECT
-            u.id,
-            s.id,
-            sy.id
-         FROM users u
-         INNER JOIN school_years sy ON sy.is_current = 1
-         INNER JOIN sections s ON s.school_year_id = sy.id
-         WHERE u.username = :username
-           AND s.name = :section_name
-         LIMIT 1'
-    );
-    $assignmentSeedStatement->execute([
-        'username' => 'teacher_mabini',
-        'section_name' => 'Mabini',
-    ]);
-
     $bootstrapped = true;
 }
 

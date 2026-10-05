@@ -29,8 +29,8 @@ if (is_post()) {
             $errors[] = 'Current password is required.';
         }
 
-        if (strlen($newPassword) < 6) {
-            $errors[] = 'New password must be at least 6 characters.';
+        if (strlen($newPassword) < 12) {
+            $errors[] = 'New password must be at least 12 characters.';
         }
 
         if ($newPassword !== $confirmPassword) {
@@ -110,7 +110,7 @@ if (is_post()) {
                         name="new_password"
                         type="password"
                         autocomplete="new-password"
-                        minlength="6"
+                        minlength="12"
                         required
                     >
 

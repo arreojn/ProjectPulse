@@ -6,7 +6,7 @@ require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/app/helpers.php';
 require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/app/auth.php';
-require_once __DIR__ . '/app/password_resets.php';
+require_once __DIR__ . '/password_resets.php';
 require_once __DIR__ . '/app/theme_settings.php';
 
 theme_settings_bootstrap();
@@ -30,7 +30,7 @@ if (is_post()) {
 
         if ($errors === []) {
             request_password_reset($submittedIdentity);
-            flash_set('forgot_password', 'If an account with that identity exists, a password reset request has been sent for admin approval.');
+            flash_set('forgot_password', 'Your request has been submitted. If the account exists, a reset request will be reviewed by the administrator.');
             redirect('forgot_password.php');
         }
     } catch (Throwable $exception) {

@@ -110,6 +110,15 @@ function admin_has_learner_filters(array $filters): bool
     return false;
 }
 
+function admin_learner_page_url(int $page, int $pageSize, array $filters): string
+{
+    return route_url('admin.php?' . http_build_query(array_merge(
+        ['module' => 'learner_management'],
+        $filters,
+        ['per_page' => $pageSize, 'page' => $page]
+    )));
+}
+
 $user = require_roles(['admin']);
 
 $allowedModules = [
@@ -145,6 +154,12 @@ $attendanceCoverage = [
 $attendanceStatusRows = [];
 $attendanceHourRows = [];
 $attendanceGradeRows = [];
+$attendanceTrendRows = [];
+$attendanceGradeStatusRows = [];
+$attendanceFrequentAbsenceRows = [];
+$attendanceFrequentLateRows = [];
+$attendanceDashboardWarnings = [];
+$attendanceSchoolYear = null;
 $latestLogs = [];
 $dataWarning = null;
 $learnerFlash = flash_get('learner_management');
@@ -152,6 +167,14 @@ $learnerForm = learner_form_defaults();
 $learnerRows = [];
 $learnerFilters = learner_list_filters();
 $learnerFiltersApplied = admin_has_learner_filters($learnerFilters);
+$learnerPageSizeOptions = [10, 20, 50, 100, 200];
+$learnerPageSize = 10;
+$learnerPage = 1;
+$learnerTotal = 0;
+$learnerTotalPages = 1;
+$learnerListStart = 0;
+$learnerListEnd = 0;
+$learnerListError = null;
 $learnerSections = [];
 $learnerSchoolYear = null;
 $learnerEditId = isset($_GET['edit_learner_id']) ? (int) $_GET['edit_learner_id'] : null;
@@ -189,6 +212,10 @@ $announcementEditId = isset($_GET['edit_announcement_id']) ? (int) $_GET['edit_a
 $settingsFlash = flash_get('admin_settings');
 $passwordResetFlash = flash_get('admin_password_resets');
 $pendingPasswordResets = [];
+$sidebarRequestCounts = [
+    'issues' => 0,
+    'password_resets' => 0,
+];
 $themeColors = [];
 $activeThemeKey = 'default';
 $systemLoginLogs = [];
@@ -236,8 +263,20 @@ if ($module === 'learner_management') {
             }
         }
 
-        $learnerRows = learner_list($learnerFilters);
+        $requestedPageSize = (int) ($_GET['per_page'] ?? 10);
+        if (in_array($requestedPageSize, $learnerPageSizeOptions, true)) {
+            $learnerPageSize = $requestedPageSize;
+        }
+
+        $learnerTotal = learner_list_count($learnerFilters);
+        $learnerTotalPages = max(1, (int) ceil($learnerTotal / $learnerPageSize));
+        $learnerPage = min(max(1, (int) ($_GET['page'] ?? 1)), $learnerTotalPages);
+        $learnerRows = learner_list($learnerFilters, $learnerPageSize, ($learnerPage - 1) * $learnerPageSize);
+        $learnerListStart = $learnerTotal > 0 ? (($learnerPage - 1) * $learnerPageSize) + 1 : 0;
+        $learnerListEnd = min($learnerTotal, (($learnerPage - 1) * $learnerPageSize) + count($learnerRows));
     } catch (Throwable $exception) {
+        $learnerListError = 'Unable to load the learner list right now.';
+        error_log('Learner list query failed: ' . $exception->getMessage());
         $learnerFlash = [
             'type' => 'error',
             'message' => $exception->getMessage(),
@@ -413,8 +452,11 @@ if ($module === 'password_resets') {
             $requestId = (int) ($_POST['request_id'] ?? 0);
 
             if ($formAction === 'approve_reset') {
-                $newPassword = approve_password_reset($requestId, (int) $user['id']);
-                flash_set('admin_password_resets', 'Password has been reset. The new password is: ' . $newPassword);
+                $temporaryPassword = approve_password_reset($requestId, (int) $user['id']);
+                flash_set(
+                    'admin_password_resets',
+                    'Password reset approved. One-time temporary password: ' . $temporaryPassword . '. Share it with the user through a secure channel.'
+                );
                 redirect('admin.php?module=password_resets');
             }
 
@@ -430,6 +472,23 @@ if ($module === 'password_resets') {
         $passwordResetFlash = ['type' => 'error', 'message' => $exception->getMessage()];
     }
 }
+
+try {
+    $sidebarRequestCounts['issues'] = (int) database()->query(
+        'SELECT COUNT(*) FROM reported_issues WHERE status IN (\'open\', \'in_progress\')'
+    )->fetchColumn();
+} catch (Throwable $exception) {
+    $sidebarRequestCounts['issues'] = 0;
+}
+
+try {
+    $sidebarRequestCounts['password_resets'] = (int) database()->query(
+        'SELECT COUNT(*) FROM password_reset_requests WHERE status = \'pending\''
+    )->fetchColumn();
+} catch (Throwable $exception) {
+    $sidebarRequestCounts['password_resets'] = 0;
+}
+
 if ($module === 'settings') {
     try {
         if (is_post() && ($_POST['form_action'] ?? '') === 'save_theme') {
@@ -588,6 +647,104 @@ if ($module === 'attendance_module') {
     }
 }
 
+if ($module === 'attendance_module' && $attendanceSchoolYear !== null) {
+    $schoolYearId = (int) $attendanceSchoolYear['id'];
+
+    try {
+        $trendStatement = database()->prepare(
+            'SELECT
+                DATE(asl.scanned_at) AS scan_date,
+                COUNT(DISTINCT le.id) AS scanned_learners
+             FROM attendance_scan_logs asl
+             INNER JOIN learner_enrollments le ON le.id = asl.learner_enrollment_id
+             INNER JOIN learners l ON l.id = le.learner_id
+             WHERE le.school_year_id = :school_year_id
+               AND le.enrollment_status = \'enrolled\'
+               AND l.current_status = \'active\'
+                             AND DATE(asl.scanned_at) BETWEEN :school_year_start AND CURDATE()
+             GROUP BY DATE(asl.scanned_at)
+                         ORDER BY scan_date DESC
+                         LIMIT 30'
+        );
+        $trendStatement->execute([
+            'school_year_id' => $schoolYearId,
+                        'school_year_start' => (string) $attendanceSchoolYear['start_date'],
+        ]);
+                $attendanceTrendRows = array_reverse($trendStatement->fetchAll());
+    } catch (Throwable $exception) {
+        error_log('Attendance trend query failed: ' . $exception->getMessage());
+        $attendanceDashboardWarnings['trend'] = 'Unable to load attendance trend.';
+    }
+
+    try {
+        $gradeStatusStatement = database()->prepare(
+            'SELECT
+                le.grade_level,
+                al.code,
+                al.label,
+                al.color_hex,
+                COUNT(DISTINCT ar.id) AS total
+             FROM learner_enrollments le
+             INNER JOIN learners l ON l.id = le.learner_id
+             LEFT JOIN attendance_records ar
+                ON ar.learner_enrollment_id = le.id
+               AND ar.attendance_date = CURDATE()
+             LEFT JOIN attendance_legends al ON al.id = ar.legend_id
+             WHERE le.school_year_id = :school_year_id
+               AND le.enrollment_status = \'enrolled\'
+               AND l.current_status = \'active\'
+             GROUP BY le.grade_level, al.id, al.code, al.label, al.color_hex
+             ORDER BY FIELD(le.grade_level, \'Kinder\', \'Grade 1\', \'Grade 2\', \'Grade 3\', \'Grade 4\', \'Grade 5\', \'Grade 6\', \'Grade 7\', \'Grade 8\', \'Grade 9\', \'Grade 10\', \'Grade 11\', \'Grade 12\'), le.grade_level ASC, al.code ASC'
+        );
+        $gradeStatusStatement->execute(['school_year_id' => $schoolYearId]);
+        $attendanceGradeStatusRows = $gradeStatusStatement->fetchAll();
+    } catch (Throwable $exception) {
+        error_log('Grade attendance status query failed: ' . $exception->getMessage());
+        $attendanceDashboardWarnings['grade_status'] = 'Unable to load attendance by grade level.';
+    }
+
+    try {
+        $recordedStatusStatement = database()->prepare(
+            'SELECT
+                l.id AS learner_id,
+                CONCAT(l.first_name, \' \', l.last_name) AS learner_name,
+                le.grade_level,
+                COALESCE(s.name, \'Unassigned\') AS section_name,
+                al.code AS attendance_code,
+                COUNT(DISTINCT ar.id) AS record_count,
+                MAX(ar.attendance_date) AS last_recorded_date
+             FROM attendance_records ar
+             INNER JOIN attendance_legends al ON al.id = ar.legend_id
+             INNER JOIN learner_enrollments le ON le.id = ar.learner_enrollment_id
+             INNER JOIN learners l ON l.id = le.learner_id
+             LEFT JOIN sections s ON s.id = le.section_id
+             WHERE le.school_year_id = :school_year_id
+               AND le.enrollment_status = \'enrolled\'
+               AND l.current_status = \'active\'
+               AND ar.attendance_date BETWEEN :school_year_start AND CURDATE()
+               AND al.code IN (\'A\', \'L\')
+             GROUP BY l.id, l.first_name, l.last_name, le.grade_level, s.name, al.code
+             ORDER BY al.code ASC, record_count DESC, last_recorded_date DESC, l.last_name ASC, l.first_name ASC'
+        );
+        $recordedStatusStatement->execute([
+            'school_year_id' => $schoolYearId,
+            'school_year_start' => (string) $attendanceSchoolYear['start_date'],
+        ]);
+        foreach ($recordedStatusStatement->fetchAll() as $recordedStatusRow) {
+            if ($recordedStatusRow['attendance_code'] === 'A') {
+                $attendanceFrequentAbsenceRows[] = $recordedStatusRow;
+            } elseif ($recordedStatusRow['attendance_code'] === 'L') {
+                $attendanceFrequentLateRows[] = $recordedStatusRow;
+            }
+        }
+        $attendanceFrequentAbsenceRows = array_slice($attendanceFrequentAbsenceRows, 0, 5);
+        $attendanceFrequentLateRows = array_slice($attendanceFrequentLateRows, 0, 5);
+    } catch (Throwable $exception) {
+        error_log('Recorded absence/late query failed: ' . $exception->getMessage());
+        $attendanceDashboardWarnings['recorded_status'] = 'Unable to load recorded absence and late summaries.';
+    }
+}
+
 if ($module === 'settings') {
     $stats['today_logins'] = (int) database()->query('SELECT COUNT(*) FROM auth_login_logs WHERE login_status = \'success\' AND DATE(logged_in_at) = CURDATE()')->fetchColumn();
     $systemLoginLogs = auth_recent_login_logs(10);
@@ -613,18 +770,102 @@ $sexOptions = ['male', 'female'];
 $attendanceStatusTotal = 0;
 $attendanceMaxHourlyScans = 0;
 $attendanceMaxGradeLearners = 0;
+$attendanceStatusCounts = [];
+$attendanceGradeStatusCounts = [];
+$attendanceGradeChartLabels = [];
+$attendanceTrendLabels = [];
+$attendanceTrendValues = [];
+$attendancePeakScanLabel = 'No scan activity today.';
+$attendanceLowestCoverageLabel = 'No active grade enrollment.';
+$attendanceLowestCoveragePercent = null;
 
 foreach ($attendanceStatusRows as $row) {
-    $attendanceStatusTotal += (int) ($row['total'] ?? 0);
+    $statusCode = (string) ($row['code'] ?? '');
+    $statusCount = (int) ($row['total'] ?? 0);
+    $attendanceStatusTotal += $statusCount;
+    $attendanceStatusCounts[$statusCode] = $statusCount;
 }
 
 foreach ($attendanceHourRows as $row) {
-    $attendanceMaxHourlyScans = max($attendanceMaxHourlyScans, (int) ($row['total'] ?? 0));
+    $hourCount = (int) ($row['total'] ?? 0);
+    if ($hourCount > $attendanceMaxHourlyScans) {
+        $attendanceMaxHourlyScans = $hourCount;
+        $hourStart = (int) ($row['hour_value'] ?? 0);
+        $attendancePeakScanLabel = date('g:00 A', mktime($hourStart, 0, 0))
+            . ' to ' . date('g:00 A', mktime(($hourStart + 1) % 24, 0, 0));
+    }
 }
 
 foreach ($attendanceGradeRows as $row) {
     $attendanceMaxGradeLearners = max($attendanceMaxGradeLearners, (int) ($row['total_learners'] ?? 0));
+    $gradeLabel = (string) ($row['grade_level'] ?? '');
+    $attendanceGradeChartLabels[] = $gradeLabel;
+    $attendanceGradeStatusCounts[$gradeLabel] = [];
+
+    $gradeTotal = (int) ($row['total_learners'] ?? 0);
+    if ($gradeTotal > 0) {
+        $gradePercent = round(((int) ($row['scanned_learners'] ?? 0) / $gradeTotal) * 100, 1);
+        if ($attendanceLowestCoveragePercent === null || $gradePercent < $attendanceLowestCoveragePercent) {
+            $attendanceLowestCoveragePercent = $gradePercent;
+            $attendanceLowestCoverageLabel = $gradeLabel . ' (' . number_format($gradePercent, 1) . '%)';
+        }
+    }
 }
+
+foreach ($attendanceGradeStatusRows as $row) {
+    $gradeLabel = (string) ($row['grade_level'] ?? '');
+    $statusCode = (string) ($row['code'] ?? '');
+    if ($statusCode !== '' && isset($attendanceGradeStatusCounts[$gradeLabel])) {
+        $attendanceGradeStatusCounts[$gradeLabel][$statusCode] = (int) ($row['total'] ?? 0);
+    }
+}
+
+$attendanceGradeDatasets = [];
+foreach ($attendanceStatusRows as $row) {
+    $statusCode = (string) ($row['code'] ?? '');
+    if ($statusCode === '') {
+        continue;
+    }
+
+    $attendanceGradeDatasets[] = [
+        'label' => (string) ($row['label'] ?? $statusCode),
+        'code' => $statusCode,
+        'color' => admin_chart_color($row['color_hex'] ?? null),
+        'data' => array_map(
+            static fn (string $gradeLabel): int => (int) ($attendanceGradeStatusCounts[$gradeLabel][$statusCode] ?? 0),
+            $attendanceGradeChartLabels
+        ),
+    ];
+}
+
+foreach ($attendanceTrendRows as $row) {
+    $trendDate = (string) ($row['scan_date'] ?? '');
+    $trendTimestamp = strtotime($trendDate);
+    if ($trendTimestamp !== false) {
+        $attendanceTrendLabels[] = date('M j', $trendTimestamp);
+        $attendanceTrendValues[] = (int) ($row['scanned_learners'] ?? 0);
+    }
+}
+
+$attendanceDashboardChartData = [
+    'trend' => [
+        'labels' => $attendanceTrendLabels,
+        'values' => $attendanceTrendValues,
+    ],
+    'hourly' => [
+        'labels' => array_map(static fn (array $row): string => (string) ($row['hour_label'] ?? ''), $attendanceHourRows),
+        'values' => array_map(static fn (array $row): int => (int) ($row['total'] ?? 0), $attendanceHourRows),
+    ],
+    'status' => [
+        'labels' => array_map(static fn (array $row): string => (string) ($row['label'] ?? ''), $attendanceStatusRows),
+        'values' => array_map(static fn (array $row): int => (int) ($row['total'] ?? 0), $attendanceStatusRows),
+        'colors' => array_map(static fn (array $row): string => admin_chart_color($row['color_hex'] ?? null), $attendanceStatusRows),
+    ],
+    'gradeStatus' => [
+        'labels' => $attendanceGradeChartLabels,
+        'datasets' => $attendanceGradeDatasets,
+    ],
+];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -634,6 +875,7 @@ foreach ($attendanceGradeRows as $row) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo escape(APP_NAME); ?> Admin</title>
     <link rel="stylesheet" href="<?php echo escape(asset_url('assets/css/app.css')); ?>">
+    <link rel="stylesheet" href="<?php echo escape(asset_url('loginassets/fonts/font-awesome-4.7.0/css/font-awesome.min.css')); ?>">
 </head>
 <body class="dashboard-body admin-dashboard">
     <button
@@ -675,8 +917,14 @@ foreach ($attendanceGradeRows as $row) {
                     <div class="menu-group">
                         <p class="menu-group-title">System</p>
                         <a href="<?php echo escape(route_url('admin.php?module=announcements')); ?>" class="submenu-link<?php echo $module === 'announcements' ? ' active' : ''; ?>">Announcements</a>
-                        <a href="<?php echo escape(route_url('admin.php?module=reported_issues')); ?>" class="submenu-link<?php echo $module === 'reported_issues' ? ' active' : ''; ?>">Reported Issues</a>
-                        <a href="<?php echo escape(route_url('admin.php?module=password_resets')); ?>" class="submenu-link<?php echo $module === 'password_resets' ? ' active' : ''; ?>">Password Resets</a>
+                        <a href="<?php echo escape(route_url('admin.php?module=reported_issues')); ?>" class="submenu-link submenu-link-counted<?php echo $module === 'reported_issues' ? ' active' : ''; ?>" aria-label="<?php echo escape('Reported Issues' . ($sidebarRequestCounts['issues'] > 0 ? ', ' . $sidebarRequestCounts['issues'] . ' open or in-progress requests' : '')); ?>">
+                            <span>Reported Issues</span>
+                            <?php if ($sidebarRequestCounts['issues'] > 0): ?><span class="sidebar-count" aria-hidden="true"><?php echo escape((string) $sidebarRequestCounts['issues']); ?></span><?php endif; ?>
+                        </a>
+                        <a href="<?php echo escape(route_url('admin.php?module=password_resets')); ?>" class="submenu-link submenu-link-counted<?php echo $module === 'password_resets' ? ' active' : ''; ?>" aria-label="<?php echo escape('Password Resets' . ($sidebarRequestCounts['password_resets'] > 0 ? ', ' . $sidebarRequestCounts['password_resets'] . ' pending requests' : '')); ?>">
+                            <span>Password Resets</span>
+                            <?php if ($sidebarRequestCounts['password_resets'] > 0): ?><span class="sidebar-count" aria-hidden="true"><?php echo escape((string) $sidebarRequestCounts['password_resets']); ?></span><?php endif; ?>
+                        </a>
                         <a href="<?php echo escape(route_url('admin.php?module=settings')); ?>" class="submenu-link<?php echo $module === 'settings' ? ' active' : ''; ?>">Settings</a>
                         <a href="<?php echo escape(route_url('change_password.php')); ?>" class="submenu-link">Change Password</a>
                     </div>
@@ -694,8 +942,13 @@ foreach ($attendanceGradeRows as $row) {
                             <img class="school-logo header-logo" src="<?php echo escape(school_logo_url()); ?>" alt="School logo">
                             <div class="header-copy">
                                 <p class="eyebrow">Attendance</p>
-                                <h2>Attendance Module</h2>
-                                <p>Monitor daily scan activity and launch the attendance station from here.</p>
+                                <h2>Attendance Dashboard</h2>
+                                <p>Daily learner scan activity and current school-year coverage.</p>
+                                <div class="dashboard-header-meta">
+                                    <span><?php echo escape(date('l, F j, Y')); ?></span>
+                                    <span>School year: <?php echo escape($attendanceSchoolYear['label'] ?? 'Not configured'); ?></span>
+                                    <span>Last scan: <?php echo escape($stats['last_scan']); ?></span>
+                                </div>
                             </div>
                         </div>
 
@@ -710,145 +963,202 @@ foreach ($attendanceGradeRows as $row) {
                         <div class="alert error"><?php echo escape($dataWarning); ?></div>
                     <?php endif; ?>
 
-                    <section class="admin-stat-grid">
-                        <article class="admin-stat-card">
-                            <span class="stat-label">Today's Logs</span>
-                            <strong><?php echo escape((string) $stats['today_logs']); ?></strong>
+                    <section class="admin-stat-grid dashboard-kpi-grid" aria-label="Today's attendance summary">
+                        <article class="admin-stat-card dashboard-kpi">
+                            <div class="dashboard-kpi-heading"><span class="dashboard-kpi-icon coverage-icon" aria-hidden="true"><i class="fa fa-bar-chart"></i></span><span class="stat-label">Scan coverage today</span></div>
+                            <strong class="dashboard-kpi-value"><?php echo escape((string) $attendanceCoverage['scanned_learners']); ?><span> / <?php echo escape((string) $attendanceCoverage['total_learners']); ?></span></strong>
+                            <p><?php echo escape(number_format((float) $attendanceCoverage['coverage_percent'], 1)); ?>% of active enrollees scanned</p>
                         </article>
 
-                        <article class="admin-stat-card">
-                            <span class="stat-label">Learners Scanned Today</span>
-                            <strong><?php echo escape((string) $stats['today_learners']); ?></strong>
+                        <article class="admin-stat-card dashboard-kpi">
+                            <div class="dashboard-kpi-heading"><span class="dashboard-kpi-icon present-icon" aria-hidden="true"><i class="fa fa-check-circle"></i></span><span class="stat-label">Saved as present</span></div>
+                            <strong class="dashboard-kpi-value"><?php echo escape((string) ($attendanceStatusCounts['P'] ?? 0)); ?></strong>
+                            <p>Today's records with the P legend</p>
                         </article>
 
-                        <article class="admin-stat-card">
-                            <span class="stat-label">Last Scan</span>
-                            <strong><?php echo escape($stats['last_scan']); ?></strong>
+                        <article class="admin-stat-card dashboard-kpi">
+                            <div class="dashboard-kpi-heading"><span class="dashboard-kpi-icon late-icon" aria-hidden="true"><i class="fa fa-clock-o"></i></span><span class="stat-label">Saved as late</span></div>
+                            <strong class="dashboard-kpi-value"><?php echo escape((string) ($attendanceStatusCounts['L'] ?? 0)); ?></strong>
+                            <p>Today's records with the L legend</p>
+                        </article>
+
+                        <article class="admin-stat-card dashboard-kpi">
+                            <div class="dashboard-kpi-heading"><span class="dashboard-kpi-icon pending-icon" aria-hidden="true"><i class="fa fa-user-o"></i></span><span class="stat-label">Not yet scanned</span></div>
+                            <strong class="dashboard-kpi-value"><?php echo escape((string) $attendanceCoverage['not_scanned_learners']); ?></strong>
+                            <p>Of <?php echo escape((string) $attendanceCoverage['total_learners']); ?> active current-year enrollees</p>
                         </article>
                     </section>
 
-                    <section class="admin-analytics-grid">
-                        <article class="admin-module-card analytics-card">
+                    <p class="attendance-data-note">
+                        Scan coverage counts active enrollees with at least one scan; it is not a confirmed full-day attendance rate. The scan workflow stores P and does not calculate lateness. Without a scheduled-school-day roster, unscanned learners cannot be classified as absent and a historical attendance-rate trend cannot be calculated.
+                    </p>
+
+                    <section class="admin-analytics-grid dashboard-primary-grid" aria-label="Attendance scan activity charts">
+                        <article class="admin-module-card analytics-card dashboard-chart-card">
                             <div class="panel-heading compact-heading">
-                                <h2>Today's Scan Coverage</h2>
-                                <p>Active enrolled learners scanned vs not yet scanned.</p>
+                                <h2>Scan Activity Trend</h2>
+                                <p>Unique active enrollees scanned on the 30 most recent dates with activity this school year.</p>
                             </div>
-
-                            <div class="coverage-chart-row">
-                                <div class="coverage-donut" style="--coverage: <?php echo escape((string) $attendanceCoverage['coverage_percent']); ?>%;">
-                                    <strong><?php echo escape((string) $attendanceCoverage['coverage_percent']); ?>%</strong>
-                                    <span>scanned</span>
-                                </div>
-
-                                <div class="coverage-breakdown">
-                                    <div>
-                                        <span class="status-dot success-dot"></span>
-                                        <p>Scanned</p>
-                                        <strong><?php echo escape((string) $attendanceCoverage['scanned_learners']); ?></strong>
-                                    </div>
-                                    <div>
-                                        <span class="status-dot muted-dot"></span>
-                                        <p>Not Yet Scanned</p>
-                                        <strong><?php echo escape((string) $attendanceCoverage['not_scanned_learners']); ?></strong>
-                                    </div>
-                                    <div>
-                                        <span class="status-dot accent-dot"></span>
-                                        <p>Total Active Learners</p>
-                                        <strong><?php echo escape((string) $attendanceCoverage['total_learners']); ?></strong>
-                                    </div>
-                                </div>
-                            </div>
-                        </article>
-
-                        <article class="admin-module-card analytics-card">
-                            <div class="panel-heading compact-heading">
-                                <h2>Attendance Status Mix</h2>
-                                <p>Today's attendance records by legend.</p>
-                            </div>
-
-                            <?php if ($attendanceStatusRows === []): ?>
-                                <div class="alert neutral">No attendance legend data is available yet.</div>
+                            <?php if (isset($attendanceDashboardWarnings['trend'])): ?>
+                                <p class="dashboard-empty-state error-state" role="status"><?php echo escape($attendanceDashboardWarnings['trend']); ?></p>
+                            <?php elseif ($attendanceTrendRows === []): ?>
+                                <p class="dashboard-empty-state">No historical scan activity available for this period.</p>
                             <?php else: ?>
-                                <div class="chart-bar-list">
-                                    <?php foreach ($attendanceStatusRows as $row): ?>
-                                        <?php
-                                        $statusCount = (int) ($row['total'] ?? 0);
-                                        $statusPercent = admin_percent($statusCount, $attendanceStatusTotal);
-                                        $statusColor = admin_chart_color($row['color_hex'] ?? null);
-                                        ?>
-                                        <div class="chart-row">
-                                            <div class="chart-label">
-                                                <span><i style="--dot-color: <?php echo escape($statusColor); ?>;"></i><?php echo escape($row['label']); ?></span>
-                                                <strong><?php echo escape((string) $statusCount); ?></strong>
-                                            </div>
-                                            <div class="chart-track">
-                                                <span class="chart-fill" style="--bar-width: <?php echo escape((string) $statusPercent); ?>%; --bar-color: <?php echo escape($statusColor); ?>;"></span>
-                                            </div>
-                                        </div>
-                                    <?php endforeach; ?>
-                                </div>
+                                <div class="dashboard-chart-wrap"><canvas id="attendance-trend-chart" role="img" aria-label="Unique enrolled learners scanned by date over the last 30 days"></canvas></div>
                             <?php endif; ?>
+                            <p class="chart-footnote">Recorded scan activity only; days without scan logs are omitted. This does not measure daily attendance rate.</p>
                         </article>
 
-                        <article class="admin-module-card analytics-card">
+                        <article class="admin-module-card analytics-card dashboard-chart-card">
                             <div class="panel-heading compact-heading">
                                 <h2>Hourly Scan Volume</h2>
-                                <p>Attendance station activity across today.</p>
+                                <p>Scan events by recorded hour, including time-in and time-out scans.</p>
                             </div>
-
-                            <?php if ($attendanceHourRows === []): ?>
-                                <div class="alert neutral">No scan volume is available for today yet.</div>
+                            <?php if (isset($attendanceDashboardWarnings['hourly'])): ?>
+                                <p class="dashboard-empty-state error-state" role="status"><?php echo escape($attendanceDashboardWarnings['hourly']); ?></p>
+                            <?php elseif ($attendanceHourRows === []): ?>
+                                <p class="dashboard-empty-state">No scan activity available today.</p>
                             <?php else: ?>
-                                <div class="chart-bar-list">
-                                    <?php foreach ($attendanceHourRows as $row): ?>
-                                        <?php
-                                        $hourCount = (int) ($row['total'] ?? 0);
-                                        $hourPercent = admin_percent($hourCount, max(1, $attendanceMaxHourlyScans));
-                                        ?>
-                                        <div class="chart-row">
-                                            <div class="chart-label">
-                                                <span><?php echo escape($row['hour_label']); ?></span>
-                                                <strong><?php echo escape((string) $hourCount); ?></strong>
-                                            </div>
-                                            <div class="chart-track">
-                                                <span class="chart-fill" style="--bar-width: <?php echo escape((string) $hourPercent); ?>%; --bar-color: var(--info);"></span>
-                                            </div>
-                                        </div>
-                                    <?php endforeach; ?>
+                                <div class="dashboard-chart-wrap"><canvas id="hourly-scan-chart" role="img" aria-label="Attendance scan events by hour today"></canvas></div>
+                            <?php endif; ?>
+                            <p class="chart-peak">Peak scanning period: <strong><?php echo escape($attendancePeakScanLabel); ?></strong></p>
+                        </article>
+                    </section>
+
+                    <section class="admin-analytics-grid dashboard-secondary-grid" aria-label="Attendance status charts">
+                        <article class="admin-module-card analytics-card dashboard-chart-card">
+                            <div class="panel-heading compact-heading">
+                                <h2>Today's Attendance Status</h2>
+                                <p>Current-year records grouped by their saved legend.</p>
+                            </div>
+                            <?php if (isset($attendanceDashboardWarnings['status'])): ?>
+                                <p class="dashboard-empty-state error-state" role="status"><?php echo escape($attendanceDashboardWarnings['status']); ?></p>
+                            <?php elseif ($attendanceStatusTotal <= 0): ?>
+                                <p class="dashboard-empty-state">No attendance records yet today.</p>
+                            <?php else: ?>
+                                <div class="status-chart-layout">
+                                    <div class="status-donut-wrap"><canvas id="attendance-status-chart" role="img" aria-label="Today's attendance records by saved status"></canvas></div>
+                                    <ul class="status-chart-legend">
+                                        <?php foreach ($attendanceStatusRows as $row): ?>
+                                            <li>
+                                                <span class="legend-swatch" style="--legend-color: <?php echo escape(admin_chart_color($row['color_hex'] ?? null)); ?>"></span>
+                                                <span><?php echo escape($row['label']); ?></span>
+                                                <strong><?php echo escape((string) ($row['total'] ?? 0)); ?></strong>
+                                            </li>
+                                        <?php endforeach; ?>
+                                    </ul>
                                 </div>
                             <?php endif; ?>
                         </article>
 
-                        <article class="admin-module-card analytics-card">
+                        <article class="admin-module-card analytics-card dashboard-chart-card">
+                            <div class="panel-heading compact-heading">
+                                <h2>Attendance by Grade Level</h2>
+                                <p>Today's saved status records; hover or focus a segment for its count.</p>
+                            </div>
+                            <?php if (isset($attendanceDashboardWarnings['grade_status'])): ?>
+                                <p class="dashboard-empty-state error-state" role="status"><?php echo escape($attendanceDashboardWarnings['grade_status']); ?></p>
+                            <?php elseif ($attendanceStatusTotal <= 0): ?>
+                                <p class="dashboard-empty-state">No attendance records yet today.</p>
+                            <?php elseif ($attendanceGradeRows === []): ?>
+                                <p class="dashboard-empty-state">No active grade enrollment is available for charting.</p>
+                            <?php else: ?>
+                                <div class="dashboard-chart-wrap grade-status-chart-wrap"><canvas id="grade-status-chart" role="img" aria-label="Stacked saved attendance statuses by grade level"></canvas></div>
+                            <?php endif; ?>
+                        </article>
+                    </section>
+
+                    <section class="admin-analytics-grid dashboard-tertiary-grid" aria-label="Attendance coverage">
+                        <article class="admin-module-card analytics-card dashboard-chart-card">
+                            <div class="panel-heading compact-heading">
+                                <h2>Today's Scan Coverage</h2>
+                                <p>At least one logged scan among active enrollees in the current school year.</p>
+                            </div>
+                            <div class="coverage-chart-row dashboard-coverage-row">
+                                <div class="coverage-donut" style="--coverage: <?php echo escape((string) $attendanceCoverage['coverage_percent']); ?>%;" role="img" aria-label="<?php echo escape(number_format((float) $attendanceCoverage['coverage_percent'], 1)); ?> percent of active enrollees scanned today">
+                                    <strong><?php echo escape(number_format((float) $attendanceCoverage['coverage_percent'], 1)); ?>%</strong>
+                                    <span>scanned</span>
+                                </div>
+                                <div class="coverage-breakdown">
+                                    <div><span class="status-dot success-dot"></span><p>Scanned</p><strong><?php echo escape((string) $attendanceCoverage['scanned_learners']); ?></strong></div>
+                                    <div><span class="status-dot muted-dot"></span><p>Not yet scanned</p><strong><?php echo escape((string) $attendanceCoverage['not_scanned_learners']); ?></strong></div>
+                                    <div><span class="status-dot accent-dot"></span><p>Active learners</p><strong><?php echo escape((string) $attendanceCoverage['total_learners']); ?></strong></div>
+                                </div>
+                            </div>
+                            <p class="coverage-summary"><?php echo escape((string) $attendanceCoverage['scanned_learners']); ?> of <?php echo escape((string) $attendanceCoverage['total_learners']); ?> learners scanned</p>
+                        </article>
+
+                        <article class="admin-module-card analytics-card dashboard-chart-card">
                             <div class="panel-heading compact-heading">
                                 <h2>Grade-Level Coverage</h2>
-                                <p>Scanned learners compared with active enrollment.</p>
+                                <p>Scanned learners compared with active current-year enrollment.</p>
                             </div>
-
                             <?php if ($attendanceGradeRows === []): ?>
-                                <div class="alert neutral">No active learner enrollment is available for charting.</div>
+                                <p class="dashboard-empty-state">No active learner enrollment is available for charting.</p>
                             <?php else: ?>
-                                <div class="chart-bar-list">
+                                <div class="grade-coverage-list">
                                     <?php foreach ($attendanceGradeRows as $row): ?>
                                         <?php
                                         $gradeTotal = (int) ($row['total_learners'] ?? 0);
                                         $gradeScanned = (int) ($row['scanned_learners'] ?? 0);
-                                        $gradePercent = admin_percent($gradeScanned, $gradeTotal);
+                                        $gradeNotScanned = max(0, $gradeTotal - $gradeScanned);
+                                        $gradePercent = $gradeTotal > 0 ? round(($gradeScanned / $gradeTotal) * 100, 1) : 0.0;
+                                        $gradeRemainingPercent = $gradeTotal > 0 ? 100 - $gradePercent : 0.0;
                                         ?>
-                                        <div class="chart-row">
-                                            <div class="chart-label">
-                                                <span><?php echo escape($row['grade_level']); ?></span>
-                                                <strong><?php echo escape($gradeScanned . '/' . $gradeTotal); ?></strong>
-                                            </div>
-                                            <div class="chart-track">
-                                                <span class="chart-fill" style="--bar-width: <?php echo escape((string) $gradePercent); ?>%; --bar-color: var(--success);"></span>
+                                        <div class="grade-coverage-row">
+                                            <div class="grade-coverage-label"><span><?php echo escape($row['grade_level']); ?></span><strong><?php echo escape($gradeScanned . ' / ' . $gradeTotal); ?></strong><span><?php echo escape(number_format($gradePercent, 1)); ?>%</span></div>
+                                            <div class="grade-coverage-track" role="img" aria-label="<?php echo escape($row['grade_level'] . ': ' . $gradeScanned . ' scanned, ' . $gradeNotScanned . ' not yet scanned'); ?>" title="Scanned: <?php echo escape((string) $gradeScanned); ?>; not yet scanned: <?php echo escape((string) $gradeNotScanned); ?>">
+                                                <span class="grade-scanned-segment" style="--bar-width: <?php echo escape((string) $gradePercent); ?>%"></span>
+                                                <span class="grade-pending-segment" style="--bar-width: <?php echo escape((string) $gradeRemainingPercent); ?>%"></span>
                                             </div>
                                         </div>
                                     <?php endforeach; ?>
                                 </div>
+                                <div class="grade-coverage-legend"><span><i class="coverage-key scanned-key"></i>Scanned</span><span><i class="coverage-key pending-key"></i>Not yet scanned</span></div>
+                                <p class="chart-footnote">Lowest grade-level scan coverage: <strong><?php echo escape($attendanceLowestCoverageLabel); ?></strong></p>
                             <?php endif; ?>
                         </article>
                     </section>
+
+                    <section class="admin-analytics-grid dashboard-rankings-grid" aria-label="Learners with saved absence or late records">
+                        <article class="admin-module-card analytics-card dashboard-chart-card">
+                            <div class="panel-heading compact-heading">
+                                <h2>Frequently Absent Learners</h2>
+                                <p>Top learners with explicitly saved A-status records this school year.</p>
+                            </div>
+                            <?php if (isset($attendanceDashboardWarnings['recorded_status'])): ?>
+                                <p class="dashboard-empty-state error-state" role="status"><?php echo escape($attendanceDashboardWarnings['recorded_status']); ?></p>
+                            <?php elseif ($attendanceFrequentAbsenceRows === []): ?>
+                                <p class="dashboard-empty-state">No explicitly marked absent records are available this school year.</p>
+                            <?php else: ?>
+                                <div class="table-shell dashboard-table-shell"><table class="records-table dashboard-ranking-table"><thead><tr><th>Learner</th><th>Grade</th><th>Section</th><th>Records</th><th>Last absence</th><th>Action</th></tr></thead><tbody>
+                                    <?php foreach ($attendanceFrequentAbsenceRows as $rank => $learner): ?>
+                                        <tr><td><span class="rank-number"><?php echo escape((string) ($rank + 1)); ?></span><?php echo escape($learner['learner_name']); ?></td><td><?php echo escape($learner['grade_level']); ?></td><td><?php echo escape($learner['section_name']); ?></td><td><?php echo escape((string) $learner['record_count']); ?></td><td><?php echo escape(format_report_date((string) $learner['last_recorded_date'])); ?></td><td><a class="table-inline-link" href="<?php echo escape(route_url('admin.php?module=learner_management&edit_learner_id=' . (int) $learner['learner_id'])); ?>">View record</a></td></tr>
+                                    <?php endforeach; ?>
+                                </tbody></table></div>
+                            <?php endif; ?>
+                        </article>
+
+                        <article class="admin-module-card analytics-card dashboard-chart-card">
+                            <div class="panel-heading compact-heading">
+                                <h2>Frequently Late Learners</h2>
+                                <p>Top learners with explicitly saved L-status records this school year.</p>
+                            </div>
+                            <?php if (isset($attendanceDashboardWarnings['recorded_status'])): ?>
+                                <p class="dashboard-empty-state error-state" role="status"><?php echo escape($attendanceDashboardWarnings['recorded_status']); ?></p>
+                            <?php elseif ($attendanceFrequentLateRows === []): ?>
+                                <p class="dashboard-empty-state">No explicitly marked late records are available this school year.</p>
+                            <?php else: ?>
+                                <div class="table-shell dashboard-table-shell"><table class="records-table dashboard-ranking-table"><thead><tr><th>Learner</th><th>Grade</th><th>Section</th><th>Records</th><th>Last late</th><th>Action</th></tr></thead><tbody>
+                                    <?php foreach ($attendanceFrequentLateRows as $rank => $learner): ?>
+                                        <tr><td><span class="rank-number"><?php echo escape((string) ($rank + 1)); ?></span><?php echo escape($learner['learner_name']); ?></td><td><?php echo escape($learner['grade_level']); ?></td><td><?php echo escape($learner['section_name']); ?></td><td><?php echo escape((string) $learner['record_count']); ?></td><td><?php echo escape(format_report_date((string) $learner['last_recorded_date'])); ?></td><td><a class="table-inline-link" href="<?php echo escape(route_url('admin.php?module=learner_management&edit_learner_id=' . (int) $learner['learner_id'])); ?>">View record</a></td></tr>
+                                    <?php endforeach; ?>
+                                </tbody></table></div>
+                            <?php endif; ?>
+                        </article>
+                    </section>
+
+                    <script type="application/json" id="attendance-dashboard-chart-data"><?php echo json_encode($attendanceDashboardChartData, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?: '{}'; ?></script>
 
                     <section>
                         <article class="admin-module-card">
@@ -1097,6 +1407,7 @@ foreach ($attendanceGradeRows as $row) {
 
                         <form method="get" class="learner-filter-grid">
                             <input type="hidden" name="module" value="learner_management">
+                            <input type="hidden" name="per_page" value="<?php echo escape((string) $learnerPageSize); ?>">
 
                             <div>
                                 <label for="keyword">Search</label>
@@ -1141,8 +1452,28 @@ foreach ($attendanceGradeRows as $row) {
                             </div>
                         </form>
 
-                        <div class="table-shell">
-                            <table class="records-table learner-table">
+                        <?php if ($learnerListError !== null): ?>
+                            <p class="alert error" role="alert"><?php echo escape($learnerListError); ?></p>
+                        <?php endif; ?>
+
+                        <div class="learner-list-toolbar">
+                            <p class="learner-list-range">Showing <?php echo escape((string) $learnerListStart); ?>-<?php echo escape((string) $learnerListEnd); ?> of <?php echo escape((string) $learnerTotal); ?> learners</p>
+                            <form method="get" class="learner-page-size-form">
+                                <input type="hidden" name="module" value="learner_management">
+                                <?php foreach ($learnerFilters as $filterName => $filterValue): ?>
+                                    <input type="hidden" name="<?php echo escape($filterName); ?>" value="<?php echo escape($filterValue); ?>">
+                                <?php endforeach; ?>
+                                <label for="learner-page-size">Rows per page</label>
+                                <select id="learner-page-size" name="per_page" onchange="this.form.submit()">
+                                    <?php foreach ($learnerPageSizeOptions as $pageSizeOption): ?>
+                                        <option value="<?php echo escape((string) $pageSizeOption); ?>"<?php echo $learnerPageSize === $pageSizeOption ? ' selected' : ''; ?>><?php echo escape((string) $pageSizeOption); ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </form>
+                        </div>
+
+                        <div class="table-shell learner-list-table-shell">
+                            <table class="records-table learner-table learner-list-table">
                                 <thead>
                                     <tr>
                                         <th>Learner No.</th>
@@ -1167,29 +1498,29 @@ foreach ($attendanceGradeRows as $row) {
                                     <?php else: ?>
                                         <?php foreach ($learnerRows as $learner): ?>
                                             <tr>
-                                                <td><?php echo escape($learner['learner_number']); ?></td>
-                                                <td><?php echo escape($learner['lrn']); ?></td>
-                                                <td>
+                                                <td data-label="Learner No."><?php echo escape($learner['learner_number']); ?></td>
+                                                <td data-label="LRN"><?php echo escape($learner['lrn']); ?></td>
+                                                <td data-label="Name">
                                                     <a href="<?php echo escape(route_url('admin.php?module=learner_management&edit_learner_id=' . $learner['id'])); ?>" class="table-inline-link">
                                                         <?php echo escape(trim($learner['last_name'] . ', ' . $learner['first_name'] . ' ' . $learner['middle_name'])); ?>
                                                     </a>
                                                 </td>
-                                                <td><?php echo escape($learner['birthdate'] !== null && $learner['birthdate'] !== '' ? $learner['birthdate'] : '-'); ?></td>
-                                                <td><?php $rowAge = learner_age_for_school_year($learner['birthdate'] ?? null, $learnerSchoolYear); echo escape($rowAge !== null ? (string) $rowAge : '-'); ?></td>
-                                                <td><?php echo escape(trim((string) ($learner['mother_tongue'] ?? '')) !== '' ? (string) $learner['mother_tongue'] : '-'); ?></td>
-                                                <td><?php echo escape(trim((string) ($learner['religion'] ?? '')) !== '' ? (string) $learner['religion'] : '-'); ?></td>
-                                                <td><?php echo (int) ($learner['has_disability'] ?? 0) === 1 ? escape(ucfirst((string) $learner['disability_basis']) . ': ' . $learner['disability_type']) : 'No'; ?></td>
-                                                <td><?php echo escape($learner['grade_level'] ?? '-'); ?></td>
-                                                <td><?php echo escape($learner['section_name'] ?? '-'); ?></td>
-                                                <td><?php echo escape(ucfirst($learner['current_status'])); ?></td>
-                                                <td>
+                                                <td data-label="Birthdate"><?php echo escape($learner['birthdate'] !== null && $learner['birthdate'] !== '' ? $learner['birthdate'] : '-'); ?></td>
+                                                <td data-label="Age"><?php $rowAge = learner_age_for_school_year($learner['birthdate'] ?? null, $learnerSchoolYear); echo escape($rowAge !== null ? (string) $rowAge : '-'); ?></td>
+                                                <td data-label="Mother Tongue"><?php echo escape(trim((string) ($learner['mother_tongue'] ?? '')) !== '' ? (string) $learner['mother_tongue'] : '-'); ?></td>
+                                                <td data-label="Religion"><?php echo escape(trim((string) ($learner['religion'] ?? '')) !== '' ? (string) $learner['religion'] : '-'); ?></td>
+                                                <td data-label="Disability"><?php echo (int) ($learner['has_disability'] ?? 0) === 1 ? escape(ucfirst((string) $learner['disability_basis']) . ': ' . $learner['disability_type']) : 'No'; ?></td>
+                                                <td data-label="Grade"><?php echo escape($learner['grade_level'] ?? '-'); ?></td>
+                                                <td data-label="Section"><?php echo escape($learner['section_name'] ?? '-'); ?></td>
+                                                <td data-label="Status"><?php echo escape(ucfirst($learner['current_status'])); ?></td>
+                                                <td data-label="Actions">
                                                     <div class="table-actions">
-                                                        <a href="<?php echo escape(route_url('admin.php?module=learner_management&edit_learner_id=' . $learner['id'])); ?>" class="secondary-link small-link">Edit</a>
+                                                        <a href="<?php echo escape(route_url('admin.php?module=learner_management&edit_learner_id=' . $learner['id'])); ?>" class="secondary-link small-link icon-only-action" title="Edit learner" aria-label="Edit learner"><i class="fa fa-pencil" aria-hidden="true"></i><span class="sr-only">Edit learner</span></a>
                                                         <form method="post" class="inline-form" onsubmit="return confirm('Delete this learner?');">
                                                             <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                                                             <input type="hidden" name="form_action" value="delete_learner">
                                                             <input type="hidden" name="learner_id" value="<?php echo escape((string) $learner['id']); ?>">
-                                                            <button type="submit" class="danger-button">Delete</button>
+                                                            <button type="submit" class="danger-button icon-only-action" title="Delete learner" aria-label="Delete learner"><i class="fa fa-trash-o" aria-hidden="true"></i><span class="sr-only">Delete learner</span></button>
                                                         </form>
                                                     </div>
                                                 </td>
@@ -1199,6 +1530,22 @@ foreach ($attendanceGradeRows as $row) {
                                 </tbody>
                             </table>
                         </div>
+
+                        <?php if ($learnerTotalPages > 1): ?>
+                            <nav class="learner-pagination" aria-label="Learner list pages">
+                                <?php if ($learnerPage > 1): ?>
+                                    <a class="secondary-link small-link" rel="prev" href="<?php echo escape(admin_learner_page_url($learnerPage - 1, $learnerPageSize, $learnerFilters)); ?>">Previous</a>
+                                <?php else: ?>
+                                    <span class="secondary-link small-link pagination-disabled" aria-disabled="true">Previous</span>
+                                <?php endif; ?>
+                                <span class="learner-page-indicator">Page <?php echo escape((string) $learnerPage); ?> of <?php echo escape((string) $learnerTotalPages); ?></span>
+                                <?php if ($learnerPage < $learnerTotalPages): ?>
+                                    <a class="secondary-link small-link" rel="next" href="<?php echo escape(admin_learner_page_url($learnerPage + 1, $learnerPageSize, $learnerFilters)); ?>">Next</a>
+                                <?php else: ?>
+                                    <span class="secondary-link small-link pagination-disabled" aria-disabled="true">Next</span>
+                                <?php endif; ?>
+                            </nav>
+                        <?php endif; ?>
                     </section>
                 <?php elseif ($module === 'sections_management'): ?>
                     <header class="admin-page-header">
@@ -1304,12 +1651,12 @@ foreach ($attendanceGradeRows as $row) {
                                                 <td><?php echo escape((string) $section['learner_count']); ?></td>
                                                 <td>
                                                     <div class="table-actions">
-                                                        <a href="<?php echo escape(route_url('admin.php?module=sections_management&edit_section_id=' . $section['id'])); ?>" class="secondary-link small-link">Edit</a>
+                                                        <a href="<?php echo escape(route_url('admin.php?module=sections_management&edit_section_id=' . $section['id'])); ?>" class="secondary-link small-link icon-only-action" title="Edit section" aria-label="Edit section"><i class="fa fa-pencil" aria-hidden="true"></i><span class="sr-only">Edit section</span></a>
                                                         <form method="post" class="inline-form" onsubmit="return confirm('Delete this section?');">
                                                             <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                                                             <input type="hidden" name="form_action" value="delete_section">
                                                             <input type="hidden" name="section_id" value="<?php echo escape((string) $section['id']); ?>">
-                                                            <button type="submit" class="danger-button">Delete</button>
+                                                            <button type="submit" class="danger-button icon-only-action" title="Delete section" aria-label="Delete section"><i class="fa fa-trash-o" aria-hidden="true"></i><span class="sr-only">Delete section</span></button>
                                                         </form>
                                                     </div>
                                                 </td>
@@ -1449,12 +1796,12 @@ foreach ($attendanceGradeRows as $row) {
                                                 <td><?php echo escape($teacher['school_year_label']); ?></td>
                                                 <td>
                                                     <div class="table-actions">
-                                                        <a href="<?php echo escape(route_url('admin.php?module=teacher_management&edit_teacher_id=' . $teacher['id'])); ?>" class="secondary-link small-link">Edit</a>
+                                                        <a href="<?php echo escape(route_url('admin.php?module=teacher_management&edit_teacher_id=' . $teacher['id'])); ?>" class="secondary-link small-link icon-only-action" title="Edit teacher" aria-label="Edit teacher"><i class="fa fa-pencil" aria-hidden="true"></i><span class="sr-only">Edit teacher</span></a>
                                                         <form method="post" class="inline-form" onsubmit="return confirm('Delete this teacher account?');">
                                                             <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                                                             <input type="hidden" name="form_action" value="delete_teacher">
                                                             <input type="hidden" name="teacher_id" value="<?php echo escape((string) $teacher['id']); ?>">
-                                                            <button type="submit" class="danger-button">Delete</button>
+                                                            <button type="submit" class="danger-button icon-only-action" title="Delete teacher" aria-label="Delete teacher"><i class="fa fa-trash-o" aria-hidden="true"></i><span class="sr-only">Delete teacher</span></button>
                                                         </form>
                                                     </div>
                                                 </td>
@@ -1887,12 +2234,12 @@ foreach ($attendanceGradeRows as $row) {
                                                 <td><?php echo escape($announcement['published_at'] !== null ? date('M j, Y', strtotime($announcement['published_at'])) : '-'); ?></td>
                                                 <td>
                                                     <div class="table-actions">
-                                                        <a href="<?php echo escape(route_url('admin.php?module=announcements&edit_announcement_id=' . $announcement['id'])); ?>" class="secondary-link small-link">Edit</a>
+                                                        <a href="<?php echo escape(route_url('admin.php?module=announcements&edit_announcement_id=' . $announcement['id'])); ?>" class="secondary-link small-link icon-only-action" title="Edit announcement" aria-label="Edit announcement"><i class="fa fa-pencil" aria-hidden="true"></i><span class="sr-only">Edit announcement</span></a>
                                                         <form method="post" class="inline-form" onsubmit="return confirm('Delete this announcement?');">
                                                             <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                                                             <input type="hidden" name="form_action" value="delete_announcement">
                                                             <input type="hidden" name="announcement_id" value="<?php echo escape((string) $announcement['id']); ?>">
-                                                            <button type="submit" class="danger-button">Delete</button>
+                                                            <button type="submit" class="danger-button icon-only-action" title="Delete announcement" aria-label="Delete announcement"><i class="fa fa-trash-o" aria-hidden="true"></i><span class="sr-only">Delete announcement</span></button>
                                                         </form>
                                                     </div>
                                                 </td>
@@ -2136,6 +2483,9 @@ foreach ($attendanceGradeRows as $row) {
             </section>
         </section>
     </main>
+    <?php if ($module === 'attendance_module'): ?>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
+    <?php endif; ?>
     <script src="<?php echo escape(asset_url('assets/js/admin.js')); ?>"></script>
 </body>
 </html>

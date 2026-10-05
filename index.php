@@ -29,16 +29,19 @@ try {
 
 $errorMessage = null;
 $submittedIdentity = '';
+$csrfToken = csrf_token();
 
 if (is_post() && $databaseConnectionOk) {
     $submittedIdentity = trim((string)($_POST['identity'] ?? ''));
     $password = (string)($_POST['password'] ?? '');
 
-    if (attempt_login($submittedIdentity, $password)) {
+    if (!verify_csrf_token($_POST['csrf_token'] ?? null)) {
+        $errorMessage = 'Invalid login session token. Please refresh the page and try again.';
+    } elseif (attempt_login($submittedIdentity, $password)) {
         redirect(dashboard_path_for_role(current_user()['role'] ?? null));
+    } else {
+        $errorMessage = 'Invalid username or password.';
     }
-
-    $errorMessage = 'Invalid username or password.';
 }
 ?>
 <!DOCTYPE html>
@@ -46,109 +49,83 @@ if (is_post() && $databaseConnectionOk) {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title><?= escape(APP_NAME) ?></title>
+<meta name="theme-color" content="#f7f8f6">
+<title><?= escape(APP_NAME) ?> | Sign in</title>
 
-<link rel="stylesheet" href="<?= escape(asset_url('vendor/bootstrap/css/bootstrap.min.css')) ?>">
 <link rel="stylesheet" href="<?= escape(asset_url('loginassets/fonts/font-awesome-4.7.0/css/font-awesome.min.css')) ?>">
-<link rel="stylesheet" href="<?= escape(asset_url('loginassets/vendor/animate/animate.css')) ?>">
-<link rel="stylesheet" href="<?= escape(asset_url('loginassets/vendor/css-hamburgers/hamburgers.min.css')) ?>">
-<link rel="stylesheet" href="<?= escape(asset_url('loginassets/vendor/select2/select2.min.css')) ?>">
-<link rel="stylesheet" href="<?= escape(asset_url('loginassets/css/util.css')) ?>">
-<link rel="stylesheet" href="<?= escape(asset_url('loginassets/css/main.css')) ?>">
-
-<style>
-.auth-logo{width:180px;margin-bottom:20px}
-.project-title{font-size:48px;font-weight:700;color:#2E2A47}
-.project-subtitle{font-size:17px;color:#666;margin-bottom:25px}
-.about-card{margin-top:25px;padding:20px;background:#fafafa;border:1px solid #ddd;border-radius:12px}
-.about-card h4{margin-bottom:10px}
-.about-card p{font-size:14px;line-height:1.7;color:#555}
-.login-subtitle{text-align:center;margin-top:-20px;margin-bottom:30px;color:#666}
-.alert.error{background:#fdecea;border:1px solid #f5c2c7;color:#842029;padding:10px;border-radius:6px;margin-bottom:15px}
-.forgot-link{display:block;text-align:center;margin-top:20px}
-</style>
+<link rel="stylesheet" href="<?= escape(asset_url('assets/css/login.css')) ?>">
 </head>
 <body>
 
-<div class="limiter">
-<div class="container-login100">
-<div class="wrap-login100">
+<main class="login-screen">
+<section class="login-main" aria-labelledby="login-title">
+<div class="login-content">
+<a class="wordmark" href="<?= escape(route_url('index.php')) ?>" aria-label="ProjectPulse home">
+<span class="wordmark-project">Project</span><span class="wordmark-pulse">Pulse</span>
+</a>
 
-<div class="login100-pic js-tilt" data-tilt>
-<img src="<?= escape(asset_url('assets/images/pulselogo.png')) ?>" class="auth-logo" alt="Project PULSE">
+<form method="post" class="login-form">
+<input type="hidden" name="csrf_token" value="<?= escape($csrfToken) ?>">
 
-<h1 class="project-title">Project LINK</h1>
-
-<p class="project-subtitle">
-Learner Information Network and Knowledgebase<br>
-</p>
-
-<div class="about-card">
-<h4>About Project LINK</h4>
-<p>
-Project LINK is an integrated school information system that centralizes learner records,
-attendance, academic performance, health monitoring, and stakeholder engagement through
-secure role-based access for administrators, teachers, parents, guidance counselors,
-and health coordinators.
-</p>
-</div>
-
-</div>
-
-<form method="post" class="login100-form validate-form">
-
-<span class="login100-form-title">Login to Your Account</span>
-
-<p class="login-subtitle">Enter your credentials to access the portal.</p>
+<h1 id="login-title">Welcome back</h1>
+<p class="form-intro">Sign in to access your account.</p>
 
 <?php if ($errorMessage): ?>
-<div class="alert error"><?= escape($errorMessage) ?></div>
+<div class="login-alert" role="alert"><?= escape($errorMessage) ?></div>
 <?php endif; ?>
 
 <?php if ($databaseWarning): ?>
-<div class="alert error"><?= escape($databaseWarning) ?></div>
+<div class="login-alert" role="alert"><?= escape($databaseWarning) ?></div>
 <?php endif; ?>
 
-<div class="wrap-input100">
-<input class="input100" type="text" id="identity" name="identity"
-placeholder="Username or Email"
-value="<?= escape($submittedIdentity) ?>" required>
-<span class="focus-input100"></span>
-<span class="symbol-input100"><i class="fa fa-user"></i></span>
+<label class="field-label" for="identity">Username or email</label>
+<div class="login-field">
+<i class="fa fa-user field-icon" aria-hidden="true"></i>
+<input type="text" id="identity" name="identity" autocomplete="username"
+placeholder="Enter your username or email" value="<?= escape($submittedIdentity) ?>" required>
 </div>
 
-<div class="wrap-input100">
-<input class="input100" type="password" id="password" name="password"
-placeholder="Password" required>
-<span class="focus-input100"></span>
-<span class="symbol-input100"><i class="fa fa-lock"></i></span>
-</div>
-
-<div class="container-login100-form-btn">
-<button class="login100-form-btn" type="submit" <?= !$databaseConnectionOk ? 'disabled' : '' ?>>
-Log In
+<label class="field-label" for="password">Password</label>
+<div class="login-field">
+<i class="fa fa-lock field-icon" aria-hidden="true"></i>
+<input type="password" id="password" name="password" autocomplete="current-password"
+placeholder="Enter your password" required>
+<button class="password-toggle" type="button" aria-label="Show password" aria-pressed="false">
+<i class="fa fa-eye-slash" aria-hidden="true"></i>
 </button>
 </div>
 
-<div class="text-center p-t-12">
-<a class="txt2" href="<?= escape(route_url('forgot_password.php')) ?>">
-Forgot Password?
-</a>
-</div>
+<button class="login-button" type="submit" <?= !$databaseConnectionOk ? 'disabled' : '' ?>>
+<span>Log in</span><i class="fa fa-arrow-right" aria-hidden="true"></i>
+</button>
+
+<a class="forgot-link" href="<?= escape(route_url('forgot_password.php')) ?>">Forgot password? <span>Reset here</span></a>
 
 </form>
+</div>
+</section>
 
+<aside class="brand-panel" aria-label="ProjectPulse learner monitoring portal">
+<div class="brand-art">
+<img src="<?= escape(asset_url('assets/images/pulselogo.png')) ?>" alt="ProjectPulse monitoring portal logo">
+<p class="brand-tagline">Data. Insight. Engagement. Success.</p>
 </div>
-</div>
-</div>
+</aside>
 
-<script src="<?= escape(asset_url('loginassets/vendor/jquery/jquery-3.2.1.min.js')) ?>"></script>
-<script src="<?= escape(asset_url('loginassets/vendor/bootstrap/js/popper.js')) ?>"></script>
-<script src="<?= escape(asset_url('loginassets/vendor/bootstrap/js/bootstrap.min.js')) ?>"></script>
-<script src="<?= escape(asset_url('loginassets/vendor/select2/select2.min.js')) ?>"></script>
-<script src="<?= escape(asset_url('loginassets/vendor/tilt/tilt.jquery.min.js')) ?>"></script>
+<footer class="login-footer">&copy; <?= date('Y') ?> ProjectPulse <span aria-hidden="true">&middot;</span> Learner monitoring portal</footer>
+</main>
+
 <script>
-$('.js-tilt').tilt({scale:1.05});
+const passwordField = document.getElementById('password');
+const passwordToggle = document.querySelector('.password-toggle');
+
+passwordToggle.addEventListener('click', () => {
+    const isVisible = passwordField.type === 'text';
+    passwordField.type = isVisible ? 'password' : 'text';
+    passwordToggle.setAttribute('aria-pressed', String(!isVisible));
+    passwordToggle.setAttribute('aria-label', isVisible ? 'Show password' : 'Hide password');
+    passwordToggle.querySelector('i').className = isVisible ? 'fa fa-eye-slash' : 'fa fa-eye';
+});
 </script>
 
 </body>

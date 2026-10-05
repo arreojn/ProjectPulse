@@ -58,6 +58,13 @@ function redirect(string $path): void
 function start_session(): void
 {
     if (session_status() !== PHP_SESSION_ACTIVE) {
+        session_set_cookie_params([
+            'lifetime' => 0,
+            'path' => APP_BASE_PATH === '' ? '/' : APP_BASE_PATH,
+            'secure' => projectpulse_detect_scheme() === 'https',
+            'httponly' => true,
+            'samesite' => 'Lax',
+        ]);
         session_start();
     }
 }
