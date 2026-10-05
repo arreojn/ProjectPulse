@@ -1,156 +1,81 @@
 <?php
-$response = "";
-$status = "";
 
-if ($_SERVER["REQUEST_METHOD"] === "POST") {
+declare(strict_types=1);
 
-    $recipient = trim($_POST['recipient']);
-    $message = trim($_POST['message']);
+require_once __DIR__ . '/config/config.php';
+require_once __DIR__ . '/app/helpers.php';
+require_once __DIR__ . '/config/database.php';
+require_once __DIR__ . '/app/auth.php';
+require_once __DIR__ . '/app/sms_settings.php';
 
-    if (!empty($recipient) && !empty($message)) {
+require_roles(['admin']);
 
-        $ch = curl_init('https://smsapiph.onrender.com/api/v1/send/sms');
+$response = '';
+$status = '';
+$settings = sms_settings();
 
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'x-api-key: sk-2b10zgr5jxlcyhhuovkxglnyo5acopzq',
-            'Content-Type: application/json'
-        ]);
-
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode([
-            'recipient' => $recipient,
-            'message'   => $message
-        ]));
-
-        $response = curl_exec($ch);
-
-        if (curl_errno($ch)) {
-            $status = "cURL Error: " . curl_error($ch);
-        } else {
-            $status = "Request sent successfully.";
-        }
-
-        curl_close($ch);
-
+if (is_post()) {
+    if (!verify_csrf_token($_POST['csrf_token'] ?? null)) {
+        $status = 'Invalid form token. Please refresh the page.';
     } else {
-        $status = "Please complete all fields.";
+        $recipient = trim((string) ($_POST['recipient'] ?? ''));
+        $message = trim((string) ($_POST['message'] ?? ''));
+
+        if ($recipient === '' || $message === '') {
+            $status = 'Please complete all fields.';
+        } elseif ($settings['endpoint'] === '' || $settings['api_key'] === '') {
+            $status = 'Configure the SMS endpoint and API key in Admin Settings first.';
+        } else {
+            $ch = curl_init($settings['endpoint']);
+            curl_setopt_array($ch, [
+                CURLOPT_POST => true,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_CONNECTTIMEOUT => 5,
+                CURLOPT_TIMEOUT => 20,
+                CURLOPT_HTTPHEADER => [
+                    'x-api-key: ' . $settings['api_key'],
+                    'Content-Type: application/json',
+                ],
+                CURLOPT_POSTFIELDS => json_encode([
+                    'recipient' => $recipient,
+                    'message' => $message,
+                ], JSON_THROW_ON_ERROR),
+            ]);
+
+            $rawResponse = curl_exec($ch);
+            $httpStatus = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+            $curlError = curl_error($ch);
+            curl_close($ch);
+
+            if ($rawResponse === false || $curlError !== '') {
+                $status = 'SMS request failed. Please check the provider settings.';
+            } else {
+                $response = (string) $rawResponse;
+                $status = $httpStatus >= 200 && $httpStatus < 300
+                    ? 'Request sent successfully.'
+                    : 'The SMS provider rejected the request.';
+            }
+        }
     }
 }
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <title>SMS API Test</title>
-
-<style>
-body{
-    font-family:Arial,Helvetica,sans-serif;
-    background:#f5f5f5;
-}
-
-.container{
-    width:600px;
-    margin:40px auto;
-    background:#fff;
-    padding:20px;
-    border-radius:8px;
-    box-shadow:0 0 10px rgba(0,0,0,.1);
-}
-
-label{
-    display:block;
-    margin-top:15px;
-    font-weight:bold;
-}
-
-input, textarea{
-    width:100%;
-    padding:10px;
-    margin-top:5px;
-    box-sizing:border-box;
-}
-
-textarea{
-    height:150px;
-    resize:vertical;
-}
-
-button{
-    margin-top:20px;
-    padding:12px 25px;
-    background:#007bff;
-    color:white;
-    border:none;
-    border-radius:5px;
-    cursor:pointer;
-}
-
-button:hover{
-    background:#0056b3;
-}
-
-.success{
-    color:green;
-    margin-top:20px;
-}
-
-.response{
-    margin-top:20px;
-    background:#f4f4f4;
-    padding:15px;
-    border-radius:5px;
-    white-space:pre-wrap;
-}
-</style>
-
 </head>
 <body>
-
-<div class="container">
-
-<h2>SMS API Test</h2>
-
+<main>
+<h1>SMS API Test</h1>
+<?php if ($status !== ''): ?><p><?php echo escape($status); ?></p><?php endif; ?>
 <form method="post">
-
-<label>Recipient Number</label>
-<input
-    type="text"
-    name="recipient"
-    placeholder="+639168556960"
-    value="<?php echo isset($_POST['recipient']) ? htmlspecialchars($_POST['recipient']) : ''; ?>"
-    required>
-
-<label>Message</label>
-<textarea
-    name="message"
-    placeholder="Enter your message here..."
-    required><?php echo isset($_POST['message']) ? htmlspecialchars($_POST['message']) : ''; ?></textarea>
-
+<input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
+<label>Recipient Number <input type="text" name="recipient" required></label>
+<label>Message <textarea name="message" required></textarea></label>
 <button type="submit">Send SMS</button>
-
 </form>
-
-<?php if($status!=""): ?>
-<div class="success">
-    <?php echo htmlspecialchars($status); ?>
-</div>
-<?php endif; ?>
-
-<?php if($response!=""): ?>
-<h3>API Response</h3>
-<div class="response">
-<?php
-echo htmlspecialchars(
-    json_encode(json_decode($response, true), JSON_PRETTY_PRINT)
-);
-?>
-</div>
-<?php endif; ?>
-
-</div>
-
+<?php if ($response !== ''): ?><pre><?php echo escape($response); ?></pre><?php endif; ?>
+</main>
 </body>
 </html>

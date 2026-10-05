@@ -27,14 +27,14 @@ function school_logo_url(): string
 function learner_photo_url(?string $lrn, string $defaultAsset = 'assets/images/learners/default.jpg'): string
 {
     $normalizedLrn = preg_replace('/\D+/', '', trim((string) $lrn)) ?? '';
-    $photoDirectory = __DIR__ . '/../assets/images/learners/';
+    $photoDirectory = learner_photo_storage_directory();
 
     if ($normalizedLrn !== '') {
         foreach (['jpg', 'jpeg', 'png', 'webp'] as $extension) {
             $candidatePath = $photoDirectory . $normalizedLrn . '.' . $extension;
 
             if (is_file($candidatePath)) {
-                return asset_url('assets/images/learners/' . $normalizedLrn . '.' . $extension);
+                return route_url('learner_photo.php?lrn=' . rawurlencode($normalizedLrn));
             }
         }
     }
@@ -42,6 +42,16 @@ function learner_photo_url(?string $lrn, string $defaultAsset = 'assets/images/l
     $defaultPath = __DIR__ . '/../' . ltrim($defaultAsset, '/');
 
     return asset_url(is_file($defaultPath) ? $defaultAsset : 'assets/images/learners/logorotate.gif');
+}
+
+function learner_photo_storage_directory(): string
+{
+    $configuredPath = trim((string) (getenv('PROJECTPULSE_FACE_STORAGE') ?: ''));
+    $basePath = $configuredPath !== ''
+        ? $configuredPath
+        : dirname(__DIR__, 3) . DIRECTORY_SEPARATOR . 'ProjectPulsePrivate' . DIRECTORY_SEPARATOR . 'learner_faces';
+
+    return rtrim($basePath, "\\/") . DIRECTORY_SEPARATOR;
 }
 
 function route_url(string $path): string

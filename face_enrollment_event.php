@@ -6,6 +6,7 @@ require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/app/helpers.php';
 require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/app/auth.php';
+require_once __DIR__ . '/app/teachers.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 
@@ -33,12 +34,24 @@ try {
         throw new RuntimeException('A valid 12-digit LRN is required.', 422);
     }
 
+    if (($user['role'] ?? '') === 'teacher' && teacher_accessible_learner_by_lrn((int) $user['id'], $lrn) === null) {
+        throw new RuntimeException('The selected learner is not part of your assigned section.', 403);
+    }
+
     if (empty($imageDataUrl) || !str_starts_with($imageDataUrl, 'data:image/jpeg;base64,')) {
         throw new RuntimeException('No valid image data received.', 422);
     }
 
-    $imgData = base64_decode(preg_replace('#^data:image/jpeg;base64,#i', '', $imageDataUrl));
-    $filePath = realpath(__DIR__ . '/assets/images/learners/') . '/' . $lrn . '.jpg';
+    $imgData = base64_decode(preg_replace('#^data:image/jpeg;base64,#i', '', $imageDataUrl), true);
+    if ($imgData === false || strlen($imgData) > 5 * 1024 * 1024 || @getimagesizefromstring($imgData) === false) {
+        throw new RuntimeException('The captured image is invalid or too large.', 422);
+    }
+
+    $storageDirectory = learner_photo_storage_directory();
+    if (!is_dir($storageDirectory) && !mkdir($storageDirectory, 0700, true) && !is_dir($storageDirectory)) {
+        throw new RuntimeException('The learner photo storage directory is unavailable.');
+    }
+    $filePath = $storageDirectory . $lrn . '.jpg';
 
     if (file_put_contents($filePath, $imgData) === false) {
         throw new RuntimeException('Failed to save learner photo on the server.');

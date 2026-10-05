@@ -1,0 +1,17 @@
+# Runtime secrets and local credentials
+.env
+.env.*
+!.env.example
+cookies*.txt
+*_cookies.txt
+
+# Learner biometric and generated recognition data
+assets/images/learners/*
+ai_scanner/recognizer.yml
+ai_scanner/labels.json
+ai_scanner/__pycache__/
+
+# Local logs and temporary uploads
+*.log
+uploads/
+tmp/

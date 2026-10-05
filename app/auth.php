@@ -112,6 +112,8 @@ function auth_bootstrap(): void
     auth_ensure_column('users', 'first_name', 'VARCHAR(100) NULL AFTER email');
     auth_ensure_column('users', 'middle_name', 'VARCHAR(100) NULL AFTER first_name');
     auth_ensure_column('users', 'last_name', 'VARCHAR(100) NULL AFTER middle_name');
+    auth_ensure_column('users', 'must_change_password', 'TINYINT(1) NOT NULL DEFAULT 0 AFTER is_active');
+    auth_ensure_column('users', 'auth_version', 'INT UNSIGNED NOT NULL DEFAULT 1 AFTER must_change_password');
 
     database()->exec(
         'CREATE TABLE IF NOT EXISTS auth_login_logs (
@@ -370,7 +372,7 @@ function attempt_login(string $identity, string $password): bool
     }
 
     $statement = database()->prepare(
-        'SELECT id, username, email, first_name, middle_name, last_name, password_hash, role
+        'SELECT id, username, email, first_name, middle_name, last_name, password_hash, role, must_change_password, auth_version
          FROM users
          WHERE is_active = 1
            AND (username = :identity OR email = :identity)
@@ -395,6 +397,8 @@ function attempt_login(string $identity, string $password): bool
         'middle_name' => $user['middle_name'],
         'last_name' => $user['last_name'],
         'role' => $user['role'],
+        'must_change_password' => (int) ($user['must_change_password'] ?? 0),
+        'auth_version' => (int) ($user['auth_version'] ?? 1),
     ];
     auth_log_login_attempt($identity, $user, true);
 
@@ -433,13 +437,20 @@ function auth_change_password(int $userId, string $currentPassword, string $newP
 
     $updateStatement = database()->prepare(
         'UPDATE users
-         SET password_hash = :password_hash
+         SET password_hash = :password_hash,
+             must_change_password = 0,
+             auth_version = auth_version + 1
          WHERE id = :id'
     );
     $updateStatement->execute([
         'password_hash' => password_hash($newPassword, PASSWORD_DEFAULT),
         'id' => $userId,
     ]);
+
+    if (isset($_SESSION['auth_user']) && is_array($_SESSION['auth_user'])) {
+        $_SESSION['auth_user']['must_change_password'] = 0;
+        $_SESSION['auth_user']['auth_version'] = (int) ($_SESSION['auth_user']['auth_version'] ?? 1) + 1;
+    }
 }
 
 function current_user(): ?array
@@ -447,9 +458,39 @@ function current_user(): ?array
     auth_bootstrap();
     start_session();
 
-    if (!isset($_SESSION['auth_user']) || !is_array($_SESSION['auth_user'])) {
+    if (!isset($_SESSION['auth_user']['id']) || !is_numeric($_SESSION['auth_user']['id'])) {
         return null;
     }
+
+    $statement = database()->prepare(
+        'SELECT id, username, email, first_name, middle_name, last_name, role, is_active, must_change_password, auth_version
+         FROM users
+         WHERE id = :id
+         LIMIT 1'
+    );
+    $statement->execute(['id' => (int) $_SESSION['auth_user']['id']]);
+    $user = $statement->fetch();
+
+    if (
+        $user === false
+        || (int) $user['is_active'] !== 1
+        || (int) ($user['auth_version'] ?? 1) !== (int) ($_SESSION['auth_user']['auth_version'] ?? 1)
+    ) {
+        logout_user();
+        return null;
+    }
+
+    $_SESSION['auth_user'] = [
+        'id' => (int) $user['id'],
+        'username' => $user['username'],
+        'email' => $user['email'],
+        'first_name' => $user['first_name'],
+        'middle_name' => $user['middle_name'],
+        'last_name' => $user['last_name'],
+        'role' => $user['role'],
+        'must_change_password' => (int) $user['must_change_password'],
+        'auth_version' => (int) $user['auth_version'],
+    ];
 
     return $_SESSION['auth_user'];
 }
@@ -473,6 +514,11 @@ function require_login(): array
 
     if ($user === null) {
         redirect('index.php');
+    }
+
+    $currentScript = basename((string) ($_SERVER['SCRIPT_NAME'] ?? ''));
+    if ((int) ($user['must_change_password'] ?? 0) === 1 && $currentScript !== 'change_password.php') {
+        redirect('change_password.php');
     }
 
     return $user;

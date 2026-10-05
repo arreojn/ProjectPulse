@@ -215,7 +215,7 @@ theme_settings_bootstrap();
             attendanceEventUrl: '<?php echo escape(route_url('api/attendance_event.php')); ?>',
             attendanceLogsUrl: '<?php echo escape(route_url('api/attendance_logs.php')); ?>',
             scanModeUpdateUrl: '<?php echo escape(route_url('api/attendance_mode.php')); ?>',
-            learnerPhotoBaseUrl: '<?php echo escape(asset_url('assets/images/learners/')); ?>',
+            learnerPhotoBaseUrl: '<?php echo escape(route_url('learner_photo.php?lrn=')); ?>',
             defaultLearnerPhotoUrl: '<?php echo escape(asset_url('assets/images/learners/logorotate.gif')); ?>',
             scanMode: {
                 key: '<?php echo escape($scanMode['key']); ?>',

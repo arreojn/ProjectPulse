@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/import_security.php';
+
 function parent_portal_bootstrap(): void
 {
     static $bootstrapped = false;
@@ -558,6 +560,7 @@ function parent_import_parse_csv_rows(string $path): array
         static fn ($value): string => strtolower(parent_import_clean_string((string) $value)),
         $header
     );
+    import_validate_headers($normalizedHeader, array_map('strtolower', parent_import_template_headers()));
 
     $rows = [];
 
@@ -569,6 +572,7 @@ function parent_import_parse_csv_rows(string $path): array
         }
 
         $rows[] = $item;
+        import_assert_row_limit(count($rows));
     }
 
     fclose($handle);
@@ -579,7 +583,7 @@ function parent_import_parse_csv_rows(string $path): array
 function parent_import_parse_excel_xml_rows(string $path): array
 {
     libxml_use_internal_errors(true);
-    $xml = simplexml_load_file($path);
+    $xml = simplexml_load_file($path, 'SimpleXMLElement', LIBXML_NONET | LIBXML_NOCDATA | LIBXML_NOBLANKS);
     libxml_clear_errors();
 
     if ($xml === false) {
@@ -619,6 +623,7 @@ function parent_import_parse_excel_xml_rows(string $path): array
                 static fn ($value): string => strtolower(parent_import_clean_string((string) $value)),
                 $values
             );
+            import_validate_headers($header, array_map('strtolower', parent_import_template_headers()));
             continue;
         }
 
@@ -629,6 +634,7 @@ function parent_import_parse_excel_xml_rows(string $path): array
         }
 
         $rows[] = $item;
+        import_assert_row_limit(count($rows));
     }
 
     return $rows;
@@ -636,11 +642,7 @@ function parent_import_parse_excel_xml_rows(string $path): array
 
 function parent_import_rows_from_file(array $file): array
 {
-    if (!isset($file['tmp_name']) || !is_uploaded_file($file['tmp_name'])) {
-        throw new RuntimeException('Choose a CSV or XLS parent account file to import.');
-    }
-
-    $extension = strtolower(pathinfo((string) ($file['name'] ?? ''), PATHINFO_EXTENSION));
+    $extension = import_validate_upload($file, ['csv', 'xls']);
 
     return match ($extension) {
         'csv' => parent_import_parse_csv_rows($file['tmp_name']),

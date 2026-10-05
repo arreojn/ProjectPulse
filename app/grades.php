@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/import_security.php';
+
 function grade_book_bootstrap(): void
 {
     static $bootstrapped = false;
@@ -223,6 +225,7 @@ function grade_parse_csv_rows(string $path): array
         static fn ($value): string => strtolower(grade_import_clean_string((string) $value)),
         $header
     );
+    import_validate_headers($normalizedHeader, array_map('strtolower', grade_template_headers()));
 
     $rows = [];
 
@@ -234,6 +237,7 @@ function grade_parse_csv_rows(string $path): array
         }
 
         $rows[] = $item;
+        import_assert_row_limit(count($rows));
     }
 
     fclose($handle);
@@ -244,7 +248,7 @@ function grade_parse_csv_rows(string $path): array
 function grade_parse_excel_xml_rows(string $path): array
 {
     libxml_use_internal_errors(true);
-    $xml = simplexml_load_file($path);
+    $xml = simplexml_load_file($path, 'SimpleXMLElement', LIBXML_NONET | LIBXML_NOCDATA | LIBXML_NOBLANKS);
     libxml_clear_errors();
 
     if ($xml === false) {
@@ -284,6 +288,7 @@ function grade_parse_excel_xml_rows(string $path): array
                 static fn ($value): string => strtolower(grade_import_clean_string((string) $value)),
                 $values
             );
+            import_validate_headers($header, array_map('strtolower', grade_template_headers()));
             continue;
         }
 
@@ -294,6 +299,7 @@ function grade_parse_excel_xml_rows(string $path): array
         }
 
         $rows[] = $item;
+        import_assert_row_limit(count($rows));
     }
 
     return $rows;
@@ -301,11 +307,7 @@ function grade_parse_excel_xml_rows(string $path): array
 
 function grade_import_rows_from_file(array $file): array
 {
-    if (!isset($file['tmp_name']) || !is_uploaded_file($file['tmp_name'])) {
-        throw new RuntimeException('Choose a CSV or XLS grade file to import.');
-    }
-
-    $extension = strtolower(pathinfo((string) ($file['name'] ?? ''), PATHINFO_EXTENSION));
+    $extension = import_validate_upload($file, ['csv', 'xls']);
 
     return match ($extension) {
         'csv' => grade_parse_csv_rows($file['tmp_name']),
@@ -323,11 +325,16 @@ function grade_teacher_enrollment_for_lrn(int $teacherUserId, string $lrn, strin
          FROM learner_enrollments le
          INNER JOIN learners l ON l.id = le.learner_id
          INNER JOIN school_years sy ON sy.id = le.school_year_id
+          INNER JOIN teacher_section_assignments tsa
+             ON tsa.section_id = le.section_id
+            AND tsa.school_year_id = le.school_year_id
          WHERE l.lrn = :lrn
            AND sy.label = :school_year
+            AND tsa.teacher_user_id = :teacher_user_id
          LIMIT 1'
     );
     $statement->execute([
+        'teacher_user_id' => $teacherUserId,
         'lrn' => $lrn,
         'school_year' => $schoolYear,
     ]);
@@ -423,51 +430,9 @@ function grade_import_file_for_teacher(int $teacherUserId, array $file): int
 
                     $enrollmentId = (int) $enrollment['learner_enrollment_id'];
                 } else {
-                    $learnerStatement = database()->prepare('SELECT id FROM learners WHERE lrn = :lrn LIMIT 1');
-                    $learnerStatement->execute(['lrn' => $payload['lrn']]);
-                    $learner = $learnerStatement->fetch();
-
-                    if ($learner === false) {
-                        throw new RuntimeException('Learner with LRN ' . $payload['lrn'] . ' was not found in the system.');
-                    }
-
-                    $schoolYearStatement = database()->prepare('SELECT id FROM school_years WHERE label = :label LIMIT 1');
-                    $schoolYearStatement->execute(['label' => $payload['school_year']]);
-                    $schoolYear = $schoolYearStatement->fetch();
-
-                    if ($schoolYear === false) {
-                        $yearParts = explode('-', $payload['school_year']);
-                        if (count($yearParts) !== 2 || !is_numeric($yearParts[0]) || !is_numeric($yearParts[1])) {
-                            throw new RuntimeException('School year label "' . $payload['school_year'] . '" is not in the expected YYYY-YYYY format.');
-                        }
-
-                        $insertSchoolYear = $pdo->prepare(
-                            'INSERT INTO school_years (label, start_date, end_date, is_current)
-                             VALUES (:label, :start_date, :end_date, :is_current)'
-                        );
-                        $insertSchoolYear->execute([
-                            'label' => $payload['school_year'],
-                            'start_date' => ((int) $yearParts[0]) . '-06-01',
-                            'end_date' => ((int) $yearParts[1]) . '-05-31',
-                            'is_current' => 0,
-                        ]);
-
-                        $schoolYear = ['id' => (int) $pdo->lastInsertId()];
-                    }
-
-                    $insertEnrollment = $pdo->prepare(
-                        'INSERT INTO learner_enrollments (learner_id, school_year_id, grade_level, enrollment_status, enrolled_at)
-                         VALUES (:learner_id, :school_year_id, :grade_level, :enrollment_status, :enrolled_at)'
+                    throw new RuntimeException(
+                        'LRN ' . $payload['lrn'] . ' is not enrolled in one of your assigned sections for school year ' . $payload['school_year'] . '.'
                     );
-                    $insertEnrollment->execute([
-                        'learner_id' => (int) $learner['id'],
-                        'school_year_id' => (int) $schoolYear['id'],
-                        'grade_level' => $payload['grade_level'],
-                        'enrollment_status' => 'completed',
-                        'enrolled_at' => date('Y-m-d'),
-                    ]);
-
-                    $enrollmentId = (int) $pdo->lastInsertId();
                 }
 
                 grade_save_subject_grade($enrollmentId, $payload);

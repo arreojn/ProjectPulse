@@ -97,11 +97,15 @@ function approve_password_reset(int $requestId, int $adminId): string
             throw new RuntimeException('Password reset request not found or already processed.');
         }
 
-        $newPassword = bin2hex(random_bytes(4));
+        $newPassword = rtrim(strtr(base64_encode(random_bytes(18)), '+/', '-_'), '=');
         $newPasswordHash = password_hash($newPassword, PASSWORD_DEFAULT);
 
         $updateUserStmt = $pdo->prepare(
-            'UPDATE users SET password_hash = :password_hash WHERE id = :user_id'
+            'UPDATE users
+             SET password_hash = :password_hash,
+                 must_change_password = 1,
+                 auth_version = auth_version + 1
+             WHERE id = :user_id'
         );
         $updateUserStmt->execute([
             'password_hash' => $newPasswordHash,

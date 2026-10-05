@@ -39,7 +39,7 @@ if ($mode === 'export') {
     ]);
 
     foreach (health_measurement_export_rows($filters) as $row) {
-        fputcsv($output, $row);
+        fputcsv($output, array_map('csv_safe_value', $row));
     }
 
     fclose($output);

@@ -39,7 +39,6 @@
         scanModeFeedback: document.getElementById('scan-mode-feedback'),
         learnerPhoto: document.getElementById('learner-photo'),
     };
-    const learnerPhotoExtensions = ['jpg', 'jpeg', 'png', 'webp'];
     const defaultLearnerPhotoUrl = window.ProjectPulse.defaultLearnerPhotoUrl || '';
 
     const clearInputForNextScan = function () {
@@ -108,26 +107,8 @@
             return;
         }
 
-        let extensionIndex = 0;
-
-        const tryNextPhoto = function () {
-            if (extensionIndex >= learnerPhotoExtensions.length) {
-                setDefaultLearnerPhoto();
-                return;
-            }
-
-            const extension = learnerPhotoExtensions[extensionIndex];
-            const photoUrl = window.ProjectPulse.learnerPhotoBaseUrl + encodeURIComponent(lrn) + '.' + extension;
-            extensionIndex += 1;
-
-            fields.learnerPhoto.onerror = tryNextPhoto;
-            fields.learnerPhoto.onload = function () {
-                fields.learnerPhoto.onerror = null;
-            };
-            fields.learnerPhoto.src = photoUrl;
-        };
-
-        tryNextPhoto();
+        fields.learnerPhoto.onerror = setDefaultLearnerPhoto;
+        fields.learnerPhoto.src = window.ProjectPulse.learnerPhotoBaseUrl + encodeURIComponent(lrn);
     };
 
     const setLearnerEmpty = function (message) {

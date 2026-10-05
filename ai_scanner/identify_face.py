@@ -14,7 +14,12 @@ import numpy as np
 
 
 ROOT = Path(__file__).resolve().parent.parent
-PHOTO_DIRECTORY = ROOT / "assets" / "images" / "learners"
+PHOTO_DIRECTORY = Path(
+    __import__("os").environ.get(
+        "PROJECTPULSE_FACE_STORAGE",
+        str(ROOT.parent.parent / "ProjectPulsePrivate" / "learner_faces"),
+    )
+)
 MODEL_FILE = Path(__file__).resolve().parent / "recognizer.yml"
 LABELS_FILE = Path(__file__).resolve().parent / "labels.json"
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}

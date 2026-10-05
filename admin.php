@@ -13,6 +13,7 @@ require_once __DIR__ . '/app/teachers.php';
 require_once __DIR__ . '/app/announcements.php';
 require_once __DIR__ . '/app/issues.php';
 require_once __DIR__ . '/app/theme_settings.php';
+require_once __DIR__ . '/app/sms_settings.php';
 require_once __DIR__ . '/password_resets.php';
 
 function format_report_time(?string $value): string
@@ -219,6 +220,7 @@ $sidebarRequestCounts = [
 $themeColors = [];
 $activeThemeKey = 'default';
 $systemLoginLogs = [];
+$smsSettings = ['endpoint' => '', 'api_key' => ''];
 
 announcements_bootstrap();
 theme_settings_bootstrap();
@@ -508,6 +510,18 @@ if ($module === 'settings') {
             flash_set('admin_settings', 'Theme colors have been reset to default.');
             redirect('admin.php?module=settings');
         }
+
+        if (is_post() && ($_POST['form_action'] ?? '') === 'save_sms_settings') {
+            if (!verify_csrf_token($_POST['csrf_token'] ?? null)) {
+                throw new RuntimeException('Invalid form token. Please refresh the page.');
+            }
+            sms_settings_save(
+                (string) ($_POST['sms_api_endpoint'] ?? ''),
+                (string) ($_POST['sms_api_key'] ?? '')
+            );
+            flash_set('admin_settings', 'SMS settings saved successfully.');
+            redirect('admin.php?module=settings');
+        }
     } catch (Throwable $exception) {
         $settingsFlash = [
             'type' => 'error',
@@ -517,6 +531,7 @@ if ($module === 'settings') {
 
     $themeColors = theme_colors();
     $activeThemeKey = theme_active_key();
+    $smsSettings = sms_settings();
     $stats['today_logins'] = (int) database()->query('SELECT COUNT(*) FROM auth_login_logs WHERE login_status = \'success\' AND DATE(logged_in_at) = CURDATE()')->fetchColumn();
     $systemLoginLogs = auth_recent_login_logs(10);
 }
@@ -2436,6 +2451,28 @@ $attendanceDashboardChartData = [
 
                             <div class="learner-form-actions">
                                 <button type="submit" class="primary-button">Save Theme</button>
+                            </div>
+                        </form>
+                    </article>
+
+                    <article class="admin-module-card">
+                        <div class="panel-heading compact-heading">
+                            <h2>SMS Settings</h2>
+                            <p>Store the SMS provider endpoint and API key securely in the application settings.</p>
+                        </div>
+                        <form method="post" class="learner-form-grid">
+                            <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
+                            <input type="hidden" name="form_action" value="save_sms_settings">
+                            <div>
+                                <label for="sms_api_endpoint">SMS API Endpoint</label>
+                                <input id="sms_api_endpoint" name="sms_api_endpoint" type="url" value="<?php echo escape($smsSettings['endpoint']); ?>" required>
+                            </div>
+                            <div>
+                                <label for="sms_api_key">SMS API Key</label>
+                                <input id="sms_api_key" name="sms_api_key" type="password" placeholder="Leave blank to keep the current key" autocomplete="new-password">
+                            </div>
+                            <div class="learner-form-actions">
+                                <button type="submit" class="primary-button">Save SMS Settings</button>
                             </div>
                         </form>
                     </article>
