@@ -1280,6 +1280,11 @@ $attendanceDashboardChartData = [
                                 </div>
 
                                 <div>
+                                    <label for="parent_guardian_contact_number">Parent/Guardian Contact Number</label>
+                                    <input id="parent_guardian_contact_number" name="parent_guardian_contact_number" type="tel" inputmode="tel" maxlength="30" value="<?php echo escape($learnerForm['parent_guardian_contact_number']); ?>" placeholder="e.g., 09123456789" required>
+                                </div>
+
+                                <div>
                                     <label for="birthdate">Birthdate</label>
                                     <input
                                         id="birthdate"
@@ -1408,7 +1413,7 @@ $attendanceDashboardChartData = [
                                     <input id="import_file" name="import_file" type="file" accept=".csv,.xls" required>
                                 </div>
 
-                                <p class="import-note">The learner import now accepts birthdate, mother tongue, religion, and address fields. Age is auto-computed from the first Friday of June of the current school year.</p>
+                                <p class="import-note">The learner import requires a parent/guardian contact number and accepts birthdate, mother tongue, religion, and address fields. Age is auto-computed from the first Friday of June of the current school year.</p>
                                 <button type="submit" class="primary-button">Import Learners</button>
                             </form>
                         </article>

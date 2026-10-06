@@ -11,6 +11,7 @@ function learner_management_bootstrap(): void
     }
 
     learner_ensure_column('learners', 'mother_tongue', 'VARCHAR(120) NULL AFTER birthdate');
+    learner_ensure_column('learners', 'parent_guardian_contact_number', 'VARCHAR(30) NULL AFTER last_name');
     learner_ensure_column('learners', 'religion', 'VARCHAR(120) NULL AFTER mother_tongue');
     learner_ensure_column('learners', 'address_house_number', 'VARCHAR(120) NULL AFTER religion');
     learner_ensure_column('learners', 'address_barangay', 'VARCHAR(120) NULL AFTER address_house_number');
@@ -106,6 +107,7 @@ function learner_form_defaults(array $overrides = []): array
         'first_name' => '',
         'middle_name' => '',
         'last_name' => '',
+        'parent_guardian_contact_number' => '',
         'birthdate' => '',
         'mother_tongue' => learner_default_mother_tongue(),
         'religion' => '',
@@ -322,6 +324,7 @@ function learner_list(array $filters, ?int $limit = null, int $offset = 0): arra
             l.first_name,
             l.middle_name,
             l.last_name,
+            l.parent_guardian_contact_number,
             l.birthdate,
             l.mother_tongue,
             l.religion,
@@ -385,6 +388,7 @@ function learner_find(int $learnerId): ?array
             l.first_name,
             l.middle_name,
             l.last_name,
+            l.parent_guardian_contact_number,
             l.birthdate,
             l.mother_tongue,
             l.religion,
@@ -428,6 +432,7 @@ function learner_normalize_payload(array $input): array
         'first_name' => trim((string) ($input['first_name'] ?? '')),
         'middle_name' => trim((string) ($input['middle_name'] ?? '')),
         'last_name' => trim((string) ($input['last_name'] ?? '')),
+        'parent_guardian_contact_number' => trim((string) ($input['parent_guardian_contact_number'] ?? '')),
         'birthdate' => learner_normalize_birthdate((string) ($input['birthdate'] ?? $input['bday'] ?? '')),
         'mother_tongue' => trim((string) ($input['mother_tongue'] ?? '')),
         'religion' => trim((string) ($input['religion'] ?? '')),
@@ -461,6 +466,15 @@ function learner_validate_payload(array $payload): array
 
     if ($payload['first_name'] === '' || $payload['last_name'] === '') {
         $errors[] = 'First name and last name are required.';
+    }
+
+    if ($payload['parent_guardian_contact_number'] === '') {
+        $errors[] = 'Parent/Guardian contact number is required.';
+    } elseif (
+        strlen($payload['parent_guardian_contact_number']) > 30
+        || preg_match('/^[0-9+()\-\s]{7,30}$/', $payload['parent_guardian_contact_number']) !== 1
+    ) {
+        $errors[] = 'Parent/Guardian contact number must be a valid phone number up to 30 characters.';
     }
 
     if ($payload['grade_level'] === '') {
@@ -676,6 +690,7 @@ function learner_save(array $payload): void
                     first_name,
                     middle_name,
                     last_name,
+                    parent_guardian_contact_number,
                     birthdate,
                     mother_tongue,
                     religion,
@@ -694,6 +709,7 @@ function learner_save(array $payload): void
                     :first_name,
                     :middle_name,
                     :last_name,
+                    :parent_guardian_contact_number,
                     :birthdate,
                     :mother_tongue,
                     :religion,
@@ -714,6 +730,7 @@ function learner_save(array $payload): void
                 'first_name' => $payload['first_name'],
                 'middle_name' => $payload['middle_name'] !== '' ? $payload['middle_name'] : null,
                 'last_name' => $payload['last_name'],
+                'parent_guardian_contact_number' => $payload['parent_guardian_contact_number'],
                 'birthdate' => $payload['birthdate'] !== '' ? $payload['birthdate'] : null,
                 'mother_tongue' => $payload['mother_tongue'] !== '' ? $payload['mother_tongue'] : null,
                 'religion' => $payload['religion'] !== '' ? $payload['religion'] : null,
@@ -747,6 +764,7 @@ function learner_save(array $payload): void
                      first_name = :first_name,
                      middle_name = :middle_name,
                      last_name = :last_name,
+                      parent_guardian_contact_number = :parent_guardian_contact_number,
                      birthdate = :birthdate,
                      mother_tongue = :mother_tongue,
                      religion = :religion,
@@ -768,6 +786,7 @@ function learner_save(array $payload): void
                 'first_name' => $payload['first_name'],
                 'middle_name' => $payload['middle_name'] !== '' ? $payload['middle_name'] : null,
                 'last_name' => $payload['last_name'],
+                'parent_guardian_contact_number' => $payload['parent_guardian_contact_number'],
                 'birthdate' => $payload['birthdate'] !== '' ? $payload['birthdate'] : null,
                 'mother_tongue' => $payload['mother_tongue'] !== '' ? $payload['mother_tongue'] : null,
                 'religion' => $payload['religion'] !== '' ? $payload['religion'] : null,

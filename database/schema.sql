@@ -39,6 +39,7 @@ CREATE TABLE learners (
     first_name VARCHAR(100) NOT NULL,
     middle_name VARCHAR(100) NULL,
     last_name VARCHAR(100) NOT NULL,
+    parent_guardian_contact_number VARCHAR(30) NULL,
     birthdate DATE NULL,
     mother_tongue VARCHAR(120) NULL,
     religion VARCHAR(120) NULL,

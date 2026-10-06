@@ -15,6 +15,7 @@ $headers = [
     'first_name',
     'middle_name',
     'last_name',
+    'parent_guardian_contact_number',
     'birthdate',
     'age',
     'mother_tongue',
