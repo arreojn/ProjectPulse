@@ -24,8 +24,12 @@ function sms_settings_bootstrap(): void
         'INSERT IGNORE INTO system_settings (setting_key, setting_value)
          VALUES (:setting_key, :setting_value)'
     );
-    $statement->execute(['setting_key' => 'sms_api_endpoint', 'setting_value' => 'https://smsapiph.onrender.com/api/v1/send/sms']);
-    $statement->execute(['setting_key' => 'sms_api_key', 'setting_value' => '']);
+    $statement->execute(['setting_key' => 'sms_gateway_enabled', 'setting_value' => '0']);
+    $statement->execute(['setting_key' => 'sms_gateway_local_address', 'setting_value' => '']);
+    $statement->execute(['setting_key' => 'sms_gateway_public_address', 'setting_value' => '']);
+    $statement->execute(['setting_key' => 'sms_gateway_username', 'setting_value' => '']);
+    $statement->execute(['setting_key' => 'sms_gateway_password', 'setting_value' => '']);
+    $statement->execute(['setting_key' => 'sms_gateway_device_id', 'setting_value' => '']);
 
     $bootstrapped = true;
 }
@@ -35,45 +39,63 @@ function sms_settings(): array
     sms_settings_bootstrap();
     $statement = database()->query(
         "SELECT setting_key, setting_value FROM system_settings
-         WHERE setting_key IN ('sms_api_endpoint', 'sms_api_key')"
+         WHERE setting_key IN (
+            'sms_gateway_enabled', 'sms_gateway_local_address',
+            'sms_gateway_public_address', 'sms_gateway_username',
+            'sms_gateway_password', 'sms_gateway_device_id'
+         )"
     );
 
-    $settings = ['endpoint' => '', 'api_key' => ''];
+    $settings = [
+        'gateway_enabled' => false,
+        'gateway_local_address' => '',
+        'gateway_public_address' => '',
+        'gateway_username' => '',
+        'gateway_password' => '',
+        'gateway_device_id' => '',
+    ];
     foreach ($statement->fetchAll() as $row) {
-        if ($row['setting_key'] === 'sms_api_endpoint') {
-            $settings['endpoint'] = trim((string) $row['setting_value']);
-        } elseif ($row['setting_key'] === 'sms_api_key') {
-            $settings['api_key'] = trim((string) $row['setting_value']);
+        $key = $row['setting_key'];
+        $value = trim((string) $row['setting_value']);
+        if ($key === 'sms_gateway_enabled') {
+            $settings['gateway_enabled'] = filter_var($value, FILTER_VALIDATE_BOOLEAN);
+        } elseif ($key === 'sms_gateway_local_address') {
+            $settings['gateway_local_address'] = $value;
+        } elseif ($key === 'sms_gateway_public_address') {
+            $settings['gateway_public_address'] = $value;
+        } elseif ($key === 'sms_gateway_username') {
+            $settings['gateway_username'] = $value;
+        } elseif ($key === 'sms_gateway_password') {
+            $settings['gateway_password'] = $value;
+        } elseif ($key === 'sms_gateway_device_id') {
+            $settings['gateway_device_id'] = $value;
         }
     }
 
     return $settings;
 }
 
-function sms_settings_save(string $endpoint, string $apiKey): void
-{
+function sms_settings_save(
+    bool $gatewayEnabled = false,
+    string $gatewayLocalAddress = '',
+    string $gatewayUsername = '',
+    string $gatewayPassword = '',
+    string $gatewayDeviceId = '',
+    string $gatewayPublicAddress = ''
+): void {
     sms_settings_bootstrap();
-    $endpoint = trim($endpoint);
-    $apiKey = trim($apiKey);
-
-    if (!filter_var($endpoint, FILTER_VALIDATE_URL) || !str_starts_with(strtolower($endpoint), 'https://')) {
-        throw new RuntimeException('SMS API endpoint must be a valid HTTPS URL.');
-    }
-
-    $current = sms_settings();
-    if ($apiKey === '') {
-        $apiKey = $current['api_key'];
-    }
-    if ($apiKey === '') {
-        throw new RuntimeException('Enter an SMS API key before saving.');
-    }
 
     $statement = database()->prepare(
         'INSERT INTO system_settings (setting_key, setting_value)
          VALUES (:setting_key, :setting_value)
          ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_at = CURRENT_TIMESTAMP'
     );
-    $statement->execute(['setting_key' => 'sms_api_endpoint', 'setting_value' => $endpoint]);
-    $statement->execute(['setting_key' => 'sms_api_key', 'setting_value' => $apiKey]);
+    $statement->execute(['setting_key' => 'sms_gateway_enabled', 'setting_value' => $gatewayEnabled ? '1' : '0']);
+    $statement->execute(['setting_key' => 'sms_gateway_local_address', 'setting_value' => $gatewayLocalAddress]);
+    $statement->execute(['setting_key' => 'sms_gateway_public_address', 'setting_value' => $gatewayPublicAddress]);
+    $statement->execute(['setting_key' => 'sms_gateway_username', 'setting_value' => $gatewayUsername]);
+    $statement->execute(['setting_key' => 'sms_gateway_password', 'setting_value' => $gatewayPassword]);
+    $statement->execute(['setting_key' => 'sms_gateway_device_id', 'setting_value' => $gatewayDeviceId]);
 }
+
 

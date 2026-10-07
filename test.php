@@ -6,54 +6,33 @@ require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/app/helpers.php';
 require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/app/auth.php';
-require_once __DIR__ . '/app/sms_settings.php';
+require_once __DIR__ . '/app/sms_gateway.php';
 
 require_roles(['admin']);
 
 $response = '';
 $status = '';
-$settings = sms_settings();
 
 if (is_post()) {
     if (!verify_csrf_token($_POST['csrf_token'] ?? null)) {
         $status = 'Invalid form token. Please refresh the page.';
     } else {
-        $recipient = trim((string) ($_POST['recipient'] ?? ''));
+        $recipient = sms_normalize_phone((string) ($_POST['recipient'] ?? ''));
         $message = trim((string) ($_POST['message'] ?? ''));
 
         if ($recipient === '' || $message === '') {
             $status = 'Please complete all fields.';
-        } elseif ($settings['endpoint'] === '' || $settings['api_key'] === '') {
-            $status = 'Configure the SMS endpoint and API key in Admin Settings first.';
         } else {
-            $ch = curl_init($settings['endpoint']);
-            curl_setopt_array($ch, [
-                CURLOPT_POST => true,
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_CONNECTTIMEOUT => 5,
-                CURLOPT_TIMEOUT => 20,
-                CURLOPT_HTTPHEADER => [
-                    'x-api-key: ' . $settings['api_key'],
-                    'Content-Type: application/json',
-                ],
-                CURLOPT_POSTFIELDS => json_encode([
-                    'recipient' => $recipient,
-                    'message' => $message,
-                ], JSON_THROW_ON_ERROR),
-            ]);
-
-            $rawResponse = curl_exec($ch);
-            $httpStatus = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
-            $curlError = curl_error($ch);
-            curl_close($ch);
-
-            if ($rawResponse === false || $curlError !== '') {
-                $status = 'SMS request failed. Please check the provider settings.';
+            $result = sms_send_gateway_message(
+                $recipient,
+                $message,
+                sms_gateway_settings()
+            );
+            if ($result['sent']) {
+                $status = 'Request sent successfully.';
+                $response = json_encode($result['provider_response'], JSON_PRETTY_PRINT);
             } else {
-                $response = (string) $rawResponse;
-                $status = $httpStatus >= 200 && $httpStatus < 300
-                    ? 'Request sent successfully.'
-                    : 'The SMS provider rejected the request.';
+                $status = $result['reason'];
             }
         }
     }

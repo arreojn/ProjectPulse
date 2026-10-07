@@ -220,7 +220,6 @@ $sidebarRequestCounts = [
 $themeColors = [];
 $activeThemeKey = 'default';
 $systemLoginLogs = [];
-$smsSettings = ['endpoint' => '', 'api_key' => ''];
 
 announcements_bootstrap();
 theme_settings_bootstrap();
@@ -516,10 +515,28 @@ if ($module === 'settings') {
                 throw new RuntimeException('Invalid form token. Please refresh the page.');
             }
             sms_settings_save(
-                (string) ($_POST['sms_api_endpoint'] ?? ''),
-                (string) ($_POST['sms_api_key'] ?? '')
+                (bool) (($_POST['sms_gateway_enabled'] ?? '') === '1'),
+                (string) ($_POST['sms_gateway_local_address'] ?? ''),
+                (string) ($_POST['sms_gateway_username'] ?? ''),
+                (string) ($_POST['sms_gateway_password'] ?? ''),
+                (string) ($_POST['sms_gateway_device_id'] ?? ''),
+                (string) ($_POST['sms_gateway_public_address'] ?? '')
             );
             flash_set('admin_settings', 'SMS settings saved successfully.');
+            redirect('admin.php?module=settings');
+        }
+
+        if (is_post() && ($_POST['form_action'] ?? '') === 'test_sms_settings') {
+            if (!verify_csrf_token($_POST['csrf_token'] ?? null)) {
+                throw new RuntimeException('Invalid form token. Please refresh the page.');
+            }
+            require_once __DIR__ . '/app/sms_gateway.php';
+            $result = sms_send_test_message((string) ($_POST['sms_test_phone'] ?? ''));
+            if ($result['sent']) {
+                flash_set('admin_settings', 'Test SMS sent successfully to the selected number.');
+            } else {
+                flash_set('admin_settings', $result['reason'], 'error');
+            }
             redirect('admin.php?module=settings');
         }
     } catch (Throwable $exception) {
@@ -2463,21 +2480,52 @@ $attendanceDashboardChartData = [
                     <article class="admin-module-card">
                         <div class="panel-heading compact-heading">
                             <h2>SMS Settings</h2>
-                            <p>Store the SMS provider endpoint and API key securely in the application settings.</p>
+                            <p>Configure the Android SMS gateway and the existing SMS API provider. Gateway delivery is optional and runs after attendance is recorded.</p>
                         </div>
                         <form method="post" class="learner-form-grid">
                             <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                             <input type="hidden" name="form_action" value="save_sms_settings">
                             <div>
-                                <label for="sms_api_endpoint">SMS API Endpoint</label>
-                                <input id="sms_api_endpoint" name="sms_api_endpoint" type="url" value="<?php echo escape($smsSettings['endpoint']); ?>" required>
+                                <label for="sms_gateway_enabled">Enable Android Gateway</label>
+                                <select id="sms_gateway_enabled" name="sms_gateway_enabled">
+                                    <option value="1" <?php echo $smsSettings['gateway_enabled'] ? 'selected' : ''; ?>>Enabled</option>
+                                    <option value="0" <?php echo !$smsSettings['gateway_enabled'] ? 'selected' : ''; ?>>Disabled</option>
+                                </select>
                             </div>
                             <div>
-                                <label for="sms_api_key">SMS API Key</label>
-                                <input id="sms_api_key" name="sms_api_key" type="password" placeholder="Leave blank to keep the current key" autocomplete="new-password">
+                                <label for="sms_gateway_local_address">Local Address</label>
+                                <input id="sms_gateway_local_address" name="sms_gateway_local_address" value="<?php echo escape($smsSettings['gateway_local_address']); ?>" placeholder="http://192.168.100.97:8080">
+                            </div>
+                            <div>
+                                <label for="sms_gateway_public_address">Public Address</label>
+                                <input id="sms_gateway_public_address" name="sms_gateway_public_address" type="url" value="<?php echo escape($smsSettings['gateway_public_address']); ?>" placeholder="https://sms.example.com">
+                            </div>
+                            <div>
+                                <label for="sms_gateway_username">Username</label>
+                                <input id="sms_gateway_username" name="sms_gateway_username" value="<?php echo escape($smsSettings['gateway_username']); ?>" autocomplete="username">
+                            </div>
+                            <div>
+                                <label for="sms_gateway_password">Password</label>
+                                <input id="sms_gateway_password" name="sms_gateway_password" type="password" value="<?php echo escape($smsSettings['gateway_password']); ?>" autocomplete="new-password">
+                            </div>
+                            <div>
+                                <label for="sms_gateway_device_id">Device ID</label>
+                                <input id="sms_gateway_device_id" name="sms_gateway_device_id" value="<?php echo escape($smsSettings['gateway_device_id']); ?>">
                             </div>
                             <div class="learner-form-actions">
                                 <button type="submit" class="primary-button">Save SMS Settings</button>
+                            </div>
+                        </form>
+
+                        <form method="post" class="learner-form-grid sms-test-form">
+                            <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
+                            <input type="hidden" name="form_action" value="test_sms_settings">
+                            <div>
+                                <label for="sms_test_phone">Test Recipient Number</label>
+                                <input id="sms_test_phone" name="sms_test_phone" type="tel" inputmode="tel" placeholder="09171234567" required>
+                            </div>
+                            <div class="learner-form-actions">
+                                <button type="submit" class="ghost-button">Send Test SMS</button>
                             </div>
                         </form>
                     </article>

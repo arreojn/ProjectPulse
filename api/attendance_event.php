@@ -52,7 +52,7 @@ $attendanceDate = date('Y-m-d');
 $scanMode = attendance_scan_mode();
 
 $enrollmentStatement = database()->prepare(
-    'SELECT le.id
+    'SELECT le.id, l.first_name, l.last_name, l.parent_guardian_contact_number
      FROM learners l
      INNER JOIN learner_enrollments le ON le.learner_id = l.id
      INNER JOIN school_years sy ON sy.id = le.school_year_id
@@ -258,6 +258,17 @@ try {
     ]);
 
     $pdo->commit();
+
+    require_once __DIR__ . '/../app/sms_gateway.php';
+    if (!empty($enrollment['parent_guardian_contact_number'])) {
+        sms_send_attendance_notification(
+            $enrollment['first_name'] . ' ' . $enrollment['last_name'],
+            $enrollment['parent_guardian_contact_number'],
+            $slot['label'],
+            $attendanceDate,
+            $currentTime
+        );
+    }
 } catch (Throwable $exception) {
     if ($pdo->inTransaction()) {
         $pdo->rollBack();
