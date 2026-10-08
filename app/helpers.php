@@ -65,12 +65,34 @@ function redirect(string $path): void
     exit;
 }
 
+function projectpulse_session_cookie_path(): string
+{
+    $scriptName = '/' . trim(str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? '')), '/');
+    $basePath = '/' . trim((string) APP_BASE_PATH, '/');
+
+    if ($basePath !== '/' && ($scriptName === $basePath || str_starts_with($scriptName, $basePath . '/'))) {
+        return $basePath;
+    }
+
+    $scriptDirectory = trim(str_replace('\\', '/', dirname($scriptName)), '/');
+
+    return $scriptDirectory === '' || $scriptDirectory === '.'
+        ? '/'
+        : '/' . $scriptDirectory;
+}
+
+function projectpulse_session_name(): string
+{
+    return 'PROJECTPULSESESSID';
+}
+
 function start_session(): void
 {
     if (session_status() !== PHP_SESSION_ACTIVE) {
+        session_name(projectpulse_session_name());
         session_set_cookie_params([
             'lifetime' => 0,
-            'path' => APP_BASE_PATH === '' ? '/' : APP_BASE_PATH,
+            'path' => projectpulse_session_cookie_path(),
             'secure' => projectpulse_detect_scheme() === 'https',
             'httponly' => true,
             'samesite' => 'Lax',

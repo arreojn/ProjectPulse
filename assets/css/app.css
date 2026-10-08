@@ -3287,7 +3287,7 @@ textarea:focus {
     }
 }
 
-@media (max-width: 1600px) {
+@media (max-width: 920px) {
     .learner-list-table-shell {
         overflow: visible;
         border: 0;

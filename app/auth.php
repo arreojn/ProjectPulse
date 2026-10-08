@@ -547,7 +547,7 @@ function logout_user(): void
             '',
             [
                 'expires' => time() - 42000,
-                'path' => APP_BASE_PATH === '' ? '/' : APP_BASE_PATH,
+                'path' => projectpulse_session_cookie_path(),
                 'domain' => $params['domain'] ?? '',
                 'secure' => projectpulse_detect_scheme() === 'https',
                 'httponly' => true,
