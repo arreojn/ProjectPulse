@@ -214,11 +214,17 @@ if ($module === 'case_detail' && $editingCase === null) {
     <main class="dashboard-shell admin-shell wide-admin-shell">
         <section class="admin-layout">
             <aside id="admin-sidebar" class="admin-sidebar teacher-nav-sidebar">
-                                <div class="sidebar-brand" style="text-align: center; margin-bottom: 1rem;">
-                    <img src="assets/images/school-logo.png" alt="Project PULSE Logo" style="max-width: 80px; height: auto;">
-                    <h3 style="color: var(--surface-strong); margin-top: 0.5rem; font-size: 1.1rem;">Project PULSE</h3>
-                </div>
                 <div class="sidebar-profile">
+                    <div class="sidebar-brand">
+                        <div class="sidebar-brand-logos">
+                            <img class="sidebar-brand-logo pulse-logo" src="<?php echo escape(asset_url('assets/images/pulselogo.png')); ?>" alt="Project PULSE Logo">
+                            <img class="sidebar-brand-logo school-logo-badge" src="<?php echo escape(school_logo_url()); ?>" alt="School Logo">
+                        </div>
+                        <div class="sidebar-brand-text">
+                            <span class="sidebar-brand-title">Project <span class="brand-pulse">PULSE</span></span>
+                            <span class="sidebar-brand-subtitle">Monitoring Portal</span>
+                        </div>
+                    </div>
                     <p class="eyebrow">Guidance Counselor</p>
                     <h1>Guidance Portal</h1>
                     <p class="sidebar-user"><?php echo escape($user['first_name'] . ' ' . $user['last_name']); ?></p>
