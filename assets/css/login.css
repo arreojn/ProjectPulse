@@ -353,3 +353,19 @@ body {
         transition-duration: 0.01ms !important;
     }
 }
+.vue-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: 1rem;
+    color: #17663a;
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+
+.vue-status-dot {
+    width: 0.45rem;
+    height: 0.45rem;
+    border-radius: 50%;
+    background: #17663a;
+}

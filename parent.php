@@ -97,7 +97,7 @@ if ($selectedChild !== null) {
     </style>
 </head>
 <body class="dashboard-body">
-    <main class="dashboard-shell fullscreen-shell">
+    <main class="dashboard-shell fullscreen-shell" id="parent-portal-root" data-parent-api-endpoint="<?php echo escape(asset_url('api/parent_portal.php')); ?>" data-parent-csrf="<?php echo escape(csrf_token()); ?>">
         <header class="topbar">
             <div class="header-title-block">
                 <img class="school-logo" src="<?php echo escape(school_logo_url()); ?>" alt="School logo">
@@ -284,9 +284,10 @@ if ($selectedChild !== null) {
                         <div class="panel-heading compact-heading">
                             <h2>Monthly Attendance Logs</h2>
                             <p>Showing <?php echo escape((string) count($attendanceRows)); ?> recorded day(s) for <?php echo escape($selectedMonthLabel); ?>.</p>
+                            <label class="vue-quick-filter" for="parent-attendance-quick-filter">Filter these records <input id="parent-attendance-quick-filter" type="search" placeholder="Date, status, or remark" autocomplete="off"></label>
                         </div>
 
-                        <div class="parent-month-summary-grid">
+                        <div class="parent-month-summary-grid" id="parent-month-summary">
                             <div class="summary-card">
                                 <span class="summary-code">Recorded Days</span>
                                 <strong><?php echo escape((string) $attendanceSummary['days_with_records']); ?></strong>
@@ -325,7 +326,7 @@ if ($selectedChild !== null) {
                         </div>
 
                         <div class="table-shell">
-                            <table class="records-table">
+                            <table class="records-table" data-vue-parent-attendance-table>
                                 <thead>
                                     <tr>
                                         <th>Date</th>
@@ -369,7 +370,7 @@ if ($selectedChild !== null) {
                         <?php if ($gradeHistoryGroups === []): ?>
                             <div class="alert neutral">No grade records are available for this learner yet.</div>
                         <?php else: ?>
-                            <div class="grade-history-stack">
+                            <div class="grade-history-stack" id="parent-grade-history-root">
                                 <?php foreach ($gradeHistoryGroups as $gradeGroup): ?>
                                     <?php $usesSeniorGradeLayout = grade_is_senior_high((string) $gradeGroup['grade_level']); ?>
                                     <section class="grade-history-section">
@@ -506,6 +507,6 @@ if ($selectedChild !== null) {
         </div>
         <?php $_SESSION['seen_parent_announcements'] = true; ?>
     <?php endif; ?>
-    <script src="<?php echo escape(asset_url('assets/js/admin.js')); ?>"></script>
+    <script type="module" src="<?php echo escape(asset_url('assets/dist/shared.js')); ?>"></script>
 </body>
 </html>

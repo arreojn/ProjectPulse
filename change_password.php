@@ -91,7 +91,7 @@ if (is_post()) {
                     <div class="alert error"><?php echo escape($error); ?></div>
                 <?php endforeach; ?>
 
-                <form method="post" class="auth-form">
+                <form method="post" class="auth-form" id="change-password-form" data-auth-action="change" data-auth-endpoint="<?php echo escape(asset_url('api/auth_password.php')); ?>" data-redirect="<?php echo escape(route_url($dashboardPath)); ?>">
                     <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
 
                     <label for="current_password">Current Password</label>
@@ -132,5 +132,6 @@ if (is_post()) {
             </article>
         </section>
     </main>
+    <script type="module" src="<?php echo escape(asset_url('assets/dist/shared.js')); ?>"></script>
 </body>
 </html>

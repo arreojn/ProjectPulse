@@ -391,7 +391,7 @@ $filterLabel = health_portal_filter_label($filters, $allSectionDropdownOptions);
     </style>
     <link rel="stylesheet" href="<?php echo escape(asset_url('assets/css/app.css')); ?>">
 </head>
-<body class="dashboard-body admin-dashboard">
+<body class="dashboard-body admin-dashboard" data-health-portal="true">
     <button
         id="sidebar-toggle"
         class="sidebar-toggle-button"
@@ -531,6 +531,8 @@ $filterLabel = health_portal_filter_label($filters, $allSectionDropdownOptions);
                         <!-- Removed Quick Actions Card as per request -->
                     </section>
 
+                    <div id="health-portal-visualizations" class="chart-container" aria-live="polite"></div>
+
                     <section class="chart-container">
                         <article class="chart-card">
                             <h3 class="chart-title">BMI Remarks Distribution</h3>
@@ -661,6 +663,28 @@ $filterLabel = health_portal_filter_label($filters, $allSectionDropdownOptions);
                         </form>
                     </article>
 
+                    <article class="teacher-panel-card no-print">
+                        <div class="panel-heading">
+                            <h2>Import Height and Weight</h2>
+                            <p>Upload a CSV file with LRN, height_cm, and weight_kg columns to update learner measurements in one pass.</p>
+                        </div>
+
+                        <form method="post" enctype="multipart/form-data" class="teacher-form-grid" data-vue-health-import>
+                            <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
+                            <input type="hidden" name="form_action" value="import_measurements">
+                            <input type="hidden" name="redirect_module" value="learner_bmi">
+
+                            <div>
+                                <label for="health-measurement-import-file">CSV file</label>
+                                <input id="health-measurement-import-file" name="measurement_file" type="file" accept=".csv,text/csv" required>
+                            </div>
+
+                            <div class="learner-form-actions">
+                                <button type="submit" class="primary-button">Import Measurements</button>
+                            </div>
+                        </form>
+                    </article>
+
                     <article class="teacher-panel-card">
                         <div class="panel-heading compact-heading">
                             <h2>Learner BMI List</h2>
@@ -764,15 +788,15 @@ $filterLabel = health_portal_filter_label($filters, $allSectionDropdownOptions);
                                                     </div>
                                                 </td>
                                                 <td>
-                                                    <input form="<?php echo escape($formId); ?>" name="height_cm" type="number" min="30" max="250" step="0.01" value="<?php echo escape($learner['height_cm'] !== null ? (string) $learner['height_cm'] : ''); ?>" class="table-input-slim">
+                                                    <input form="<?php echo escape($formId); ?>" name="height_cm" type="number" min="30" max="250" step="0.01" value="<?php echo escape($learner['height_cm'] !== null ? (string) $learner['height_cm'] : ''); ?>" class="table-input-slim" data-vue-bmi-height>
                                                 </td>
                                                 <td>
-                                                    <input form="<?php echo escape($formId); ?>" name="weight_kg" type="number" min="1" max="300" step="0.01" value="<?php echo escape($learner['weight_kg'] !== null ? (string) $learner['weight_kg'] : ''); ?>" class="table-input-slim">
+                                                    <input form="<?php echo escape($formId); ?>" name="weight_kg" type="number" min="1" max="300" step="0.01" value="<?php echo escape($learner['weight_kg'] !== null ? (string) $learner['weight_kg'] : ''); ?>" class="table-input-slim" data-vue-bmi-weight>
                                                 </td>
-                                                <td><?php echo escape($learner['bmi'] !== null ? number_format((float) $learner['bmi'], 2) : '-'); ?></td>
+                                                <td><span data-vue-bmi-output><?php echo escape($learner['bmi'] !== null ? number_format((float) $learner['bmi'], 2) : '-'); ?></span></td>
                                                 <td><span class="table-status"><?php echo escape($learner['bmi_remarks']); ?></span></td>
                                                 <td>
-                                                    <form id="<?php echo escape($formId); ?>" method="post" class="inline-form">
+                                                    <form id="<?php echo escape($formId); ?>" method="post" class="inline-form" data-vue-bmi-form data-vue-health-action="save_measurement">
                                                         <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                                                         <input type="hidden" name="form_action" value="save_measurement">
                                                         <input type="hidden" name="redirect_module" value="learner_bmi">
@@ -933,7 +957,7 @@ $filterLabel = health_portal_filter_label($filters, $allSectionDropdownOptions);
                             <p>Apply the selected dose and date to every learner in the filtered list below.</p>
                         </div>
 
-                        <form method="post" class="teacher-form-grid">
+                        <form method="post" class="teacher-form-grid" data-vue-health-action="assign_deworming_class">
                             <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                             <input type="hidden" name="form_action" value="assign_deworming_class">
                             <input type="hidden" name="redirect_module" value="deworming"> <!-- Keep redirect_module -->
@@ -1028,7 +1052,7 @@ $filterLabel = health_portal_filter_label($filters, $allSectionDropdownOptions);
                                                 <td><?php echo escape(health_portal_format_date($learner['first_dose_date'] ?? null)); ?></td>
                                                 <td><?php echo escape(health_portal_format_date($learner['second_dose_date'] ?? null)); ?></td>
                                                 <td>
-                                                    <form method="post" class="table-form-stack">
+                                                    <form method="post" class="table-form-stack" data-vue-health-action="assign_deworming_individual">
                                                         <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                                                         <input type="hidden" name="form_action" value="assign_deworming_individual">
                                                         <input type="hidden" name="redirect_module" value="deworming">
@@ -1093,7 +1117,7 @@ $filterLabel = health_portal_filter_label($filters, $allSectionDropdownOptions);
                             <p>Check the learners to add them to the feeding program list for the current school year.</p>
                         </div>
 
-                        <form method="post">
+                        <form method="post" data-vue-health-action="add_feeding_recipients" data-vue-health-feeding-add>
                             <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                             <input type="hidden" name="form_action" value="add_feeding_recipients">
                             <input type="hidden" name="redirect_module" value="feeding_program">
@@ -1177,7 +1201,7 @@ $filterLabel = health_portal_filter_label($filters, $allSectionDropdownOptions);
                                                 <td><?php echo escape($learner['grade_level'] . ' - ' . $learner['section_name']); ?></td>
                                                 <td><?php echo escape(health_portal_format_date($learner['enrolled_on'] ?? null)); ?></td>
                                                 <td>
-                                                    <form method="post" class="inline-form" onsubmit="return confirm('Remove this learner from the feeding program list?');">
+                                                    <form method="post" class="inline-form" data-vue-health-action="remove_feeding_recipient" data-vue-health-feeding-remove onsubmit="return confirm('Remove this learner from the feeding program list?');">
                                                         <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                                                         <input type="hidden" name="form_action" value="remove_feeding_recipient">
                                                         <input type="hidden" name="redirect_module" value="feeding_program">
@@ -1199,6 +1223,31 @@ $filterLabel = health_portal_filter_label($filters, $allSectionDropdownOptions);
         </section>
     </main>
 
-    <script src="<?php echo escape(asset_url('assets/js/admin.js')); ?>"></script>
+        <script id="health-dashboard-chart-data" type="application/json">
+            <?php echo json_encode([
+                'bmi' => array_map(static fn (array $row): array => [
+                    'label' => $row['label'],
+                    'value' => (int) $row['total'],
+                    'color' => $row['color'],
+                ], $dashboardBmiRows),
+                'deworming' => [
+                    ['label' => '1st Dose', 'value' => (int) ($dashboardDewormingCounts['first_dose_count'] ?? 0), 'color' => 'var(--success)'],
+                    ['label' => '2nd Dose', 'value' => (int) ($dashboardDewormingCounts['second_dose_count'] ?? 0), 'color' => 'var(--info)'],
+                    ['label' => 'No Dose', 'value' => (int) ($dashboardDewormingCounts['no_dose_count'] ?? 0), 'color' => 'var(--muted)'],
+                ],
+                'feeding' => [
+                    ['label' => 'Recipients', 'value' => (int) ($dashboardFeedingCounts['recipient_count'] ?? 0), 'color' => 'var(--accent)'],
+                    ['label' => 'Non-Recipients', 'value' => (int) ($dashboardFeedingCounts['non_recipient_count'] ?? 0), 'color' => 'var(--muted)'],
+                ],
+            ], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>
+        </script>
+        <script id="health-portal-config" type="application/json">
+            <?php echo json_encode([
+                'workflowUrl' => route_url('api/health_workflow.php'),
+                'module' => $module,
+                'csrfToken' => csrf_token(),
+            ], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>
+        </script>
+        <script type="module" src="<?php echo escape(asset_url('assets/dist/shared.js')); ?>"></script>
 </body>
 </html>

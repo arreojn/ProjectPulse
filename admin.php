@@ -1271,7 +1271,7 @@ $attendanceDashboardChartData = [
                                 <p>Current school year: <?php echo escape($learnerSchoolYear['label'] ?? 'Not set'); ?></p>
                             </div>
 
-                            <form method="post" class="learner-form-grid">
+                            <form method="post" class="learner-form-grid" data-vue-admin-form data-admin-endpoint="<?php echo escape(route_url('api/admin_learner_workflow.php')); ?>" data-admin-redirect="<?php echo escape(route_url('admin.php?module=learner_management')); ?>">
                                 <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                                 <input type="hidden" name="form_action" value="save_learner">
                                 <input type="hidden" name="id" value="<?php echo escape((string) ($learnerForm['id'] ?? '')); ?>">
@@ -1421,7 +1421,7 @@ $attendanceDashboardChartData = [
                                 <a href="<?php echo escape(route_url('download_learner_template.php?format=xls')); ?>" class="secondary-link">Download XLS Template</a>
                             </div>
 
-                            <form method="post" enctype="multipart/form-data" class="import-form">
+                            <form method="post" enctype="multipart/form-data" class="import-form" data-vue-admin-form data-admin-endpoint="<?php echo escape(route_url('api/admin_learner_workflow.php')); ?>" data-admin-redirect="<?php echo escape(route_url('admin.php?module=learner_management')); ?>">
                                 <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                                 <input type="hidden" name="form_action" value="import_learners">
 
@@ -1495,6 +1495,7 @@ $attendanceDashboardChartData = [
 
                         <div class="learner-list-toolbar">
                             <p class="learner-list-range">Showing <?php echo escape((string) $learnerListStart); ?>-<?php echo escape((string) $learnerListEnd); ?> of <?php echo escape((string) $learnerTotal); ?> learners</p>
+                            <label class="vue-quick-filter" for="learner-quick-filter">Quick filter this page <input id="learner-quick-filter" type="search" placeholder="Name or LRN" autocomplete="off"></label>
                             <form method="get" class="learner-page-size-form">
                                 <input type="hidden" name="module" value="learner_management">
                                 <?php foreach ($learnerFilters as $filterName => $filterValue): ?>
@@ -1553,7 +1554,7 @@ $attendanceDashboardChartData = [
                                                 <td data-label="Actions">
                                                     <div class="table-actions">
                                                         <a href="<?php echo escape(route_url('admin.php?module=learner_management&edit_learner_id=' . $learner['id'])); ?>" class="secondary-link small-link icon-only-action" title="Edit learner" aria-label="Edit learner"><i class="fa fa-pencil" aria-hidden="true"></i><span class="sr-only">Edit learner</span></a>
-                                                        <form method="post" class="inline-form" onsubmit="return confirm('Delete this learner?');">
+                                                        <form method="post" class="inline-form" data-vue-admin-form data-admin-endpoint="<?php echo escape(route_url('api/admin_learner_workflow.php')); ?>" data-admin-action-type="delete" data-admin-confirm="Delete this learner?" data-admin-reload="true">
                                                             <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                                                             <input type="hidden" name="form_action" value="delete_learner">
                                                             <input type="hidden" name="learner_id" value="<?php echo escape((string) $learner['id']); ?>">
@@ -1607,7 +1608,7 @@ $attendanceDashboardChartData = [
                                 <p>Sections are saved under the current school year only.</p>
                             </div>
 
-                            <form method="post" class="learner-form-grid">
+                            <form method="post" class="learner-form-grid" data-vue-admin-form data-admin-endpoint="<?php echo escape(route_url('api/admin_sections_workflow.php')); ?>" data-admin-redirect="<?php echo escape(route_url('admin.php?module=sections_management')); ?>">
                                 <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                                 <input type="hidden" name="form_action" value="save_section">
                                 <input type="hidden" name="id" value="<?php echo escape((string) ($sectionForm['id'] ?? '')); ?>">
@@ -1689,7 +1690,7 @@ $attendanceDashboardChartData = [
                                                 <td>
                                                     <div class="table-actions">
                                                         <a href="<?php echo escape(route_url('admin.php?module=sections_management&edit_section_id=' . $section['id'])); ?>" class="secondary-link small-link icon-only-action" title="Edit section" aria-label="Edit section"><i class="fa fa-pencil" aria-hidden="true"></i><span class="sr-only">Edit section</span></a>
-                                                        <form method="post" class="inline-form" onsubmit="return confirm('Delete this section?');">
+                                                        <form method="post" class="inline-form" data-vue-admin-form data-admin-endpoint="<?php echo escape(route_url('api/admin_sections_workflow.php')); ?>" data-admin-action-type="delete" data-admin-confirm="Delete this section?" data-admin-reload="true">
                                                             <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                                                             <input type="hidden" name="form_action" value="delete_section">
                                                             <input type="hidden" name="section_id" value="<?php echo escape((string) $section['id']); ?>">
@@ -1727,7 +1728,7 @@ $attendanceDashboardChartData = [
                                 <p>Assign each teacher to an advisory section for the selected school year.</p>
                             </div>
 
-                            <form method="post" class="learner-form-grid">
+                            <form method="post" class="learner-form-grid" data-vue-admin-form data-admin-endpoint="<?php echo escape(route_url('api/admin_teacher_workflow.php')); ?>" data-admin-redirect="<?php echo escape(route_url('admin.php?module=teacher_management')); ?>">
                                 <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                                 <input type="hidden" name="form_action" value="save_teacher">
                                 <input type="hidden" name="id" value="<?php echo escape((string) ($teacherForm['id'] ?? '')); ?>">
@@ -1834,7 +1835,7 @@ $attendanceDashboardChartData = [
                                                 <td>
                                                     <div class="table-actions">
                                                         <a href="<?php echo escape(route_url('admin.php?module=teacher_management&edit_teacher_id=' . $teacher['id'])); ?>" class="secondary-link small-link icon-only-action" title="Edit teacher" aria-label="Edit teacher"><i class="fa fa-pencil" aria-hidden="true"></i><span class="sr-only">Edit teacher</span></a>
-                                                        <form method="post" class="inline-form" onsubmit="return confirm('Delete this teacher account?');">
+                                                        <form method="post" class="inline-form" data-vue-admin-form data-admin-endpoint="<?php echo escape(route_url('api/admin_teacher_workflow.php')); ?>" data-admin-action-type="delete" data-admin-confirm="Delete this teacher account?" data-admin-reload="true">
                                                             <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                                                             <input type="hidden" name="form_action" value="delete_teacher">
                                                             <input type="hidden" name="teacher_id" value="<?php echo escape((string) $teacher['id']); ?>">
@@ -1871,6 +1872,7 @@ $attendanceDashboardChartData = [
                                 method="get"
                                 class="report-filter-grid"
                                 id="report-filter-form"
+                                data-vue-admin-report-form
                                 data-report-filter-map="<?php echo escape((string) json_encode($reportFilterMap, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP)); ?>"
                             >
                                 <input type="hidden" name="module" value="attendance_reports">
@@ -2208,7 +2210,7 @@ $attendanceDashboardChartData = [
                                 <p>Published announcements will be visible on the parent portal.</p>
                             </div>
 
-                            <form method="post" class="learner-form-grid">
+                            <form method="post" class="learner-form-grid" data-vue-admin-form data-admin-endpoint="<?php echo escape(route_url('api/admin_announcements_workflow.php')); ?>" data-admin-redirect="<?php echo escape(route_url('admin.php?module=announcements')); ?>">
                                 <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                                 <input type="hidden" name="form_action" value="save_announcement">
                                 <input type="hidden" name="id" value="<?php echo escape((string) ($announcementForm['id'] ?? '')); ?>">
@@ -2272,7 +2274,7 @@ $attendanceDashboardChartData = [
                                                 <td>
                                                     <div class="table-actions">
                                                         <a href="<?php echo escape(route_url('admin.php?module=announcements&edit_announcement_id=' . $announcement['id'])); ?>" class="secondary-link small-link icon-only-action" title="Edit announcement" aria-label="Edit announcement"><i class="fa fa-pencil" aria-hidden="true"></i><span class="sr-only">Edit announcement</span></a>
-                                                        <form method="post" class="inline-form" onsubmit="return confirm('Delete this announcement?');">
+                                                        <form method="post" class="inline-form" data-vue-admin-form data-admin-endpoint="<?php echo escape(route_url('api/admin_announcements_workflow.php')); ?>" data-admin-action-type="delete" data-admin-confirm="Delete this announcement?" data-admin-reload="true">
                                                             <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                                                             <input type="hidden" name="form_action" value="delete_announcement">
                                                             <input type="hidden" name="announcement_id" value="<?php echo escape((string) $announcement['id']); ?>">
@@ -2334,20 +2336,22 @@ $attendanceDashboardChartData = [
                                                 <td><?php echo escape($issue['subject']); ?></td>
                                                 <td><?php echo escape(substr($issue['description'], 0, 100)) . (strlen($issue['description']) > 100 ? '...' : ''); ?></td>
                                                 <td><?php echo escape($issue['reporter_name'] . ' (' . $issue['username'] . ')'); ?></td>
-                                                <td><span class="table-status"><?php echo escape(ucfirst($issue['status'])); ?></span></td>
+                                                <td><span class="table-status" data-issue-status-label><?php echo escape(ucfirst(str_replace('_', ' ', $issue['status']))); ?></span></td>
                                                 <td><?php echo escape(date('M j, Y H:i', strtotime($issue['created_at']))); ?></td>
                                                 <td>
                                                     <div class="table-actions">
-                                                        <form method="post" class="inline-form">
+                                                        <form method="post" class="inline-form" data-vue-issue-status data-endpoint="<?php echo escape(route_url('api/issue_status.php')); ?>" data-current-status="<?php echo escape($issue['status']); ?>">
                                                             <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                                                             <input type="hidden" name="form_action" value="update_issue_status">
                                                             <input type="hidden" name="issue_id" value="<?php echo escape((string) $issue['id']); ?>">
-                                                            <select name="status" onchange="this.form.submit()">
+                                                            <select name="status">
                                                                 <option value="open"<?php echo $issue['status'] === 'open' ? ' selected' : ''; ?>>Open</option>
                                                                 <option value="in_progress"<?php echo $issue['status'] === 'in_progress' ? ' selected' : ''; ?>>In Progress</option>
                                                                 <option value="resolved"<?php echo $issue['status'] === 'resolved' ? ' selected' : ''; ?>>Resolved</option>
                                                                 <option value="closed"<?php echo $issue['status'] === 'closed' ? ' selected' : ''; ?>>Closed</option>
                                                             </select>
+                                                            <button type="submit" class="secondary-button">Update</button>
+                                                            <small class="issue-status-feedback" data-issue-status-feedback aria-live="polite"></small>
                                                         </form>
                                                     </div>
                                                 </td>
@@ -2405,13 +2409,13 @@ $attendanceDashboardChartData = [
                                                 <td><?php echo escape(ucfirst($request['role'])); ?></td>
                                                 <td>
                                                     <div class="table-actions">
-                                                        <form method="post" class="inline-form" onsubmit="return confirm('Approve this request and reset the password?');">
+                                                        <form method="post" class="inline-form" data-vue-admin-form data-admin-endpoint="<?php echo escape(route_url('api/admin_password_resets_workflow.php')); ?>" data-admin-action-type="reset" data-admin-confirm="Approve this request and reset the password?" data-admin-reload="true">
                                                             <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                                                             <input type="hidden" name="form_action" value="approve_reset">
                                                             <input type="hidden" name="request_id" value="<?php echo escape((string) $request['id']); ?>">
                                                             <button type="submit" class="primary-button small-link">Approve</button>
                                                         </form>
-                                                        <form method="post" class="inline-form" onsubmit="return confirm('Deny this password reset request?');">
+                                                        <form method="post" class="inline-form" data-vue-admin-form data-admin-endpoint="<?php echo escape(route_url('api/admin_password_resets_workflow.php')); ?>" data-admin-action-type="reset" data-admin-confirm="Deny this password reset request?" data-admin-reload="true">
                                                             <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                                                             <input type="hidden" name="form_action" value="deny_reset">
                                                             <input type="hidden" name="request_id" value="<?php echo escape((string) $request['id']); ?>">
@@ -2447,7 +2451,7 @@ $attendanceDashboardChartData = [
                             <h2>Theme Customization</h2>
                             <p>Choose the color scheme used across the portal.</p>
                         </div>
-                        <form method="post" class="learner-form-grid">
+                        <form method="post" class="learner-form-grid" data-vue-admin-form data-admin-endpoint="<?php echo escape(route_url('api/admin_settings_workflow.php')); ?>" data-admin-redirect="<?php echo escape(route_url('admin.php?module=settings')); ?>">
                             <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                             <input type="hidden" name="form_action" value="save_theme">
 
@@ -2475,6 +2479,14 @@ $attendanceDashboardChartData = [
                                 <button type="submit" class="primary-button">Save Theme</button>
                             </div>
                         </form>
+
+                        <form method="post" class="learner-form-grid" data-vue-admin-form data-admin-endpoint="<?php echo escape(route_url('api/admin_settings_workflow.php')); ?>" data-admin-action-type="reset" data-admin-confirm="Reset theme colors to the default palette?" data-admin-reload="true">
+                            <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
+                            <input type="hidden" name="form_action" value="reset_theme">
+                            <div class="learner-form-actions">
+                                <button type="submit" class="ghost-button">Reset Theme</button>
+                            </div>
+                        </form>
                     </article>
 
                     <article class="admin-module-card">
@@ -2482,7 +2494,7 @@ $attendanceDashboardChartData = [
                             <h2>SMS Settings</h2>
                             <p>Configure the Android SMS gateway and the existing SMS API provider. Gateway delivery is optional and runs after attendance is recorded.</p>
                         </div>
-                        <form method="post" class="learner-form-grid">
+                        <form method="post" class="learner-form-grid" data-vue-admin-form data-admin-endpoint="<?php echo escape(route_url('api/admin_settings_workflow.php')); ?>" data-admin-redirect="<?php echo escape(route_url('admin.php?module=settings')); ?>">
                             <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                             <input type="hidden" name="form_action" value="save_sms_settings">
                             <div>
@@ -2517,7 +2529,7 @@ $attendanceDashboardChartData = [
                             </div>
                         </form>
 
-                        <form method="post" class="learner-form-grid sms-test-form">
+                        <form method="post" class="learner-form-grid sms-test-form" data-vue-admin-form data-admin-endpoint="<?php echo escape(route_url('api/admin_settings_workflow.php')); ?>" data-admin-redirect="<?php echo escape(route_url('admin.php?module=settings')); ?>">
                             <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                             <input type="hidden" name="form_action" value="test_sms_settings">
                             <div>
@@ -2576,6 +2588,9 @@ $attendanceDashboardChartData = [
     <?php if ($module === 'attendance_module'): ?>
         <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
     <?php endif; ?>
-    <script src="<?php echo escape(asset_url('assets/js/admin.js')); ?>"></script>
+        <script type="module" src="<?php echo escape(asset_url('assets/dist/shared.js')); ?>"></script>
+    <?php if ($module === 'reported_issues'): ?>
+        <script type="module" src="<?php echo escape(asset_url('assets/dist/issueStatus.js')); ?>"></script>
+    <?php endif; ?>
 </body>
 </html>

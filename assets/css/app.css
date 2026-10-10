@@ -1019,6 +1019,7 @@ textarea:focus {
 .admin-main-panel {
     padding: 20px;
     display: grid;
+    align-content: start;
     gap: 14px;
     min-width: 0;
 }
@@ -3375,4 +3376,58 @@ textarea:focus {
     .learner-list-table tbody tr {
         grid-template-columns: minmax(0, 1fr);
     }
+}
+/* Vue-enhanced file input feedback */
+.vue-file-feedback {
+    display: block;
+    margin-top: 0.35rem;
+    color: var(--muted);
+}
+
+.vue-quick-filter {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    color: var(--muted);
+    font-size: 0.86rem;
+}
+
+.vue-quick-filter input {
+    min-width: 12rem;
+    padding: 0.45rem 0.6rem;
+}
+
+[data-vue-bmi-output] {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+
+.vue-textarea-counter {
+    display: block;
+    margin-top: 0.25rem;
+    color: var(--muted);
+    font-size: 0.78rem;
+    text-align: right;
+}
+
+.vue-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.65rem;
+    border: 1px solid rgba(23, 102, 58, 0.25);
+    border-radius: 999px;
+    background: rgba(23, 102, 58, 0.08);
+    color: var(--success);
+    font-size: 0.78rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.vue-status-dot {
+    width: 0.45rem;
+    height: 0.45rem;
+    border-radius: 50%;
+    background: var(--success);
+    box-shadow: 0 0 0 3px rgba(23, 102, 58, 0.12);
 }

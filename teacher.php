@@ -913,7 +913,7 @@ $pageMeta = $allowedModules[$module];
                                 <h2>Grades</h2>
                             </div>
 
-                            <form method="get" class="report-filter-grid" style="margin-bottom: 1.5rem;">
+                            <form method="get" class="report-filter-grid" style="margin-bottom: 1.5rem;" data-vue-teacher-report-form>
                                 <input type="hidden" name="module" value="learner_details">
                                 <input type="hidden" name="learner_id" value="<?php echo escape((string) $selectedDashboardLearner['id']); ?>">
 
@@ -996,7 +996,7 @@ $pageMeta = $allowedModules[$module];
                             <p>Create a new parent account and immediately link it to one learner in your section.</p>
                         </div>
 
-                        <form method="post" class="teacher-form-grid">
+                        <form method="post" class="teacher-form-grid" data-vue-teacher-form data-endpoint="<?php echo escape(route_url('api/teacher_workflows.php')); ?>">
                             <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                             <input type="hidden" name="form_action" value="create_parent_and_link">
 
@@ -1081,7 +1081,7 @@ $pageMeta = $allowedModules[$module];
                             <a href="<?php echo escape(route_url('download_parent_template.php?format=xls')); ?>" class="secondary-link">Download XLS Template</a>
                         </div>
 
-                        <form method="post" enctype="multipart/form-data" class="import-form">
+                        <form method="post" enctype="multipart/form-data" class="import-form" data-vue-teacher-form data-endpoint="<?php echo escape(route_url('api/teacher_workflows.php')); ?>">
                             <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                             <input type="hidden" name="form_action" value="import_parent_accounts">
 
@@ -1101,7 +1101,7 @@ $pageMeta = $allowedModules[$module];
                             <p>Use an existing parent username or email and attach it to a learner in your section.</p>
                         </div>
 
-                        <form method="post" class="report-filter-grid">
+                        <form method="post" class="report-filter-grid" data-vue-teacher-form data-endpoint="<?php echo escape(route_url('api/teacher_workflows.php')); ?>">
                             <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                             <input type="hidden" name="form_action" value="link_existing_parent">
 
@@ -1199,7 +1199,7 @@ $pageMeta = $allowedModules[$module];
                             <h2>School Form 2 - Daily Attendance Report</h2>
                             <p>Select a month to display your assigned section's attendance register.</p>
                         </div>
-                        <form method="get" class="report-filter-grid">
+                        <form method="get" class="report-filter-grid" data-vue-teacher-report-form>
                             <input type="hidden" name="module" value="section_attendance">
                             <div class="report-filter-field report-filter-field-wide">
                                 <label for="attendance_month">Report month</label>
@@ -1477,7 +1477,7 @@ $pageMeta = $allowedModules[$module];
                             <a href="<?php echo escape(route_url('download_grade_template.php?format=xls')); ?>" class="secondary-link">Download XLS Template</a>
                         </div>
 
-                        <form method="post" enctype="multipart/form-data" class="import-form">
+                        <form method="post" enctype="multipart/form-data" class="import-form" data-vue-teacher-form data-endpoint="<?php echo escape(route_url('api/teacher_workflows.php')); ?>">
                             <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                             <input type="hidden" name="form_action" value="import_grades">
 
@@ -1497,7 +1497,7 @@ $pageMeta = $allowedModules[$module];
                             <p>Review the grade records currently stored for your assigned learners.</p>
                         </div>
 
-                        <form method="get" class="report-filter-grid" style="margin-bottom: 1.5rem;">
+                        <form method="get" class="report-filter-grid" style="margin-bottom: 1.5rem;" data-vue-teacher-report-form>
                             <input type="hidden" name="module" value="grades_import">
 
                             <div class="report-filter-field report-filter-field-wide">
@@ -1585,7 +1585,7 @@ $pageMeta = $allowedModules[$module];
                             <p>Open one learner to view the detailed imported grades.</p>
                         </div>
 
-                        <form method="get" class="report-filter-grid">
+                        <form method="get" class="report-filter-grid" data-vue-teacher-report-form>
                             <input type="hidden" name="module" value="grades_import">
 
                             <div class="report-filter-field report-filter-field-wide">
@@ -1688,7 +1688,7 @@ $pageMeta = $allowedModules[$module];
                             <a href="<?php echo escape(route_url('download_learner_profile_template.php?format=xls')); ?>" class="secondary-link">Download XLS Template</a>
                         </div>
 
-                        <form method="post" enctype="multipart/form-data" class="import-form">
+                        <form method="post" enctype="multipart/form-data" class="import-form" data-vue-teacher-form data-endpoint="<?php echo escape(route_url('api/teacher_workflows.php')); ?>">
                             <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                             <input type="hidden" name="form_action" value="import_learner_profiles">
 
@@ -1708,7 +1708,7 @@ $pageMeta = $allowedModules[$module];
                             <p>Choose a learner to review or update the basic profile.</p>
                         </div>
 
-                        <form method="get" class="report-filter-grid">
+                        <form method="get" class="report-filter-grid" data-vue-teacher-report-form>
                             <input type="hidden" name="module" value="learner_profiles">
 
                             <div class="report-filter-field report-filter-field-wide">
@@ -1738,7 +1738,7 @@ $pageMeta = $allowedModules[$module];
                             <div class="alert neutral">No learner selected.</div>
                         <?php else: ?>
                             <?php $profileAge = learner_age_on_reference_date($profileForm['birthdate'], $ageReferenceDate); ?>
-                            <form method="post" class="teacher-form-grid">
+                            <form method="post" class="teacher-form-grid" data-vue-teacher-form data-endpoint="<?php echo escape(route_url('api/teacher_workflows.php')); ?>">
                                 <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                                 <input type="hidden" name="form_action" value="save_learner_profile">
                                 <input type="hidden" name="learner_id" value="<?php echo escape($profileForm['learner_id']); ?>">
@@ -1966,7 +1966,7 @@ $pageMeta = $allowedModules[$module];
                                 <p>Published announcements will be visible to parents of your advisory learners.</p>
                             </div>
 
-                            <form method="post" class="learner-form-grid">
+                            <form method="post" class="learner-form-grid" data-vue-teacher-form data-endpoint="<?php echo escape(route_url('api/teacher_workflows.php')); ?>">
                                 <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                                 <input type="hidden" name="form_action" value="save_announcement">
                                 <input type="hidden" name="id" value="<?php echo escape((string) ($announcementForm['id'] ?? '')); ?>">
@@ -2028,7 +2028,7 @@ $pageMeta = $allowedModules[$module];
                                             <td>
                                                 <div class="table-actions">
                                                     <a href="<?php echo escape(teacher_module_url('announcements', ['edit_announcement_id' => $announcement['id']])); ?>" class="secondary-link small-link icon-only-action" title="Edit announcement" aria-label="Edit announcement"><i class="fa fa-pencil" aria-hidden="true"></i><span class="sr-only">Edit announcement</span></a>
-                                                    <form method="post" class="inline-form" onsubmit="return confirm('Delete this announcement?');">
+                                                    <form method="post" class="inline-form" data-vue-teacher-form data-endpoint="<?php echo escape(route_url('api/teacher_workflows.php')); ?>" onsubmit="return confirm('Delete this announcement?');">
                                                         <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                                                         <input type="hidden" name="form_action" value="delete_announcement">
                                                         <input type="hidden" name="announcement_id" value="<?php echo escape((string) $announcement['id']); ?>">
@@ -2055,7 +2055,7 @@ $pageMeta = $allowedModules[$module];
                                 <div class="alert <?php echo escape($settingsFlash['type']); ?>"><?php echo escape($settingsFlash['message']); ?></div>
                             <?php endif; ?>
 
-                            <form method="post" class="learner-form-grid">
+                            <form method="post" class="learner-form-grid" data-vue-teacher-form data-endpoint="<?php echo escape(route_url('api/teacher_workflows.php')); ?>">
                                 <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                                 <input type="hidden" name="form_action" value="save_theme">
 
@@ -2098,7 +2098,7 @@ $pageMeta = $allowedModules[$module];
                                 <h2>Report an Issue</h2>
                                 <p>Encountered a problem? Let us know!</p>
                             </div>
-                            <form method="post" class="learner-form-grid">
+                            <form method="post" class="learner-form-grid" data-vue-teacher-form data-endpoint="<?php echo escape(route_url('api/teacher_workflows.php')); ?>">
                                 <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                                 <input type="hidden" name="form_action" value="report_issue">
 
@@ -2157,6 +2157,6 @@ $pageMeta = $allowedModules[$module];
         <?php $_SESSION['seen_admin_announcements'] = true; ?>
     <?php endif; ?>
 
-    <script src="<?php echo escape(asset_url('assets/js/admin.js')); ?>"></script>
+        <script type="module" src="<?php echo escape(asset_url('assets/dist/shared.js')); ?>"></script>
 </body>
 </html>

@@ -115,18 +115,7 @@ placeholder="Enter your password" required>
 <footer class="login-footer">&copy; <?= date('Y') ?> ProjectPulse <span aria-hidden="true">&middot;</span> Learner monitoring portal</footer>
 </main>
 
-<script>
-const passwordField = document.getElementById('password');
-const passwordToggle = document.querySelector('.password-toggle');
-
-passwordToggle.addEventListener('click', () => {
-    const isVisible = passwordField.type === 'text';
-    passwordField.type = isVisible ? 'password' : 'text';
-    passwordToggle.setAttribute('aria-pressed', String(!isVisible));
-    passwordToggle.setAttribute('aria-label', isVisible ? 'Show password' : 'Hide password');
-    passwordToggle.querySelector('i').className = isVisible ? 'fa fa-eye-slash' : 'fa fa-eye';
-});
-</script>
+<script type="module" src="<?= escape(asset_url('assets/dist/login.js')) ?>"></script>
 
 </body>
 </html>

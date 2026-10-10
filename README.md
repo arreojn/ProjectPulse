@@ -175,6 +175,56 @@ existing `attendance_records` and `attendance_scan_logs` tables.
 
 The recognition model is rebuilt by the training action after enrollment.
 
+### Vue attendance pilot
+
+The attendance scanner is the first bounded Vue 3 workflow. PHP continues to
+own authentication, sessions, database access, page rendering, and the
+existing JSON API endpoints. Vue is mounted only on `attendance.php`; the
+other PHP pages and their JavaScript are unchanged.
+
+Prerequisites: Node.js LTS and npm, in addition to the existing PHP/MySQL and
+XAMPP setup. From the project directory:
+
+```text
+npm install
+npm run dev      # optional local Vite development server
+npm run build    # production bundle for Apache/XAMPP
+```
+
+`npm run build` writes the deployable bundle to `assets/dist/`, which is
+served by the PHP page. The production build is committed so a deployed
+XAMPP copy does not need Node.js. The pilot preserves the existing scanner
+workflow: 12-digit LRN validation, CSRF-protected scans and mode changes,
+learner lookup, recent logs, empty/loading/error states, and responsive CSS.
+
+The shared Vue bundle is also loaded by the administrator, teacher, health,
+guidance, and parent portals. It currently owns the common responsive sidebar,
+report-filter visibility, learner-age display, and announcement-modal behavior.
+It also adds consistent submit feedback and duplicate-submit protection to
+the existing PHP GET/POST forms. The administrator attendance charts now use
+the Vue controller with the existing Chart.js data. Module-specific forms
+remain PHP-backed until their workflow is migrated and regression-tested.
+Import workflows also receive Vue-managed file-selection feedback, while their
+existing multipart form submissions and server-side validation remain the
+source of truth.
+
+The facial attendance and facial enrollment stations are now separate Vue
+bundles. They preserve the existing webcam, CSRF, recognition, enrollment,
+model-training, and attendance-summary endpoints while moving camera lifecycle,
+frame processing, feedback, and table updates out of inline JavaScript.
+
+The administrator's reported-issues page uses a dedicated Vue bundle for
+status updates. It posts to an admin-only, CSRF-protected PHP JSON endpoint;
+the existing PHP form submission remains available when JavaScript is disabled.
+
+Regression checklist for the pilot:
+
+- Authorized `attendance` and `admin` users can scan a learner and see updated details and logs.
+- Unauthorized users cannot open `attendance.php` or its attendance APIs.
+- Invalid LRNs, missing learners, API failures, empty logs, and invalid CSRF tokens show an operator-visible error.
+- Admins can change scan mode; attendance users can view but not change it.
+- Verify desktop and mobile widths in XAMPP after each production build.
+
 For responsive scanning, ProjectPulse starts a localhost recognition worker on
 the first facial-attendance scan. The worker keeps the OpenCV detector and
 trained model in memory, so subsequent frames do not start Python or reload

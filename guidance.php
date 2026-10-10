@@ -373,7 +373,7 @@ if ($module === 'case_detail' && $editingCase === null) {
                         <h2><?php echo $editingCase !== null ? 'Update Guidance Case' : 'Create Guidance Case'; ?></h2>
                         <p>Fields for managing a learner guidance case file.</p>
                     </div>
-                    <form method="post" class="teacher-form-grid">
+                    <form method="post" class="teacher-form-grid" data-vue-guidance-form="case" data-endpoint="<?php echo escape(route_url('api/guidance_case.php')); ?>">
                         <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                         <input type="hidden" name="save_case" value="1">
                         <?php if ($editingCase !== null): ?>
@@ -475,7 +475,7 @@ if ($module === 'case_detail' && $editingCase === null) {
                                 <h2>Add Counseling Session</h2>
                             </div>
                         </div>
-                        <form method="post" class="report-filter-grid">
+                        <form method="post" class="report-filter-grid" data-vue-guidance-form="session" data-endpoint="<?php echo escape(route_url('api/guidance_session.php')); ?>">
                             <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                             <input type="hidden" name="save_session" value="1">
                             <input type="hidden" name="case_id" value="<?php echo escape((string) $editingCase['id']); ?>">
@@ -511,7 +511,7 @@ if ($module === 'case_detail' && $editingCase === null) {
                                 <h2>Add Referral</h2>
                             </div>
                         </div>
-                        <form method="post" class="teacher-form-grid">
+                        <form method="post" class="teacher-form-grid" data-vue-guidance-form="referral" data-endpoint="<?php echo escape(route_url('api/guidance_referral.php')); ?>">
                             <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                             <input type="hidden" name="save_referral" value="1">
                             <input type="hidden" name="case_id" value="<?php echo escape((string) $editingCase['id']); ?>">
@@ -556,7 +556,7 @@ if ($module === 'case_detail' && $editingCase === null) {
                                 <h2>Add Intervention Plan</h2>
                             </div>
                         </div>
-                        <form method="post" class="teacher-form-grid">
+                        <form method="post" class="teacher-form-grid" data-vue-guidance-form="intervention" data-endpoint="<?php echo escape(route_url('api/guidance_intervention.php')); ?>">
                             <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                             <input type="hidden" name="save_intervention" value="1">
                             <input type="hidden" name="case_id" value="<?php echo escape((string) $editingCase['id']); ?>">
@@ -697,7 +697,7 @@ if ($module === 'case_detail' && $editingCase === null) {
                         <h2>Filter Cases</h2>
                         <p>Search by keyword, status, or date range.</p>
                     </div>
-                    <form method="get" class="report-filter-grid">
+                    <form method="get" class="report-filter-grid" data-vue-guidance-filter="cases" data-vue-guidance-table="#guidance-cases-table">
                         <input type="hidden" name="module" value="cases">
                         <div class="report-filter-field">
                             <label for="keyword">Keyword</label>
@@ -728,7 +728,7 @@ if ($module === 'case_detail' && $editingCase === null) {
                 </article>
                 <article class="teacher-panel-card">
                     <div class="table-shell">
-                        <table class="records-table">
+                        <table class="records-table" id="guidance-cases-table" data-vue-guidance-table="cases">
                             <thead>
                                 <tr>
                                     <th>Case #</th>
@@ -765,7 +765,7 @@ if ($module === 'case_detail' && $editingCase === null) {
                         <h2>Report Filters</h2>
                         <p>Select filters to generate the Case Summary Report.</p>
                     </div>
-                    <form method="get" class="report-filter-grid">
+                    <form method="get" class="report-filter-grid" data-vue-guidance-filter="reports" data-vue-guidance-table="#guidance-report-table">
                         <input type="hidden" name="module" value="reports">
                         <div class="report-filter-field">
                             <label for="keyword">Keyword</label>
@@ -807,7 +807,7 @@ if ($module === 'case_detail' && $editingCase === null) {
                         </div>
                     </div>
                     <div class="table-shell">
-                        <table class="records-table">
+                        <table class="records-table" id="guidance-report-table" data-vue-guidance-table="reports">
                             <thead>
                                 <tr>
                                     <th>Case #</th>
@@ -870,7 +870,7 @@ if ($module === 'case_detail' && $editingCase === null) {
                             <h2>Change Password</h2>
                             <p>Update your account password.</p>
                         </div>
-                        <form method="post" class="auth-form">
+                        <form method="post" class="auth-form" data-vue-guidance-form="password" data-endpoint="<?php echo escape(route_url('api/guidance_password.php')); ?>">
                             <input type="hidden" name="action" value="change_password">
                             <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
 
@@ -900,6 +900,6 @@ if ($module === 'case_detail' && $editingCase === null) {
             </section>
         </section>
     </main>
-    <script src="<?php echo escape(asset_url('assets/js/admin.js')); ?>"></script>
+        <script type="module" src="<?php echo escape(asset_url('assets/dist/shared.js')); ?>"></script>
 </body>
 </html>
