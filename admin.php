@@ -932,17 +932,12 @@ $attendanceDashboardChartData = [
                     <div class="sidebar-brand">
                         <div class="sidebar-brand-logos">
                             <img class="sidebar-brand-logo pulse-logo" src="<?php echo escape(asset_url('assets/images/pulselogo.png')); ?>" alt="Project PULSE Logo">
-                            <img class="sidebar-brand-logo school-logo-badge" src="<?php echo escape(school_logo_url()); ?>" alt="School Logo">
                         </div>
                         <div class="sidebar-brand-text">
                             <span class="sidebar-brand-title">Project <span class="brand-pulse">PULSE</span></span>
                             <span class="sidebar-brand-subtitle">Monitoring Portal</span>
                         </div>
                     </div>
-                    <p class="eyebrow">Admin Profile</p>
-                    <h1>Portal Admin</h1>
-                    <p class="sidebar-user"><?php echo escape($user['username']); ?></p>
-                    <p class="sidebar-email"><?php echo escape($user['email']); ?></p>
                 </div>
 
                 <nav class="sidebar-nav" aria-label="Admin Navigation">
@@ -983,9 +978,7 @@ $attendanceDashboardChartData = [
                         <div class="admin-page-title">
                             <img class="school-logo header-logo" src="<?php echo escape(school_logo_url()); ?>" alt="School logo">
                             <div class="header-copy">
-                                <p class="eyebrow">Attendance</p>
                                 <h2>Attendance Dashboard</h2>
-                                <p>Daily learner scan activity and current school-year coverage.</p>
                                 <div class="dashboard-header-meta">
                                     <span><?php echo escape(date('l, F j, Y')); ?></span>
                                     <span>School year: <?php echo escape($attendanceSchoolYear['label'] ?? 'Not configured'); ?></span>
@@ -994,11 +987,9 @@ $attendanceDashboardChartData = [
                             </div>
                         </div>
 
-                        <!-- <div class="topbar-actions">
-                            <a href="<?php echo escape(route_url('attendance.php')); ?>" class="primary-button">Open Attendance Station</a>
-                            <a href="<?php echo escape(route_url('face_enrollment.php')); ?>" class="secondary-link">Face Enrollment</a>
-                            <a href="<?php echo escape(route_url('face_attendance.php')); ?>" class="ghost-button">Face Recognition Station</a>
-                        </div> -->
+                        <div class="topbar-actions">
+                            <a href="<?php echo escape(route_url('attendance.php')); ?>" class="primary-button" target="_blank" rel="noopener">Open Attendance Station</a>
+                        </div>
                     </header>
 
                     <?php if ($dataWarning !== null): ?>
@@ -1031,15 +1022,10 @@ $attendanceDashboardChartData = [
                         </article>
                     </section>
 
-                    <p class="attendance-data-note">
-                        Scan coverage counts active enrollees with at least one scan; it is not a confirmed full-day attendance rate. The scan workflow stores P and does not calculate lateness. Without a scheduled-school-day roster, unscanned learners cannot be classified as absent and a historical attendance-rate trend cannot be calculated.
-                    </p>
-
                     <section class="admin-analytics-grid dashboard-primary-grid" aria-label="Attendance scan activity charts">
                         <article class="admin-module-card analytics-card dashboard-chart-card">
                             <div class="panel-heading compact-heading">
                                 <h2>Scan Activity Trend</h2>
-                                <p>Unique active enrollees scanned on the 30 most recent dates with activity this school year.</p>
                             </div>
                             <?php if (isset($attendanceDashboardWarnings['trend'])): ?>
                                 <p class="dashboard-empty-state error-state" role="status"><?php echo escape($attendanceDashboardWarnings['trend']); ?></p>
@@ -1048,13 +1034,11 @@ $attendanceDashboardChartData = [
                             <?php else: ?>
                                 <div class="dashboard-chart-wrap"><canvas id="attendance-trend-chart" role="img" aria-label="Unique enrolled learners scanned by date over the last 30 days"></canvas></div>
                             <?php endif; ?>
-                            <p class="chart-footnote">Recorded scan activity only; days without scan logs are omitted. This does not measure daily attendance rate.</p>
                         </article>
 
                         <article class="admin-module-card analytics-card dashboard-chart-card">
                             <div class="panel-heading compact-heading">
                                 <h2>Hourly Scan Volume</h2>
-                                <p>Scan events by recorded hour, including time-in and time-out scans.</p>
                             </div>
                             <?php if (isset($attendanceDashboardWarnings['hourly'])): ?>
                                 <p class="dashboard-empty-state error-state" role="status"><?php echo escape($attendanceDashboardWarnings['hourly']); ?></p>
@@ -1071,7 +1055,6 @@ $attendanceDashboardChartData = [
                         <article class="admin-module-card analytics-card dashboard-chart-card">
                             <div class="panel-heading compact-heading">
                                 <h2>Today's Attendance Status</h2>
-                                <p>Current-year records grouped by their saved legend.</p>
                             </div>
                             <?php if (isset($attendanceDashboardWarnings['status'])): ?>
                                 <p class="dashboard-empty-state error-state" role="status"><?php echo escape($attendanceDashboardWarnings['status']); ?></p>
@@ -1096,7 +1079,6 @@ $attendanceDashboardChartData = [
                         <article class="admin-module-card analytics-card dashboard-chart-card">
                             <div class="panel-heading compact-heading">
                                 <h2>Attendance by Grade Level</h2>
-                                <p>Today's saved status records; hover or focus a segment for its count.</p>
                             </div>
                             <?php if (isset($attendanceDashboardWarnings['grade_status'])): ?>
                                 <p class="dashboard-empty-state error-state" role="status"><?php echo escape($attendanceDashboardWarnings['grade_status']); ?></p>
@@ -1114,7 +1096,6 @@ $attendanceDashboardChartData = [
                         <article class="admin-module-card analytics-card dashboard-chart-card">
                             <div class="panel-heading compact-heading">
                                 <h2>Today's Scan Coverage</h2>
-                                <p>At least one logged scan among active enrollees in the current school year.</p>
                             </div>
                             <div class="coverage-chart-row dashboard-coverage-row">
                                 <div class="coverage-donut" style="--coverage: <?php echo escape((string) $attendanceCoverage['coverage_percent']); ?>%;" role="img" aria-label="<?php echo escape(number_format((float) $attendanceCoverage['coverage_percent'], 1)); ?> percent of active enrollees scanned today">
@@ -1133,7 +1114,6 @@ $attendanceDashboardChartData = [
                         <article class="admin-module-card analytics-card dashboard-chart-card">
                             <div class="panel-heading compact-heading">
                                 <h2>Grade-Level Coverage</h2>
-                                <p>Scanned learners compared with active current-year enrollment.</p>
                             </div>
                             <?php if ($attendanceGradeRows === []): ?>
                                 <p class="dashboard-empty-state">No active learner enrollment is available for charting.</p>
@@ -1166,7 +1146,6 @@ $attendanceDashboardChartData = [
                         <article class="admin-module-card analytics-card dashboard-chart-card">
                             <div class="panel-heading compact-heading">
                                 <h2>Frequently Absent Learners</h2>
-                                <p>Top learners with explicitly saved A-status records this school year.</p>
                             </div>
                             <?php if (isset($attendanceDashboardWarnings['recorded_status'])): ?>
                                 <p class="dashboard-empty-state error-state" role="status"><?php echo escape($attendanceDashboardWarnings['recorded_status']); ?></p>
@@ -1184,7 +1163,6 @@ $attendanceDashboardChartData = [
                         <article class="admin-module-card analytics-card dashboard-chart-card">
                             <div class="panel-heading compact-heading">
                                 <h2>Frequently Late Learners</h2>
-                                <p>Top learners with explicitly saved L-status records this school year.</p>
                             </div>
                             <?php if (isset($attendanceDashboardWarnings['recorded_status'])): ?>
                                 <p class="dashboard-empty-state error-state" role="status"><?php echo escape($attendanceDashboardWarnings['recorded_status']); ?></p>
@@ -1206,7 +1184,6 @@ $attendanceDashboardChartData = [
                         <article class="admin-module-card">
                             <div class="panel-heading compact-heading">
                                 <h2>Latest Attendance Logs</h2>
-                                <p>Recent system activity across the attendance station.</p>
                             </div>
 
                             <div class="table-shell">
@@ -1671,7 +1648,7 @@ $attendanceDashboardChartData = [
                         </div>
 
                         <div class="table-shell">
-                            <table class="records-table learner-table">
+                            <table class="records-table learner-table sections-table">
                                 <thead>
                                     <tr>
                                         <th>Grade</th>
@@ -1691,13 +1668,13 @@ $attendanceDashboardChartData = [
                                     <?php else: ?>
                                         <?php foreach ($sectionRows as $section): ?>
                                             <tr>
-                                                <td><?php echo escape($section['grade_level']); ?></td>
-                                                <td><?php echo escape($section['name']); ?></td>
-                                                <td><?php echo escape(trim((string) ($section['adviser_name'] ?? '')) !== '' ? (string) $section['adviser_name'] : '-'); ?></td>
-                                                <td><?php echo escape($section['school_year_label']); ?></td>
-                                                <td><?php echo escape((string) $section['assigned_teacher_count']); ?></td>
-                                                <td><?php echo escape((string) $section['learner_count']); ?></td>
-                                                <td>
+                                                <td data-label="Grade"><?php echo escape($section['grade_level']); ?></td>
+                                                <td data-label="Section"><?php echo escape($section['name']); ?></td>
+                                                <td data-label="Adviser"><?php echo escape(trim((string) ($section['adviser_name'] ?? '')) !== '' ? (string) $section['adviser_name'] : '-'); ?></td>
+                                                <td data-label="School Year"><?php echo escape($section['school_year_label']); ?></td>
+                                                <td data-label="Teachers"><?php echo escape((string) $section['assigned_teacher_count']); ?></td>
+                                                <td data-label="Learners"><?php echo escape((string) $section['learner_count']); ?></td>
+                                                <td data-label="Actions">
                                                     <div class="table-actions">
                                                         <a href="<?php echo escape(route_url('admin.php?module=sections_management&edit_section_id=' . $section['id'])); ?>" class="secondary-link small-link icon-only-action" title="Edit section" aria-label="Edit section"><i class="fa fa-pencil" aria-hidden="true"></i><span class="sr-only">Edit section</span></a>
                                                         <form method="post" class="inline-form" data-vue-admin-form data-admin-endpoint="<?php echo escape(route_url('api/admin_sections_workflow.php')); ?>" data-admin-action-type="delete" data-admin-confirm="Delete this section?" data-admin-reload="true">
@@ -1816,7 +1793,7 @@ $attendanceDashboardChartData = [
                         </div>
 
                         <div class="table-shell">
-                            <table class="records-table learner-table">
+                            <table class="records-table learner-table mobile-record-table">
                                 <thead>
                                     <tr>
                                         <th>Teacher Name</th>
@@ -1836,13 +1813,13 @@ $attendanceDashboardChartData = [
                                     <?php else: ?>
                                         <?php foreach ($teacherRows as $teacher): ?>
                                             <tr>
-                                                <td><?php echo escape(trim($teacher['first_name'] . ' ' . $teacher['middle_name'] . ' ' . $teacher['last_name']) !== '' ? trim($teacher['first_name'] . ' ' . $teacher['middle_name'] . ' ' . $teacher['last_name']) : $teacher['username']); ?></td>
-                                                <td><?php echo escape($teacher['username']); ?></td>
-                                                <td><?php echo escape($teacher['email']); ?></td>
-                                                <td><?php echo escape($teacher['grade_level']); ?></td>
-                                                <td><?php echo escape($teacher['section_name']); ?></td>
-                                                <td><?php echo escape($teacher['school_year_label']); ?></td>
-                                                <td>
+                                                <td data-label="Teacher Name"><?php echo escape(trim($teacher['first_name'] . ' ' . $teacher['middle_name'] . ' ' . $teacher['last_name']) !== '' ? trim($teacher['first_name'] . ' ' . $teacher['middle_name'] . ' ' . $teacher['last_name']) : $teacher['username']); ?></td>
+                                                <td data-label="Username"><?php echo escape($teacher['username']); ?></td>
+                                                <td data-label="Email"><?php echo escape($teacher['email']); ?></td>
+                                                <td data-label="Grade"><?php echo escape($teacher['grade_level']); ?></td>
+                                                <td data-label="Section"><?php echo escape($teacher['section_name']); ?></td>
+                                                <td data-label="School Year"><?php echo escape($teacher['school_year_label']); ?></td>
+                                                <td data-label="Actions">
                                                     <div class="table-actions">
                                                         <a href="<?php echo escape(route_url('admin.php?module=teacher_management&edit_teacher_id=' . $teacher['id'])); ?>" class="secondary-link small-link icon-only-action" title="Edit teacher" aria-label="Edit teacher"><i class="fa fa-pencil" aria-hidden="true"></i><span class="sr-only">Edit teacher</span></a>
                                                         <form method="post" class="inline-form" data-vue-admin-form data-admin-endpoint="<?php echo escape(route_url('api/admin_teacher_workflow.php')); ?>" data-admin-action-type="delete" data-admin-confirm="Delete this teacher account?" data-admin-reload="true">
@@ -2259,7 +2236,7 @@ $attendanceDashboardChartData = [
                         </div>
 
                         <div class="table-shell">
-                            <table class="records-table learner-table">
+                            <table class="records-table learner-table mobile-record-table">
                                 <thead>
                                     <tr>
                                         <th>Title</th>
@@ -2277,11 +2254,11 @@ $attendanceDashboardChartData = [
                                     <?php else: ?>
                                         <?php foreach ($announcementRows as $announcement): ?>
                                             <tr>
-                                                <td><?php echo escape($announcement['title']); ?></td>
-                                                <td><span class="table-status"><?php echo !empty($announcement['is_published']) ? 'Published' : 'Draft'; ?></span></td>
-                                                <td><?php echo escape($announcement['username'] ?? 'N/A'); ?></td>
-                                                <td><?php echo escape($announcement['published_at'] !== null ? date('M j, Y', strtotime($announcement['published_at'])) : '-'); ?></td>
-                                                <td>
+                                                <td data-label="Title"><?php echo escape($announcement['title']); ?></td>
+                                                <td data-label="Status"><span class="table-status"><?php echo !empty($announcement['is_published']) ? 'Published' : 'Draft'; ?></span></td>
+                                                <td data-label="Created By"><?php echo escape($announcement['username'] ?? 'N/A'); ?></td>
+                                                <td data-label="Published On"><?php echo escape($announcement['published_at'] !== null ? date('M j, Y', strtotime($announcement['published_at'])) : '-'); ?></td>
+                                                <td data-label="Actions">
                                                     <div class="table-actions">
                                                         <a href="<?php echo escape(route_url('admin.php?module=announcements&edit_announcement_id=' . $announcement['id'])); ?>" class="secondary-link small-link icon-only-action" title="Edit announcement" aria-label="Edit announcement"><i class="fa fa-pencil" aria-hidden="true"></i><span class="sr-only">Edit announcement</span></a>
                                                         <form method="post" class="inline-form" data-vue-admin-form data-admin-endpoint="<?php echo escape(route_url('api/admin_announcements_workflow.php')); ?>" data-admin-action-type="delete" data-admin-confirm="Delete this announcement?" data-admin-reload="true">
@@ -2322,7 +2299,7 @@ $attendanceDashboardChartData = [
                         </div>
 
                         <div class="table-shell reported-issues-table-shell">
-                            <table class="records-table learner-table">
+                            <table class="records-table learner-table mobile-record-table">
                                 <thead>
                                     <tr>
                                         <th>ID</th>
@@ -2342,13 +2319,13 @@ $attendanceDashboardChartData = [
                                     <?php else: ?>
                                         <?php foreach ($issueRows as $issue): ?>
                                             <tr>
-                                                <td><?php echo escape((string) $issue['id']); ?></td>
-                                                <td><?php echo escape($issue['subject']); ?></td>
-                                                <td><?php echo escape(substr($issue['description'], 0, 100)) . (strlen($issue['description']) > 100 ? '...' : ''); ?></td>
-                                                <td><?php echo escape($issue['reporter_name'] . ' (' . $issue['username'] . ')'); ?></td>
-                                                <td><span class="table-status" data-issue-status-label><?php echo escape(ucfirst(str_replace('_', ' ', $issue['status']))); ?></span></td>
-                                                <td><?php echo escape(date('M j, Y H:i', strtotime($issue['created_at']))); ?></td>
-                                                <td>
+                                                <td data-label="ID"><?php echo escape((string) $issue['id']); ?></td>
+                                                <td data-label="Subject"><?php echo escape($issue['subject']); ?></td>
+                                                <td data-label="Description"><?php echo escape(substr($issue['description'], 0, 100)) . (strlen($issue['description']) > 100 ? '...' : ''); ?></td>
+                                                <td data-label="Reported By"><?php echo escape($issue['reporter_name'] . ' (' . $issue['username'] . ')'); ?></td>
+                                                <td data-label="Status"><span class="table-status" data-issue-status-label><?php echo escape(ucfirst(str_replace('_', ' ', $issue['status']))); ?></span></td>
+                                                <td data-label="Reported On"><?php echo escape(date('M j, Y H:i', strtotime($issue['created_at']))); ?></td>
+                                                <td data-label="Actions">
                                                     <div class="table-actions">
                                                         <form method="post" class="inline-form" data-vue-issue-status data-endpoint="<?php echo escape(route_url('api/issue_status.php')); ?>" data-current-status="<?php echo escape($issue['status']); ?>">
                                                             <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
@@ -2395,7 +2372,7 @@ $attendanceDashboardChartData = [
                         </div>
 
                         <div class="table-shell">
-                            <table class="records-table learner-table">
+                            <table class="records-table learner-table mobile-record-table">
                                 <thead>
                                     <tr>
                                         <th>Requested At</th>
@@ -2413,11 +2390,11 @@ $attendanceDashboardChartData = [
                                     <?php else: ?>
                                         <?php foreach ($pendingPasswordResets as $request): ?>
                                             <tr>
-                                                <td><?php echo escape(date('M j, Y H:i', strtotime($request['requested_at']))); ?></td>
-                                                <td><?php echo escape($request['username']); ?></td>
-                                                <td><?php echo escape($request['email']); ?></td>
-                                                <td><?php echo escape(ucfirst($request['role'])); ?></td>
-                                                <td>
+                                                <td data-label="Requested At"><?php echo escape(date('M j, Y H:i', strtotime($request['requested_at']))); ?></td>
+                                                <td data-label="Username"><?php echo escape($request['username']); ?></td>
+                                                <td data-label="Email"><?php echo escape($request['email']); ?></td>
+                                                <td data-label="Role"><?php echo escape(ucfirst($request['role'])); ?></td>
+                                                <td data-label="Actions">
                                                     <div class="table-actions">
                                                         <form method="post" class="inline-form" data-vue-admin-form data-admin-endpoint="<?php echo escape(route_url('api/admin_password_resets_workflow.php')); ?>" data-admin-action-type="reset" data-admin-confirm="Approve this request and reset the password?" data-admin-reload="true">
                                                             <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
@@ -2559,7 +2536,7 @@ $attendanceDashboardChartData = [
                         </div>
 
                         <div class="table-shell">
-                            <table class="records-table admin-log-table">
+                            <table class="records-table admin-log-table mobile-record-table">
                                 <thead>
                                     <tr>
                                         <th>Date</th>
@@ -2578,12 +2555,12 @@ $attendanceDashboardChartData = [
                                     <?php else: ?>
                                         <?php foreach ($systemLoginLogs as $log): ?>
                                             <tr>
-                                                <td><?php echo escape(date('Y-m-d', strtotime($log['logged_in_at']))); ?></td>
-                                                <td><?php echo escape(date('h:i:s A', strtotime($log['logged_in_at']))); ?></td>
-                                                <td><?php echo escape($log['identity_value']); ?></td>
-                                                <td><?php echo escape($log['full_name_snapshot'] !== null && $log['full_name_snapshot'] !== '' ? $log['full_name_snapshot'] : ($log['username_snapshot'] ?? '-')); ?></td>
-                                                <td><?php echo escape($log['role_snapshot'] !== null && $log['role_snapshot'] !== '' ? ucfirst($log['role_snapshot']) : '-'); ?></td>
-                                                <td><span class="table-status"><?php echo escape(ucfirst($log['login_status'])); ?></span></td>
+                                                <td data-label="Date"><?php echo escape(date('Y-m-d', strtotime($log['logged_in_at']))); ?></td>
+                                                <td data-label="Time"><?php echo escape(date('h:i:s A', strtotime($log['logged_in_at']))); ?></td>
+                                                <td data-label="Identity"><?php echo escape($log['identity_value']); ?></td>
+                                                <td data-label="Name"><?php echo escape($log['full_name_snapshot'] !== null && $log['full_name_snapshot'] !== '' ? $log['full_name_snapshot'] : ($log['username_snapshot'] ?? '-')); ?></td>
+                                                <td data-label="Role"><?php echo escape($log['role_snapshot'] !== null && $log['role_snapshot'] !== '' ? ucfirst($log['role_snapshot']) : '-'); ?></td>
+                                                <td data-label="Status"><span class="table-status"><?php echo escape(ucfirst($log['login_status'])); ?></span></td>
                                             </tr>
                                         <?php endforeach; ?>
                                     <?php endif; ?>

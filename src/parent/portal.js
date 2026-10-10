@@ -37,13 +37,13 @@ function renderAttendanceTable(rows) {
     const remarks = row.remarks || '-';
     return `
       <tr>
-        <td>${formatDate(row.attendance_date)}</td>
-        <td><span class="table-status">${escapeHtml(status)}</span></td>
-        <td>${formatTime(row.am_time_in)}</td>
-        <td>${formatTime(row.am_time_out)}</td>
-        <td>${formatTime(row.pm_time_in)}</td>
-        <td>${formatTime(row.pm_time_out)}</td>
-        <td>${escapeHtml(remarks)}</td>
+        <td data-label="Date">${formatDate(row.attendance_date)}</td>
+        <td data-label="Status"><span class="table-status">${escapeHtml(status)}</span></td>
+        <td data-label="AM In">${formatTime(row.am_time_in)}</td>
+        <td data-label="AM Out">${formatTime(row.am_time_out)}</td>
+        <td data-label="PM In">${formatTime(row.pm_time_in)}</td>
+        <td data-label="PM Out">${formatTime(row.pm_time_out)}</td>
+        <td data-label="Remarks">${escapeHtml(remarks)}</td>
       </tr>
     `;
   }).join('');
@@ -71,6 +71,27 @@ function renderSummary(summary) {
   `).join('');
 }
 
+function renderGradeTable(columns, rows, semesterLabel = '') {
+  const semesterHeading = semesterLabel
+    ? `<tr><th colspan="${columns.length}">${escapeHtml(semesterLabel)}</th></tr>`
+    : '';
+  const headings = columns.map(([label]) => `<th>${escapeHtml(label)}</th>`).join('');
+  const cells = rows.map((row) => `
+    <tr>${columns.map(([label, valueForRow]) => `
+      <td data-label="${escapeHtml(label)}">${escapeHtml(valueForRow(row) ?? '-')}</td>
+    `).join('')}</tr>
+  `).join('');
+
+  return `
+    <div class="table-shell">
+      <table class="records-table report-table mobile-record-table">
+        <thead>${semesterHeading}<tr>${headings}</tr></thead>
+        <tbody>${cells}</tbody>
+      </table>
+    </div>
+  `;
+}
+
 function renderGradeHistory(groups) {
   const gradeRoot = document.getElementById('parent-grade-history-root');
   if (!gradeRoot) return;
@@ -81,26 +102,43 @@ function renderGradeHistory(groups) {
   }
 
   gradeRoot.innerHTML = groups.map((group) => {
-    const rows = (group.rows || []).map((row) => {
+    const rows = group.rows || [];
+    const isSeniorHigh = /^(?:grade\s*)?(?:11|12)$/i.test(String(group.grade_level || '').trim());
+    const quarterAverage = (row) => {
       const values = [row.quarter_1_grade, row.quarter_2_grade, row.quarter_3_grade, row.quarter_4_grade]
         .filter((value) => value !== null && value !== '');
-      const quarterAverage = values.length
+      return values.length
         ? values.reduce((total, value) => total + Number(value), 0) / values.length
         : null;
+    };
 
-      return `
-        <tr>
-          <td>${escapeHtml(row.subject_name ?? '-')}</td>
-          <td>${escapeHtml(row.quarter_1_grade ?? '-')}</td>
-          <td>${escapeHtml(row.quarter_2_grade ?? '-')}</td>
-          <td>${escapeHtml(row.quarter_3_grade ?? '-')}</td>
-          <td>${escapeHtml(row.quarter_4_grade ?? '-')}</td>
-          <td>${quarterAverage !== null ? escapeHtml(String(quarterAverage.toFixed(2))) : '-'}</td>
-          <td>${escapeHtml(row.final_average ?? '-')}</td>
-          <td>${escapeHtml(row.remarks ?? '-')}</td>
-        </tr>
-      `;
-    }).join('');
+    const gradeTables = isSeniorHigh
+      ? renderGradeTable([
+        ['Subject', (row) => row.subject_name],
+        ['Q1', (row) => row.quarter_1_grade],
+        ['Q2', (row) => row.quarter_2_grade],
+        ['1st Sem Avg', (row) => row.first_semester_average],
+      ], rows, 'First Semester') + renderGradeTable([
+        ['Subject', (row) => row.subject_name],
+        ['Q3', (row) => row.quarter_3_grade],
+        ['Q4', (row) => row.quarter_4_grade],
+        ['2nd Sem Avg', (row) => row.second_semester_average],
+        ['Final Avg', (row) => row.final_average],
+        ['Remarks', (row) => row.remarks],
+      ], rows, 'Second Semester')
+      : renderGradeTable([
+        ['Subject', (row) => row.subject_name],
+        ['Q1', (row) => row.quarter_1_grade],
+        ['Q2', (row) => row.quarter_2_grade],
+        ['Q3', (row) => row.quarter_3_grade],
+        ['Q4', (row) => row.quarter_4_grade],
+        ['Average', (row) => {
+          const average = quarterAverage(row);
+          return average !== null ? average.toFixed(2) : '-';
+        }],
+        ['Final Avg', (row) => row.final_average],
+        ['Remarks', (row) => row.remarks],
+      ], rows);
 
     return `
       <section class="grade-history-section">
@@ -110,23 +148,7 @@ function renderGradeHistory(groups) {
           <p><strong>Section:</strong> ${escapeHtml(group.section_name || '-')}</p>
           <p><strong>Grand Average:</strong> ${escapeHtml(group.grand_average !== null ? String(group.grand_average) : '-')}</p>
         </div>
-        <div class="table-shell">
-          <table class="records-table report-table">
-            <thead>
-              <tr>
-                <th>Subject</th>
-                <th>Q1</th>
-                <th>Q2</th>
-                <th>Q3</th>
-                <th>Q4</th>
-                <th>Average</th>
-                <th>Final Avg</th>
-                <th>Remarks</th>
-              </tr>
-            </thead>
-            <tbody>${rows}</tbody>
-          </table>
-        </div>
+        ${gradeTables}
       </section>
     `;
   }).join('');

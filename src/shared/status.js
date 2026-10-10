@@ -1,4 +1,5 @@
 export function mountVueStatus() {
+  if (document.body.classList.contains('admin-dashboard')) return;
   if (document.querySelector('[data-vue-status]')) return;
   const host = document.querySelector('.topbar-actions, .admin-page-header .topbar-actions, .login-content');
   if (!host) return;

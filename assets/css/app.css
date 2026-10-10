@@ -950,23 +950,27 @@ textarea:focus {
     align-items: center;
     justify-content: center;
     gap: 10px;
+    min-height: 68px;
 }
 
 .sidebar-brand-logo {
-    display: inline-block;
+    display: block;
     object-fit: contain;
+    flex-shrink: 0;
+    background: rgba(255, 255, 255, 0.8);
 }
 
 .sidebar-brand-logo.pulse-logo {
-    width: 58px;
-    height: 58px;
+    width: clamp(48px, 4vw, 60px);
+    height: clamp(48px, 4vw, 60px);
     border-radius: 50%;
     box-shadow: 0 4px 12px rgba(32, 24, 17, 0.12);
+    border: 1px solid rgba(31, 41, 51, 0.05);
 }
 
 .sidebar-brand-logo.school-logo-badge {
-    width: 48px;
-    height: 48px;
+    width: clamp(34px, 2.8vw, 46px);
+    height: clamp(34px, 2.8vw, 46px);
     border-radius: 50%;
     background: #fff;
     padding: 2px;
@@ -2565,6 +2569,108 @@ textarea:focus {
     }
 }
 
+.teacher-nav-sidebar {
+    max-height: none;
+    overflow: visible;
+}
+
+.teacher-nav-sidebar .sidebar-nav {
+    overflow: visible;
+    padding-right: 0;
+}
+
+@media (max-width: 1200px) {
+    .teacher-nav-sidebar {
+        grid-template-rows: auto minmax(0, 1fr) auto;
+        gap: 10px;
+        padding: 14px;
+        overflow: hidden;
+    }
+
+    .teacher-nav-sidebar .sidebar-nav {
+        min-height: 0;
+    }
+
+    .teacher-nav-sidebar .sidebar-brand {
+        gap: 4px;
+        padding-bottom: 8px;
+        margin-bottom: 4px;
+    }
+
+    .teacher-nav-sidebar .sidebar-brand-logos {
+        min-height: 48px;
+    }
+
+    .teacher-nav-sidebar .sidebar-brand-logo.pulse-logo {
+        width: 42px;
+        height: 42px;
+    }
+
+    .teacher-nav-sidebar .sidebar-brand-subtitle {
+        display: none;
+    }
+
+    .teacher-nav-sidebar .menu-group {
+        gap: 2px;
+        margin-bottom: 4px;
+    }
+
+    .teacher-nav-sidebar .menu-group-title {
+        margin: 0 0 2px;
+        font-size: 0.6rem;
+    }
+
+    .teacher-nav-sidebar .submenu-link {
+        padding: 6px 10px;
+        border-radius: 8px;
+        font-size: 0.78rem;
+        line-height: 1.2;
+    }
+}
+
+@media (max-width: 1200px) and (max-height: 620px) {
+    .teacher-nav-sidebar .menu-group-title {
+        display: none;
+    }
+}
+
+@media (max-width: 1200px) and (max-height: 480px) {
+    .teacher-nav-sidebar {
+        gap: 6px;
+        padding: 8px;
+    }
+
+    .teacher-nav-sidebar .sidebar-brand-text {
+        display: none;
+    }
+
+    .teacher-nav-sidebar .sidebar-brand-logos {
+        min-height: 38px;
+    }
+
+    .teacher-nav-sidebar .sidebar-brand-logo.pulse-logo {
+        width: 36px;
+        height: 36px;
+    }
+
+    .teacher-nav-sidebar .sidebar-nav {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-content: start;
+        gap: 4px 8px;
+    }
+
+    .teacher-nav-sidebar .menu-group {
+        gap: 3px;
+        margin: 0;
+    }
+
+    .teacher-nav-sidebar .submenu-link {
+        padding: 5px 6px;
+        font-size: 0.7rem;
+    }
+}
+
 .admin-announcement-panel {
     background: linear-gradient(135deg, rgba(180, 83, 9, 0.08), rgba(124, 45, 18, 0.05));
     border-color: rgba(180, 83, 9, 0.18);
@@ -2792,6 +2898,93 @@ textarea:focus {
     .coverage-chart-row {
         grid-template-columns: 1fr;
         justify-items: start;
+    }
+
+    .sections-table,
+    .mobile-record-table {
+        display: block;
+        width: 100%;
+        min-width: 0;
+    }
+
+    .sections-table thead,
+    .mobile-record-table thead {
+        display: none;
+    }
+
+    .sections-table tbody,
+    .mobile-record-table tbody {
+        display: grid;
+        gap: 10px;
+    }
+
+    .sections-table tbody tr,
+    .mobile-record-table tbody tr {
+        display: grid;
+        min-width: 0;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #fff;
+    }
+
+    .sections-table tbody td,
+    .mobile-record-table tbody td {
+        display: grid;
+        grid-template-columns: minmax(82px, 0.65fr) minmax(0, 1.35fr);
+        gap: 8px;
+        min-width: 0;
+        padding: 9px 10px;
+        border-bottom: 1px solid rgba(31, 41, 51, 0.06);
+        white-space: normal;
+        overflow-wrap: anywhere;
+        font-size: 0.78rem;
+    }
+
+    .sections-table tbody td::before,
+    .mobile-record-table tbody td::before {
+        content: attr(data-label);
+        color: var(--muted);
+        font-size: 0.7rem;
+        font-weight: 700;
+    }
+
+    .sections-table tbody td:last-child,
+    .mobile-record-table tbody td:last-child {
+        border-bottom: 0;
+    }
+
+    .sections-table .table-actions,
+    .mobile-record-table .table-actions {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .sections-table [data-vue-issue-status],
+    .mobile-record-table [data-vue-issue-status] {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 8px;
+        width: 100%;
+    }
+
+    .sections-table [data-vue-issue-status] select,
+    .sections-table [data-vue-issue-status] button,
+    .mobile-record-table [data-vue-issue-status] select,
+    .mobile-record-table [data-vue-issue-status] button {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .sections-table tbody td.empty-row,
+    .mobile-record-table tbody td.empty-row {
+        display: block;
+        text-align: center;
+    }
+
+    .sections-table tbody td.empty-row::before,
+    .mobile-record-table tbody td.empty-row::before {
+        content: none;
     }
 }
 
@@ -3293,6 +3486,31 @@ textarea:focus {
 }
 
 @media (max-width: 640px) {
+    .wide-admin-shell {
+        width: calc(100% - 12px);
+        padding-top: 8px;
+    }
+
+    body.admin-dashboard .admin-main-panel {
+        min-width: 0;
+        padding: 12px;
+        gap: 10px;
+    }
+
+    body.admin-dashboard .admin-main-panel > * {
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    body.admin-dashboard .admin-page-header h2 {
+        font-size: 1.3rem;
+    }
+
+    body.admin-dashboard .admin-page-header .primary-button {
+        width: 100%;
+        justify-content: center;
+    }
+
     .dashboard-kpi-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 8px;
@@ -3357,6 +3575,16 @@ textarea:focus {
     .dashboard-coverage-row .coverage-breakdown,
     .coverage-summary {
         width: 100%;
+    }
+}
+
+@media (max-width: 380px) {
+    .dashboard-kpi-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .dashboard-chart-card {
+        padding: 12px;
     }
 }
 

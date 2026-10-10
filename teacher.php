@@ -555,17 +555,12 @@ $pageMeta = $allowedModules[$module];
                     <div class="sidebar-brand">
                         <div class="sidebar-brand-logos">
                             <img class="sidebar-brand-logo pulse-logo" src="<?php echo escape(asset_url('assets/images/pulselogo.png')); ?>" alt="Project PULSE Logo">
-                            <img class="sidebar-brand-logo school-logo-badge" src="<?php echo escape(school_logo_url()); ?>" alt="School Logo">
                         </div>
                         <div class="sidebar-brand-text">
                             <span class="sidebar-brand-title">Project <span class="brand-pulse">PULSE</span></span>
                             <span class="sidebar-brand-subtitle">Monitoring Portal</span>
                         </div>
                     </div>
-                    <p class="eyebrow">Teacher Profile</p>
-                    <h1>Teacher Portal</h1>
-                    <p class="sidebar-user"><?php echo escape($user['username']); ?></p>
-                    <p class="sidebar-email"><?php echo escape($user['email']); ?></p>
                 </div>
 
                 <nav class="sidebar-nav" aria-label="Teacher Navigation">
@@ -615,9 +610,13 @@ $pageMeta = $allowedModules[$module];
                     <div class="admin-page-title">
                         <img class="school-logo header-logo" src="<?php echo escape(school_logo_url()); ?>" alt="School logo">
                         <div class="header-copy">
-                            <p class="eyebrow"><?php echo escape($pageMeta['eyebrow']); ?></p>
+                            <?php if ($module !== 'dashboard'): ?>
+                                <p class="eyebrow"><?php echo escape($pageMeta['eyebrow']); ?></p>
+                            <?php endif; ?>
                             <h2><?php echo escape($pageMeta['title']); ?></h2>
-                            <p><?php echo escape($pageMeta['description']); ?></p>
+                            <?php if ($module !== 'dashboard'): ?>
+                                <p><?php echo escape($pageMeta['description']); ?></p>
+                            <?php endif; ?>
                         </div>
                     </div>
 
@@ -674,7 +673,6 @@ $pageMeta = $allowedModules[$module];
                         <article class="teacher-panel-card">
                             <div class="panel-heading">
                                 <h2>Assigned Section</h2>
-                                <p>Your access is limited to this advisory class.</p>
                             </div>
 
                             <dl class="detail-grid wide">
@@ -703,7 +701,6 @@ $pageMeta = $allowedModules[$module];
                         <article class="teacher-panel-card">
                             <div class="panel-heading compact-heading">
                                 <h2>BMI Remarks</h2>
-                                <p>Health-measurement overview for your advisory section.</p>
                             </div>
 
                             <div class="teacher-dashboard-chart-grid">
@@ -731,7 +728,6 @@ $pageMeta = $allowedModules[$module];
                         <article class="teacher-panel-card">
                             <div class="panel-heading compact-heading">
                                 <h2>Learner Gender Distribution</h2>
-                                <p>Recorded male and female counts for your advisory section.</p>
                             </div>
 
                             <?php if ($sectionLearners === []): ?>
@@ -793,11 +789,10 @@ $pageMeta = $allowedModules[$module];
         <article class="teacher-panel-card">
             <div class="panel-heading compact-heading">
                 <h2>Section Learners</h2>
-                <p>Click a learner name to open the complete learner information.</p>
             </div>
 
             <div class="table-shell">
-                <table class="records-table learner-table">
+                <table class="records-table learner-table mobile-record-table">
                     <thead>
                         <tr>
                             <th>Learner No.</th>
@@ -815,15 +810,15 @@ $pageMeta = $allowedModules[$module];
                         <?php else: ?>
                             <?php foreach ($sectionLearners as $learner): ?>
                                 <tr>
-                                    <td><?php echo escape($learner['learner_number']); ?></td>
-                                    <td><?php echo escape($learner['lrn']); ?></td>
-                                    <td>
+                                    <td data-label="Learner No."><?php echo escape($learner['learner_number']); ?></td>
+                                    <td data-label="LRN"><?php echo escape($learner['lrn']); ?></td>
+                                    <td data-label="Name">
                                         <a class="table-inline-link" href="<?php echo escape(teacher_module_url('learner_details', ['learner_id' => (string) $learner['id']])); ?>">
                                             <?php echo escape($learner['learner_name']); ?>
                                         </a>
                                     </td>
-                                    <td><?php echo escape($learner['grade_level']); ?></td>
-                                    <td><?php echo escape((string) $learner['linked_parent_count']); ?></td>
+                                    <td data-label="Grade"><?php echo escape($learner['grade_level']); ?></td>
+                                    <td data-label="Linked Parents"><?php echo escape((string) $learner['linked_parent_count']); ?></td>
                                 </tr>
                             <?php endforeach; ?>
                         <?php endif; ?>
@@ -2015,7 +2010,7 @@ $pageMeta = $allowedModules[$module];
                         </div>
 
                         <div class="table-shell">
-                            <table class="records-table learner-table">
+                            <table class="records-table learner-table mobile-record-table">
                                 <thead>
                                 <tr>
                                     <th>Title</th>
@@ -2032,10 +2027,10 @@ $pageMeta = $allowedModules[$module];
                                 <?php else: ?>
                                     <?php foreach ($announcementRows as $announcement): ?>
                                         <tr>
-                                            <td><?php echo escape($announcement['title']); ?></td>
-                                            <td><span class="table-status"><?php echo !empty($announcement['is_published']) ? 'Published' : 'Draft'; ?></span></td>
-                                            <td><?php echo escape($announcement['published_at'] !== null ? date('M j, Y', strtotime($announcement['published_at'])) : '-'); ?></td>
-                                            <td>
+                                            <td data-label="Title"><?php echo escape($announcement['title']); ?></td>
+                                            <td data-label="Status"><span class="table-status"><?php echo !empty($announcement['is_published']) ? 'Published' : 'Draft'; ?></span></td>
+                                            <td data-label="Published On"><?php echo escape($announcement['published_at'] !== null ? date('M j, Y', strtotime($announcement['published_at'])) : '-'); ?></td>
+                                            <td data-label="Actions">
                                                 <div class="table-actions">
                                                     <a href="<?php echo escape(teacher_module_url('announcements', ['edit_announcement_id' => $announcement['id']])); ?>" class="secondary-link small-link icon-only-action" title="Edit announcement" aria-label="Edit announcement"><i class="fa fa-pencil" aria-hidden="true"></i><span class="sr-only">Edit announcement</span></a>
                                                     <form method="post" class="inline-form" data-vue-teacher-form data-endpoint="<?php echo escape(route_url('api/teacher_workflows.php')); ?>" onsubmit="return confirm('Delete this announcement?');">

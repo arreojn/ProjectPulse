@@ -1,4 +1,4 @@
-import{c as d}from"./chunks/vue.esm-bundler-DlDjmn_t.js";import{m as l}from"./chunks/status-Ds17JNgc.js";const a=window.ProjectPulse||{},n=async(e,s={})=>{const t=await fetch(e,{credentials:"same-origin",...s}),r=await t.json();if(!t.ok||!r.success){const o=new Error(r.message||"Request failed.");throw o.status=t.status,o}return r},c={template:`
+import{c as d}from"./chunks/vue.esm-bundler-DlDjmn_t.js";import{m as l}from"./chunks/status-zckm43l8.js";const a=window.ProjectPulse||{},n=async(e,s={})=>{const t=await fetch(e,{credentials:"same-origin",...s}),r=await t.json();if(!t.ok||!r.success){const o=new Error(r.message||"Request failed.");throw o.status=t.status,o}return r},c={template:`
     <section class="dashboard-grid expanded">
       <article class="status-panel compact">
         <div class="picture-box"><img class="learner-photo" :src="photoUrl" alt="Learner photo" @error="useDefaultPhoto"></div>

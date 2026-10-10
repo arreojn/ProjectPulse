@@ -326,7 +326,7 @@ if ($selectedChild !== null) {
                         </div>
 
                         <div class="table-shell">
-                            <table class="records-table" data-vue-parent-attendance-table>
+                            <table class="records-table mobile-record-table" data-vue-parent-attendance-table>
                                 <thead>
                                     <tr>
                                         <th>Date</th>
@@ -346,13 +346,13 @@ if ($selectedChild !== null) {
                                     <?php else: ?>
                                         <?php foreach ($attendanceRows as $row): ?>
                                             <tr>
-                                                <td><?php echo escape(parent_portal_format_date($row['attendance_date'])); ?></td>
-                                                <td><span class="table-status"><?php echo escape($row['attendance_status']); ?></span></td>
-                                                <td><?php echo escape(parent_portal_format_time($row['am_time_in'])); ?></td>
-                                                <td><?php echo escape(parent_portal_format_time($row['am_time_out'])); ?></td>
-                                                <td><?php echo escape(parent_portal_format_time($row['pm_time_in'])); ?></td>
-                                                <td><?php echo escape(parent_portal_format_time($row['pm_time_out'])); ?></td>
-                                                <td><?php echo escape($row['remarks'] ?? '-'); ?></td>
+                                                <td data-label="Date"><?php echo escape(parent_portal_format_date($row['attendance_date'])); ?></td>
+                                                <td data-label="Status"><span class="table-status"><?php echo escape($row['attendance_status']); ?></span></td>
+                                                <td data-label="AM In"><?php echo escape(parent_portal_format_time($row['am_time_in'])); ?></td>
+                                                <td data-label="AM Out"><?php echo escape(parent_portal_format_time($row['am_time_out'])); ?></td>
+                                                <td data-label="PM In"><?php echo escape(parent_portal_format_time($row['pm_time_in'])); ?></td>
+                                                <td data-label="PM Out"><?php echo escape(parent_portal_format_time($row['pm_time_out'])); ?></td>
+                                                <td data-label="Remarks"><?php echo escape($row['remarks'] ?? '-'); ?></td>
                                             </tr>
                                         <?php endforeach; ?>
                                     <?php endif; ?>
@@ -383,7 +383,7 @@ if ($selectedChild !== null) {
 
                                         <div class="table-shell">
                                             <?php if ($usesSeniorGradeLayout): ?>
-                                                <table class="records-table report-table">
+                                                <table class="records-table report-table mobile-record-table">
                                                     <thead>
                                                         <tr>
                                                             <th colspan="4">First Semester</th>
@@ -398,15 +398,15 @@ if ($selectedChild !== null) {
                                                     <tbody>
                                                         <?php foreach ($gradeGroup['rows'] as $gradeRow): ?>
                                                             <tr>
-                                                                <td><?php echo escape($gradeRow['subject_name']); ?></td>
-                                                                <td><?php echo escape($gradeRow['quarter_1_grade'] ?? '-'); ?></td>
-                                                                <td><?php echo escape($gradeRow['quarter_2_grade'] ?? '-'); ?></td>
-                                                                <td><?php echo escape($gradeRow['first_semester_average'] ?? '-'); ?></td>
+                                                                <td data-label="Subject"><?php echo escape($gradeRow['subject_name']); ?></td>
+                                                                <td data-label="Q1"><?php echo escape($gradeRow['quarter_1_grade'] ?? '-'); ?></td>
+                                                                <td data-label="Q2"><?php echo escape($gradeRow['quarter_2_grade'] ?? '-'); ?></td>
+                                                                <td data-label="1st Sem Avg"><?php echo escape($gradeRow['first_semester_average'] ?? '-'); ?></td>
                                                             </tr>
                                                         <?php endforeach; ?>
                                                     </tbody>
                                                 </table>
-                                                <table class="records-table report-table grade-semester-table">
+                                                <table class="records-table report-table grade-semester-table mobile-record-table">
                                                     <thead>
                                                         <tr>
                                                             <th colspan="6">Second Semester</th>
@@ -423,18 +423,18 @@ if ($selectedChild !== null) {
                                                     <tbody>
                                                         <?php foreach ($gradeGroup['rows'] as $gradeRow): ?>
                                                             <tr>
-                                                                <td><?php echo escape($gradeRow['subject_name']); ?></td>
-                                                                <td><?php echo escape($gradeRow['quarter_3_grade'] ?? '-'); ?></td>
-                                                                <td><?php echo escape($gradeRow['quarter_4_grade'] ?? '-'); ?></td>
-                                                                <td><?php echo escape($gradeRow['second_semester_average'] ?? '-'); ?></td>
-                                                                <td><?php echo escape($gradeRow['final_average'] ?? '-'); ?></td>
-                                                                <td><?php echo escape($gradeRow['remarks'] ?? '-'); ?></td>
+                                                                <td data-label="Subject"><?php echo escape($gradeRow['subject_name']); ?></td>
+                                                                <td data-label="Q3"><?php echo escape($gradeRow['quarter_3_grade'] ?? '-'); ?></td>
+                                                                <td data-label="Q4"><?php echo escape($gradeRow['quarter_4_grade'] ?? '-'); ?></td>
+                                                                <td data-label="2nd Sem Avg"><?php echo escape($gradeRow['second_semester_average'] ?? '-'); ?></td>
+                                                                <td data-label="Final Avg"><?php echo escape($gradeRow['final_average'] ?? '-'); ?></td>
+                                                                <td data-label="Remarks"><?php echo escape($gradeRow['remarks'] ?? '-'); ?></td>
                                                             </tr>
                                                         <?php endforeach; ?>
                                                     </tbody>
                                                 </table>
                                             <?php else: ?>
-                                                <table class="records-table report-table">
+                                                <table class="records-table report-table mobile-record-table">
                                                     <thead>
                                                         <tr>
                                                             <th>Subject</th>
@@ -450,15 +450,15 @@ if ($selectedChild !== null) {
                                                     <tbody>
                                                         <?php foreach ($gradeGroup['rows'] as $gradeRow): ?>
                                                             <tr>
-                                                                <td><?php echo escape($gradeRow['subject_name']); ?></td>
-                                                                <td><?php echo escape($gradeRow['quarter_1_grade'] ?? '-'); ?></td>
-                                                                <td><?php echo escape($gradeRow['quarter_2_grade'] ?? '-'); ?></td>
-                                                                <td><?php echo escape($gradeRow['quarter_3_grade'] ?? '-'); ?></td>
-                                                                <td><?php echo escape($gradeRow['quarter_4_grade'] ?? '-'); ?></td>
+                                                                <td data-label="Subject"><?php echo escape($gradeRow['subject_name']); ?></td>
+                                                                <td data-label="Q1"><?php echo escape($gradeRow['quarter_1_grade'] ?? '-'); ?></td>
+                                                                <td data-label="Q2"><?php echo escape($gradeRow['quarter_2_grade'] ?? '-'); ?></td>
+                                                                <td data-label="Q3"><?php echo escape($gradeRow['quarter_3_grade'] ?? '-'); ?></td>
+                                                                <td data-label="Q4"><?php echo escape($gradeRow['quarter_4_grade'] ?? '-'); ?></td>
                                                                 <?php $quarterAverage = grade_quarter_average($gradeRow); ?>
-                                                                <td><?php echo escape($quarterAverage !== null ? (string) $quarterAverage : '-'); ?></td>
-                                                                <td><?php echo escape($gradeRow['final_average'] ?? '-'); ?></td>
-                                                                <td><?php echo escape($gradeRow['remarks'] ?? '-'); ?></td>
+                                                                <td data-label="Average"><?php echo escape($quarterAverage !== null ? (string) $quarterAverage : '-'); ?></td>
+                                                                <td data-label="Final Avg"><?php echo escape($gradeRow['final_average'] ?? '-'); ?></td>
+                                                                <td data-label="Remarks"><?php echo escape($gradeRow['remarks'] ?? '-'); ?></td>
                                                             </tr>
                                                         <?php endforeach; ?>
                                                     </tbody>
