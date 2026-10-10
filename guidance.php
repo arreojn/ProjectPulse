@@ -214,6 +214,10 @@ if ($module === 'case_detail' && $editingCase === null) {
     <main class="dashboard-shell admin-shell wide-admin-shell">
         <section class="admin-layout">
             <aside id="admin-sidebar" class="admin-sidebar teacher-nav-sidebar">
+                                <div class="sidebar-brand" style="text-align: center; margin-bottom: 1rem;">
+                    <img src="assets/images/school-logo.png" alt="Project PULSE Logo" style="max-width: 80px; height: auto;">
+                    <h3 style="color: var(--surface-strong); margin-top: 0.5rem; font-size: 1.1rem;">Project PULSE</h3>
+                </div>
                 <div class="sidebar-profile">
                     <p class="eyebrow">Guidance Counselor</p>
                     <h1>Guidance Portal</h1>
