@@ -116,6 +116,92 @@ function announcement_save(array $data, int $userId): int
     return (int) $pdo->lastInsertId();
 }
 
+function announcement_send_sms_to_guardians(int $announcementId): array
+{
+    $announcement = announcement_find($announcementId);
+
+    if ($announcement === null) {
+        throw new RuntimeException('The saved announcement could not be found.');
+    }
+
+    if ((int) ($announcement['is_published'] ?? 0) !== 1) {
+        return [
+            'sent' => false,
+            'reason' => 'SMS was not sent because the announcement is not published.',
+        ];
+    }
+
+    require_once __DIR__ . '/sms_gateway.php';
+
+    $statement = database()->query(
+        'SELECT parent_guardian_contact_number AS phone
+         FROM learners
+         WHERE parent_guardian_contact_number IS NOT NULL
+           AND TRIM(parent_guardian_contact_number) <> \'\'
+         UNION ALL
+         SELECT contact_number AS phone
+         FROM parents
+         WHERE contact_number IS NOT NULL
+           AND TRIM(contact_number) <> \'\''
+    );
+
+    $recipients = [];
+    $invalidCount = 0;
+    foreach ($statement->fetchAll() as $row) {
+        $phone = sms_normalize_phone((string) ($row['phone'] ?? ''));
+        if ($phone === '') {
+            $invalidCount++;
+            continue;
+        }
+        $recipients[$phone] = true;
+    }
+
+    if ($recipients === []) {
+        return [
+            'sent' => false,
+            'reason' => $invalidCount > 0
+                ? 'No valid parent/guardian contact numbers were found.'
+                : 'No parent/guardian contact numbers were found.',
+        ];
+    }
+
+    $settings = sms_gateway_settings();
+    $message = 'ProjectPulse Announcement: ' . trim((string) $announcement['title']) . "\n"
+        . trim((string) $announcement['content']);
+    $sentCount = 0;
+    $failureReason = null;
+
+    foreach (array_keys($recipients) as $phone) {
+        $result = sms_send_gateway_message($phone, $message, $settings);
+        if ($result['sent']) {
+            $sentCount++;
+        } elseif ($failureReason === null) {
+            $failureReason = (string) ($result['reason'] ?? 'SMS gateway rejected the message.');
+        }
+    }
+
+    $recipientCount = count($recipients);
+    if ($sentCount === $recipientCount) {
+        return [
+            'sent' => true,
+            'message' => sprintf(
+                'Announcement published and SMS sent to %d unique parent/guardian contact number(s).',
+                $sentCount
+            ),
+        ];
+    }
+
+    return [
+        'sent' => false,
+        'reason' => sprintf(
+            'Announcement was saved, but SMS was sent to %d of %d unique parent/guardian contact number(s). %s',
+            $sentCount,
+            $recipientCount,
+            $failureReason ?? 'Some SMS messages could not be sent.'
+        ),
+    ];
+}
+
 function announcement_delete(int $id): void
 {
     $statement = database()->prepare(

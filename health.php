@@ -390,6 +390,7 @@ $filterLabel = health_portal_filter_label($filters, $allSectionDropdownOptions);
         }
     </style>
     <link rel="stylesheet" href="<?php echo escape(asset_url('assets/css/app.css')); ?>">
+    <link rel="stylesheet" href="<?php echo escape(asset_url('assets/dist/tailwind.css')); ?>">
 </head>
 <body class="dashboard-body admin-dashboard" data-health-portal="true">
     <button
@@ -1211,7 +1212,7 @@ $filterLabel = health_portal_filter_label($filters, $allSectionDropdownOptions);
                                                 <td><?php echo escape($learner['grade_level'] . ' - ' . $learner['section_name']); ?></td>
                                                 <td><?php echo escape(health_portal_format_date($learner['enrolled_on'] ?? null)); ?></td>
                                                 <td>
-                                                    <form method="post" class="inline-form" data-vue-health-action="remove_feeding_recipient" data-vue-health-feeding-remove onsubmit="return confirm('Remove this learner from the feeding program list?');">
+                                                    <form method="post" class="inline-form" data-vue-health-action="remove_feeding_recipient" data-vue-health-feeding-remove data-app-confirm="Remove this learner from the feeding program list?">
                                                         <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                                                         <input type="hidden" name="form_action" value="remove_feeding_recipient">
                                                         <input type="hidden" name="redirect_module" value="feeding_program">

@@ -56,7 +56,16 @@ try {
     }
 
     if ($action === 'change') {
-        $user = require_login();
+        $user = current_user();
+        if ($user === null) {
+            http_response_code(401);
+            echo json_encode([
+                'success' => false,
+                'message' => 'Please sign in again to change your password.',
+            ]);
+            exit;
+        }
+
         $currentPassword = (string) ($payload['current_password'] ?? '');
         $newPassword = (string) ($payload['new_password'] ?? '');
         $confirmPassword = (string) ($payload['confirm_password'] ?? '');

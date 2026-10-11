@@ -382,8 +382,19 @@ if ($module === 'announcements') {
             $formAction = (string) ($_POST['form_action'] ?? '');
 
             if ($formAction === 'save_announcement') {
-                announcement_save($_POST, (int) $user['id']);
-                flash_set('announcements_management', 'Announcement saved successfully.');
+                $announcementId = announcement_save($_POST, (int) $user['id']);
+                $message = 'Announcement saved successfully.';
+                $flashType = 'success';
+                if (isset($_POST['send_sms'])) {
+                    $smsResult = announcement_send_sms_to_guardians($announcementId);
+                    if ($smsResult['sent']) {
+                        $message = (string) $smsResult['message'];
+                    } else {
+                        $message = (string) $smsResult['reason'];
+                        $flashType = 'error';
+                    }
+                }
+                flash_set('announcements_management', $message, $flashType);
                 redirect('admin.php?module=announcements');
             }
 
@@ -522,7 +533,18 @@ if ($module === 'settings') {
                 (string) ($_POST['sms_gateway_device_id'] ?? ''),
                 (string) ($_POST['sms_gateway_public_address'] ?? '')
             );
-            flash_set('admin_settings', 'SMS settings saved successfully.');
+            require_once __DIR__ . '/app/sms_gateway.php';
+            $testPhone = (string) ($_POST['sms_test_phone'] ?? '');
+            $smsResult = sms_send_gateway_message(
+                sms_normalize_phone($testPhone),
+                'ProjectPulse SMS is working. Your SMS settings have been saved successfully.',
+                sms_gateway_settings()
+            );
+            if ($smsResult['sent']) {
+                flash_set('admin_settings', 'SMS settings saved successfully, and a confirmation SMS was sent to ' . trim($testPhone) . '.');
+            } else {
+                flash_set('admin_settings', 'SMS settings were saved, but the confirmation SMS could not be sent: ' . $smsResult['reason'], 'error');
+            }
             redirect('admin.php?module=settings');
         }
 
@@ -907,6 +929,7 @@ $attendanceDashboardChartData = [
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo escape(APP_NAME); ?> Admin</title>
     <link rel="stylesheet" href="<?php echo escape(asset_url('assets/css/app.css')); ?>">
+    <link rel="stylesheet" href="<?php echo escape(asset_url('assets/dist/tailwind.css')); ?>">
     <link rel="stylesheet" href="<?php echo escape(asset_url('loginassets/fonts/font-awesome-4.7.0/css/font-awesome.min.css')); ?>">
 </head>
 <body class="dashboard-body admin-dashboard">
@@ -2214,6 +2237,10 @@ $attendanceDashboardChartData = [
 
                                 <div class="teacher-inline-check teacher-form-grid-full">
                                     <label>
+                                        <input type="checkbox" name="send_sms" value="1" data-announcement-sms-warning>
+                                        Also send via SMS to all parent/guardian contact numbers
+                                    </label><br>
+                                    <label>
                                         <input type="checkbox" name="is_published" value="1"<?php echo !empty($announcementForm['is_published']) ? ' checked' : ''; ?>>
                                         Publish this announcement
                                     </label>
@@ -2438,7 +2465,7 @@ $attendanceDashboardChartData = [
                             <h2>Theme Customization</h2>
                             <p>Choose the color scheme used across the portal.</p>
                         </div>
-                        <form method="post" class="learner-form-grid" data-vue-admin-form data-admin-endpoint="<?php echo escape(route_url('api/admin_settings_workflow.php')); ?>" data-admin-redirect="<?php echo escape(route_url('admin.php?module=settings')); ?>">
+                        <form id="theme-save-form" method="post" class="learner-form-grid" data-vue-admin-form data-admin-endpoint="<?php echo escape(route_url('api/admin_settings_workflow.php')); ?>" data-admin-redirect="<?php echo escape(route_url('admin.php?module=settings')); ?>">
                             <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                             <input type="hidden" name="form_action" value="save_theme">
 
@@ -2462,18 +2489,18 @@ $attendanceDashboardChartData = [
                                 </div>
                             </div>
 
-                            <div class="learner-form-actions">
-                                <button type="submit" class="primary-button">Save Theme</button>
-                            </div>
                         </form>
 
-                        <form method="post" class="learner-form-grid" data-vue-admin-form data-admin-endpoint="<?php echo escape(route_url('api/admin_settings_workflow.php')); ?>" data-admin-action-type="reset" data-admin-confirm="Reset theme colors to the default palette?" data-admin-reload="true">
+                        <div class="theme-action-row">
+                            <div class="learner-form-actions">
+                                <button type="submit" form="theme-save-form" class="primary-button">Save Theme</button>
+                            </div>
+                            <form method="post" class="theme-reset-form" data-vue-admin-form data-admin-endpoint="<?php echo escape(route_url('api/admin_settings_workflow.php')); ?>" data-admin-action-type="reset" data-admin-confirm="Reset theme colors to the default palette?" data-admin-reload="true">
                             <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                             <input type="hidden" name="form_action" value="reset_theme">
-                            <div class="learner-form-actions">
                                 <button type="submit" class="ghost-button">Reset Theme</button>
-                            </div>
-                        </form>
+                            </form>
+                        </div>
                     </article>
 
                     <article class="admin-module-card">
@@ -2481,9 +2508,8 @@ $attendanceDashboardChartData = [
                             <h2>SMS Settings</h2>
                             <p>Configure the Android SMS gateway and the existing SMS API provider. Gateway delivery is optional and runs after attendance is recorded.</p>
                         </div>
-                        <form method="post" class="learner-form-grid" data-vue-admin-form data-admin-endpoint="<?php echo escape(route_url('api/admin_settings_workflow.php')); ?>" data-admin-redirect="<?php echo escape(route_url('admin.php?module=settings')); ?>">
+                        <form id="sms-settings-form" method="post" class="learner-form-grid" data-vue-admin-form data-admin-endpoint="<?php echo escape(route_url('api/admin_settings_workflow.php')); ?>" data-admin-redirect="<?php echo escape(route_url('admin.php?module=settings')); ?>">
                             <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
-                            <input type="hidden" name="form_action" value="save_sms_settings">
                             <div>
                                 <label for="sms_gateway_enabled">Enable Android Gateway</label>
                                 <select id="sms_gateway_enabled" name="sms_gateway_enabled">
@@ -2511,20 +2537,13 @@ $attendanceDashboardChartData = [
                                 <label for="sms_gateway_device_id">Device ID</label>
                                 <input id="sms_gateway_device_id" name="sms_gateway_device_id" value="<?php echo escape($smsSettings['gateway_device_id']); ?>">
                             </div>
-                            <div class="learner-form-actions">
-                                <button type="submit" class="primary-button">Save SMS Settings</button>
-                            </div>
-                        </form>
-
-                        <form method="post" class="learner-form-grid sms-test-form" data-vue-admin-form data-admin-endpoint="<?php echo escape(route_url('api/admin_settings_workflow.php')); ?>" data-admin-redirect="<?php echo escape(route_url('admin.php?module=settings')); ?>">
-                            <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
-                            <input type="hidden" name="form_action" value="test_sms_settings">
                             <div>
                                 <label for="sms_test_phone">Test Recipient Number</label>
                                 <input id="sms_test_phone" name="sms_test_phone" type="tel" inputmode="tel" placeholder="09171234567" required>
                             </div>
                             <div class="learner-form-actions">
-                                <button type="submit" class="ghost-button">Send Test SMS</button>
+                                <button type="submit" name="form_action" value="save_sms_settings" class="primary-button">Save SMS Settings</button>
+                                <button type="submit" name="form_action" value="test_sms_settings" class="ghost-button">Send Test SMS</button>
                             </div>
                         </form>
                     </article>

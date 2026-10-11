@@ -72,6 +72,7 @@ if ($selectedChild !== null) {
     <title><?php echo escape(APP_NAME); ?> Parent Portal</title>
     <?php echo theme_stylesheet_markup(); ?>
     <link rel="stylesheet" href="<?php echo escape(asset_url('assets/css/app.css')); ?>">
+    <link rel="stylesheet" href="<?php echo escape(asset_url('assets/dist/tailwind.css')); ?>">
     <style>
         .parent-child-photo {
             width: 56px;

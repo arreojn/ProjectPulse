@@ -1,6 +1,7 @@
 import { createApp } from 'vue';
 import '../guidance/workflows.js';
 import { mountVueStatus } from './status.js';
+import { presentPageAlerts } from './dialogs.js';
 import { attachPasswordWorkflow } from '../auth/password.js';
 import { attachParentPortalWorkflow } from '../parent/portal.js';
 import '../teacher/workflows.js';
@@ -12,6 +13,7 @@ const SharedShell = {
     return { mobileOpen: false, collapsed: false };
   },
   mounted() {
+    presentPageAlerts();
     this.toggleButton = document.getElementById('sidebar-toggle');
     this.sidebar = document.getElementById('admin-sidebar');
     this.backdrop = document.getElementById('sidebar-backdrop');
@@ -150,7 +152,12 @@ const SharedShell = {
       this.formBindings = [];
       document.querySelectorAll('form').forEach((form) => {
         if (form.dataset.vueSubmitBound === 'true') return;
-        const handler = () => {
+        const handler = (event) => {
+          if (
+            event.defaultPrevented
+            || form.matches('[data-vue-admin-form], [data-vue-admin-report-form], [data-vue-teacher-form], [data-vue-teacher-report-form], [data-vue-health-action], [data-vue-health-import], [data-vue-guidance-form], [data-auth-action]')
+          ) return;
+
           if (!form.checkValidity()) return;
           const isGet = (form.getAttribute('method') || 'get').toLowerCase() === 'get';
           form.dataset.vueSubmitting = 'true';

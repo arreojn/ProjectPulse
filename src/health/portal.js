@@ -1,5 +1,6 @@
 import { createApp } from 'vue';
 import { mountVueStatus } from '../shared/status.js';
+import { showAppAlert, showAppConfirm } from '../shared/dialogs.js';
 
 const readConfig = () => {
   const element = document.getElementById('health-portal-config');
@@ -76,6 +77,11 @@ const HealthPortalApp = {
       event.preventDefault();
 
       const action = form.dataset.vueHealthAction || form.getAttribute('data-vue-health-action') || form.elements.namedItem('form_action')?.value;
+      if (form.dataset.appConfirm) {
+        const confirmed = await showAppConfirm(form.dataset.appConfirm, { danger: true, confirmLabel: 'Remove' });
+        if (!confirmed) return;
+      }
+
       const endpoint = this.config.workflowUrl || 'api/health_workflow.php';
       const csrfToken = form.elements.namedItem('csrf_token')?.value;
 
@@ -104,7 +110,7 @@ const HealthPortalApp = {
           throw new Error(payload?.message || 'Unable to save the health workflow.');
         }
 
-        this.showAlert(payload.message || 'Health record updated.', true);
+        await this.showAlert(payload.message || 'Health record updated.', true);
 
         if (action === 'save_measurement' && payload.bmi !== undefined) {
           const output = form.closest('tr')?.querySelector('[data-vue-bmi-output]');
@@ -114,11 +120,11 @@ const HealthPortalApp = {
         }
 
         if (action === 'remove_feeding_recipient' || action === 'add_feeding_recipients') {
-          window.setTimeout(() => window.location.reload(), 200);
+          window.location.reload();
           return;
         }
       } catch (error) {
-        this.showAlert(error instanceof Error ? error.message : 'Unable to save the health workflow.', false);
+        await this.showAlert(error instanceof Error ? error.message : 'Unable to save the health workflow.', false);
       } finally {
         form.removeAttribute('aria-busy');
         if (submitButton) {
@@ -135,7 +141,7 @@ const HealthPortalApp = {
 
       const input = form.querySelector('input[type="file"]');
       if (!input || !(input instanceof HTMLInputElement) || !input.files || input.files.length === 0) {
-        this.showAlert('Choose a CSV file before importing measurements.', false);
+        await this.showAlert('Choose a CSV file before importing measurements.', false);
         return;
       }
 
@@ -162,10 +168,10 @@ const HealthPortalApp = {
           throw new Error(payload?.message || 'Unable to import measurements.');
         }
 
-        this.showAlert(payload.message || 'Measurements imported successfully.', true);
-        window.setTimeout(() => window.location.reload(), 300);
+        await this.showAlert(payload.message || 'Measurements imported successfully.', true);
+        window.location.reload();
       } catch (error) {
-        this.showAlert(error instanceof Error ? error.message : 'Unable to import measurements.', false);
+        await this.showAlert(error instanceof Error ? error.message : 'Unable to import measurements.', false);
       } finally {
         form.removeAttribute('aria-busy');
         if (submitButton) {
@@ -175,20 +181,7 @@ const HealthPortalApp = {
       }
     },
     showAlert(message, isSuccess) {
-      const existing = document.querySelector('.alert');
-      if (existing) {
-        existing.className = `alert ${isSuccess ? 'success' : 'error'}`;
-        existing.textContent = message;
-        return;
-      }
-
-      const alert = document.createElement('div');
-      alert.className = `alert ${isSuccess ? 'success' : 'error'}`;
-      alert.textContent = message;
-      const panel = document.querySelector('.admin-main-panel');
-      if (panel) {
-        panel.insertBefore(alert, panel.firstChild);
-      }
+      return showAppAlert(message, { variant: isSuccess ? 'success' : 'error' });
     },
     renderDashboardCharts() {
       const wrapper = document.getElementById('health-portal-visualizations');

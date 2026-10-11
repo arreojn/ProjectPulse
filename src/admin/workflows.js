@@ -1,12 +1,15 @@
 import { createApp } from 'vue';
+import { showAppAlert, showAppConfirm } from '../shared/dialogs.js';
 
 const AdminWorkflowController = {
   mounted() {
     this.bindAjaxForms();
     this.bindReportSubmitState();
+    this.bindAnnouncementSmsWarning();
   },
   beforeUnmount() {
     this.boundHandlers?.forEach(({ form, handler }) => form.removeEventListener('submit', handler));
+    this.announcementSmsWarnings?.forEach(({ checkbox, handler }) => checkbox.removeEventListener('change', handler));
     this.reportForms?.forEach(({ form, handler }) => {
       form.removeEventListener('submit', handler);
       form.removeEventListener('reset', handler.resetHandler);
@@ -19,9 +22,13 @@ const AdminWorkflowController = {
         if (form.dataset.adminWorkflowBound === 'true') return;
         const handler = async (event) => {
           const confirmMessage = form.dataset.adminConfirm;
-          if (confirmMessage && !window.confirm(confirmMessage)) {
+          if (confirmMessage) {
             event.preventDefault();
-            return;
+            const confirmed = await showAppConfirm(confirmMessage, {
+              danger: form.dataset.adminActionType === 'delete',
+              confirmLabel: form.dataset.adminActionType === 'delete' ? 'Delete' : 'Confirm',
+            });
+            if (!confirmed) return;
           }
 
           const endpoint = form.dataset.adminEndpoint;
@@ -30,14 +37,20 @@ const AdminWorkflowController = {
           event.preventDefault();
           const feedback = this.ensureFeedback(form);
           const submitButton = this.getSubmitButton(form, event.submitter);
+          const formAction = event.submitter instanceof HTMLButtonElement ? event.submitter.value : '';
 
-          this.setBusyState(form, submitButton, feedback, 'Saving...');
+          this.setBusyState(form, submitButton, feedback, formAction === 'test_sms_settings' ? 'Sending...' : 'Saving...');
 
           try {
+            const body = new FormData(form);
+            if (event.submitter instanceof HTMLButtonElement && event.submitter.name) {
+              body.set(event.submitter.name, event.submitter.value);
+            }
+
             const response = await fetch(endpoint, {
               method: form.method || 'POST',
               credentials: 'same-origin',
-              body: new FormData(form),
+              body,
             });
 
             const result = await response.json().catch(() => ({}));
@@ -46,9 +59,9 @@ const AdminWorkflowController = {
               throw new Error(result.message || 'Unable to complete this request.');
             }
 
-            feedback.textContent = result.message || 'Action completed successfully.';
-            feedback.classList.remove('is-error');
-            feedback.classList.add('is-success');
+            await showAppAlert(result.message || 'Action completed successfully.', {
+              variant: result.notification_sent === false ? 'error' : 'success',
+            });
 
             if (result.redirect) {
               window.setTimeout(() => {
@@ -61,9 +74,7 @@ const AdminWorkflowController = {
               window.setTimeout(() => window.location.reload(), 150);
             }
           } catch (error) {
-            feedback.textContent = error instanceof Error ? error.message : 'Unable to complete this request.';
-            feedback.classList.remove('is-success');
-            feedback.classList.add('is-error');
+            await showAppAlert(error instanceof Error ? error.message : 'Unable to complete this request.');
           } finally {
             this.clearBusyState(form, submitButton, feedback);
           }
@@ -72,6 +83,22 @@ const AdminWorkflowController = {
         form.addEventListener('submit', handler);
         form.dataset.adminWorkflowBound = 'true';
         this.boundHandlers.push({ form, handler });
+      });
+    },
+    bindAnnouncementSmsWarning() {
+      this.announcementSmsWarnings = [];
+      document.querySelectorAll('[data-announcement-sms-warning]').forEach((checkbox) => {
+        const handler = () => {
+          if (checkbox.checked) {
+            showAppAlert(
+              'Sending this announcement to all parent/guardian contact numbers may take some time. Please wait for delivery processing to finish before leaving this page.',
+              { variant: 'success', title: 'SMS delivery may take some time' },
+            );
+          }
+        };
+
+        checkbox.addEventListener('change', handler);
+        this.announcementSmsWarnings.push({ checkbox, handler });
       });
     },
     bindReportSubmitState() {
@@ -126,6 +153,10 @@ const AdminWorkflowController = {
       feedback.classList.remove('is-error', 'is-success');
       form.setAttribute('aria-busy', 'true');
       if (submitButton) {
+        submitButton.dataset.adminOriginalLabel = submitButton.tagName === 'INPUT'
+          ? submitButton.value
+          : submitButton.textContent || '';
+        submitButton.dataset.adminWasDisabled = String(submitButton.disabled);
         submitButton.disabled = true;
         if (submitButton.tagName === 'INPUT') {
           submitButton.value = label;
@@ -138,11 +169,13 @@ const AdminWorkflowController = {
       form.removeAttribute('aria-busy');
       if (submitButton) {
         if (submitButton.tagName === 'INPUT') {
-          submitButton.value = submitButton.dataset.originalValue || submitButton.value;
+          submitButton.value = submitButton.dataset.adminOriginalLabel || '';
         } else {
-          submitButton.textContent = submitButton.dataset.originalLabel || submitButton.textContent;
+          submitButton.textContent = submitButton.dataset.adminOriginalLabel || '';
         }
-        submitButton.disabled = false;
+        submitButton.disabled = submitButton.dataset.adminWasDisabled === 'true';
+        delete submitButton.dataset.adminOriginalLabel;
+        delete submitButton.dataset.adminWasDisabled;
       }
       if (feedback && feedback.textContent.trim() === 'Working...') {
         feedback.textContent = '';

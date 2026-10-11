@@ -17,6 +17,22 @@ CREATE TABLE users (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
+INSERT IGNORE INTO users (
+    username,
+    email,
+    password_hash,
+    role,
+    is_active,
+    must_change_password
+) VALUES (
+    'admin',
+    'admin@projectpulse.local',
+    '$2y$10$mtEiJIuw78reOzATC0t8n.Lbkzt4Kz91UWhNbQqLahOIW0bqF/OLy',
+    'admin',
+    1,
+    1
+);
+
 CREATE TABLE parents (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     user_id INT UNSIGNED NOT NULL UNIQUE,

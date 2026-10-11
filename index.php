@@ -54,6 +54,7 @@ if (is_post() && $databaseConnectionOk) {
 
 <link rel="stylesheet" href="<?= escape(asset_url('loginassets/fonts/font-awesome-4.7.0/css/font-awesome.min.css')) ?>">
 <link rel="stylesheet" href="<?= escape(asset_url('assets/css/login.css')) ?>">
+<link rel="stylesheet" href="<?= escape(asset_url('assets/dist/tailwind.css')) ?>">
 </head>
 <body>
 

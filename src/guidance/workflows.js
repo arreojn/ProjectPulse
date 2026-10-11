@@ -1,16 +1,5 @@
 import { createApp } from 'vue';
-
-const setFeedback = (form, message, type = 'error') => {
-  let feedback = form.querySelector('[data-guidance-feedback]');
-  if (!feedback) {
-    feedback = document.createElement('div');
-    feedback.setAttribute('data-guidance-feedback', 'true');
-    form.appendChild(feedback);
-  }
-
-  feedback.className = type === 'success' ? 'alert success' : 'alert error';
-  feedback.textContent = message;
-};
+import { showAppAlert } from '../shared/dialogs.js';
 
 const applyTableFilter = (form) => {
   const selector = form.dataset.vueGuidanceTable || '';
@@ -97,10 +86,10 @@ const submitGuidanceForm = async (event) => {
       return;
     }
 
-    setFeedback(form, result.message || 'Saved successfully.', 'success');
+    await showAppAlert(result.message || 'Saved successfully.', { variant: 'success' });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to complete the request.';
-    setFeedback(form, message, 'error');
+    await showAppAlert(message);
     if (form.dataset.vueGuidanceForm === 'password') {
       form.reset();
     }

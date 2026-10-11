@@ -1,5 +1,6 @@
 import { createApp } from 'vue';
 import { mountVueStatus } from '../shared/status.js';
+import { presentPageAlerts } from '../shared/dialogs.js';
 
 const LoginController = {
   template: '<span aria-hidden="true"></span>',
@@ -10,6 +11,7 @@ const LoginController = {
     this.submit = this.form?.querySelector('button[type="submit"]');
     this.boundToggle = this.togglePassword.bind(this);
     this.boundSubmit = this.onSubmit.bind(this);
+    presentPageAlerts();
     this.toggle?.addEventListener('click', this.boundToggle);
     this.form?.addEventListener('submit', this.boundSubmit);
     mountVueStatus();

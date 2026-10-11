@@ -24,6 +24,7 @@ $faceConfig = [
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo escape(APP_NAME); ?> Face Attendance</title>
     <link rel="stylesheet" href="<?php echo escape(asset_url('assets/css/app.css')); ?>">
+    <link rel="stylesheet" href="<?php echo escape(asset_url('assets/dist/tailwind.css')); ?>">
     <style>
         #video-feed { width: 100%; max-width: 620px; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 18px; transform: scaleX(-1); background: #000; }
         .face-attendance-layout { display: grid; grid-template-columns: minmax(390px, 0.85fr) minmax(0, 1.15fr); gap: 16px; align-items: start; }

@@ -6,6 +6,7 @@ require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../app/helpers.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../app/auth.php';
+require_once __DIR__ . '/../app/learners.php';
 require_once __DIR__ . '/../app/sections.php';
 
 require_roles(['admin']);

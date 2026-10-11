@@ -1,3 +1,5 @@
+import { showAppAlert } from '../shared/dialogs.js';
+
 function escapeHtml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -190,7 +192,7 @@ export function attachParentPortalWorkflow() {
       try {
         await fetchParentPortalData(childSelect.value, monthInput.value);
       } catch (error) {
-        console.warn(error);
+        await showAppAlert(error instanceof Error ? error.message : 'Unable to load the selected child record.');
       }
     };
 

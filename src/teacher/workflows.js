@@ -1,5 +1,6 @@
 import { createApp } from 'vue';
 import { mountVueStatus } from '../shared/status.js';
+import { showAppAlert, showAppConfirm } from '../shared/dialogs.js';
 
 const TeacherWorkflowController = {
   mounted() {
@@ -21,6 +22,12 @@ const TeacherWorkflowController = {
       const endpoint = (form.dataset.vueTeacherForm || form.dataset.endpoint || '').trim();
       const formAction = form.elements.namedItem('form_action')?.value;
       if (!endpoint || !formAction) return;
+
+      if (form.dataset.appConfirm) {
+        event.preventDefault();
+        const confirmed = await showAppConfirm(form.dataset.appConfirm, { danger: true, confirmLabel: 'Delete' });
+        if (!confirmed) return;
+      }
 
       const method = (form.getAttribute('method') || 'get').toLowerCase();
       if (method === 'get') {
@@ -70,13 +77,7 @@ const TeacherWorkflowController = {
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unable to complete the request.';
-        const status = form.querySelector('[data-vue-teacher-status]');
-        if (status) {
-          status.textContent = message;
-          status.classList.add('is-error');
-        } else {
-          window.alert(message);
-        }
+        await showAppAlert(message);
       } finally {
         form.removeAttribute('aria-busy');
         submitControls.forEach((control) => {

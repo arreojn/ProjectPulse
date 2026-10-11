@@ -178,6 +178,7 @@ if ($module === 'case_detail' && $editingCase === null) {
     <title><?php echo escape(APP_NAME); ?> Guidance Counselor Portal</title>
     <?php echo theme_stylesheet_markup(); ?>
     <link rel="stylesheet" href="<?php echo escape(asset_url('assets/css/app.css')); ?>">
+    <link rel="stylesheet" href="<?php echo escape(asset_url('assets/dist/tailwind.css')); ?>">
     <style>
         .sidebar-theme-form {
             display: flex;

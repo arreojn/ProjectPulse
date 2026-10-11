@@ -61,10 +61,20 @@ try {
             (string) ($_POST['sms_gateway_public_address'] ?? '')
         );
 
+        $testPhone = (string) ($_POST['sms_test_phone'] ?? '');
+        $smsResult = sms_send_gateway_message(
+            sms_normalize_phone($testPhone),
+            'ProjectPulse SMS is working. Your SMS settings have been saved successfully.',
+            sms_gateway_settings()
+        );
+
         echo json_encode([
-            'success' => true,
-            'message' => 'SMS settings saved successfully.',
-            'redirect' => route_url('admin.php?module=settings'),
+            'success' => $smsResult['sent'],
+            'notification_sent' => $smsResult['sent'],
+            'message' => $smsResult['sent']
+                ? 'SMS settings saved successfully, and a confirmation SMS was sent to ' . trim($testPhone) . '.'
+                : 'SMS settings were saved, but the confirmation SMS could not be sent: ' . $smsResult['reason'],
+            'redirect' => $smsResult['sent'] ? route_url('admin.php?module=settings') : null,
         ]);
         exit;
     }

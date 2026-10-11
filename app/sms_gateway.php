@@ -12,6 +12,12 @@ function sms_normalize_phone(string $phone): string
         $phone = substr($phone, 1);
     }
 
+    if (preg_match('/^0\d{10}$/', $phone) === 1) {
+        $phone = '63' . substr($phone, 1);
+    } elseif (preg_match('/^9\d{9}$/', $phone) === 1) {
+        $phone = '63' . $phone;
+    }
+
     return preg_match('/^639\d{9}$/', $phone) === 1 ? $phone : '';
 }
 

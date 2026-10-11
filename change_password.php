@@ -57,6 +57,7 @@ if (is_post()) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo escape(APP_NAME); ?> Change Password</title>
     <link rel="stylesheet" href="<?php echo escape(asset_url('assets/css/app.css')); ?>">
+    <link rel="stylesheet" href="<?php echo escape(asset_url('assets/dist/tailwind.css')); ?>">
 </head>
 <body class="dashboard-body">
     <main class="dashboard-shell">

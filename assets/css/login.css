@@ -117,6 +117,113 @@ body {
     line-height: 1.5;
 }
 
+.app-dialog {
+    width: min(420px, calc(100% - 32px));
+    max-width: 100%;
+    margin: auto;
+    padding: 30px;
+    border: 1px solid rgba(255, 255, 255, 0.8);
+    border-radius: 28px;
+    background: #fff;
+    color: var(--login-ink);
+    box-shadow: 0 28px 80px rgba(15, 23, 42, 0.28);
+    text-align: center;
+    font: inherit;
+}
+
+.app-dialog::backdrop {
+    background: rgba(29, 42, 57, 0.58);
+    backdrop-filter: blur(7px);
+}
+
+.app-dialog-icon {
+    display: grid;
+    width: 58px;
+    height: 58px;
+    margin: 0 auto 16px;
+    place-items: center;
+    border-radius: 50%;
+    background: rgba(45, 140, 59, 0.13);
+    color: #2d8c3b;
+    font-size: 1.8rem;
+    font-weight: 800;
+}
+
+.app-dialog-icon.is-error {
+    background: rgba(161, 43, 43, 0.12);
+    color: #a12b2b;
+}
+
+.app-dialog-icon.is-confirm {
+    background: rgba(69, 173, 83, 0.13);
+    color: #2d8c3b;
+}
+
+.app-dialog-eyebrow {
+    margin: 0 0 8px;
+    color: var(--login-muted);
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+}
+
+.app-dialog-title {
+    margin: 0 0 10px;
+    font-size: 1.55rem;
+    font-weight: 800;
+    line-height: 1.2;
+}
+
+.app-dialog-message {
+    margin: 0;
+    color: var(--login-muted);
+    font-size: 0.95rem;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+}
+
+.app-dialog-actions {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 24px;
+}
+
+.app-dialog-button {
+    min-width: 120px;
+    min-height: 46px;
+    padding: 10px 20px;
+    border: 0;
+    border-radius: 999px;
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.9rem;
+    font-weight: 800;
+}
+
+.app-dialog-accept {
+    background: linear-gradient(135deg, #45ad53, #2d8c3b);
+    color: #fff;
+    box-shadow: 0 8px 18px rgba(45, 140, 59, 0.2);
+}
+
+.app-dialog-accept.is-danger {
+    background: linear-gradient(135deg, #a12b2b, #c43d3d);
+    box-shadow: 0 8px 18px rgba(161, 43, 43, 0.2);
+}
+
+.app-dialog-cancel {
+    border: 1px solid var(--login-line);
+    background: transparent;
+    color: var(--login-muted);
+}
+
+.app-dialog-button:focus-visible {
+    outline: 3px solid rgba(69, 173, 83, 0.4);
+    outline-offset: 3px;
+}
+
 .field-label {
     display: block;
     margin: 0 0 5px;

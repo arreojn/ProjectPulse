@@ -8,7 +8,7 @@ require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../app/auth.php';
 require_once __DIR__ . '/../app/announcements.php';
 
-require_roles(['admin']);
+$user = require_roles(['admin']);
 
 header('Content-Type: application/json; charset=UTF-8');
 
@@ -28,12 +28,23 @@ $formAction = trim((string) ($_POST['form_action'] ?? ''));
 
 try {
     if ($formAction === 'save_announcement') {
-        $createdById = (int) ($_SESSION['user']['id'] ?? 0);
-        announcement_save($_POST, $createdById);
+        $createdById = (int) $user['id'];
+        $announcementId = announcement_save($_POST, $createdById);
+        $message = 'Announcement saved successfully.';
+        $notificationSent = null;
+
+        if (isset($_POST['send_sms'])) {
+            $smsResult = announcement_send_sms_to_guardians($announcementId);
+            $notificationSent = (bool) $smsResult['sent'];
+            $message = $notificationSent
+                ? (string) $smsResult['message']
+                : (string) $smsResult['reason'];
+        }
 
         echo json_encode([
             'success' => true,
-            'message' => 'Announcement saved successfully.',
+            'message' => $message,
+            'notification_sent' => $notificationSent,
             'redirect' => route_url('admin.php?module=announcements'),
         ]);
         exit;

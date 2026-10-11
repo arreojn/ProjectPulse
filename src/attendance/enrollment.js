@@ -1,5 +1,6 @@
 import { createApp } from 'vue';
 import { mountVueStatus } from '../shared/status.js';
+import { showAppAlert } from '../shared/dialogs.js';
 
 const config = window.ProjectPulse || {};
 
@@ -15,7 +16,7 @@ const FaceEnrollment = {
   },
   beforeUnmount() { this.stream?.getTracks().forEach((track) => track.stop()); this.select?.removeEventListener('change', this.boundLearnerChange); this.captureButton?.removeEventListener('click', this.boundCapturePhoto); this.trainButton?.removeEventListener('click', this.boundTrainModel); },
   methods: {
-    setFeedback(element, message, type = 'neutral') { if (!element) return; element.textContent = message; element.className = `alert ${type}`; element.style.display = 'block'; },
+    setFeedback(element, message, type = 'neutral') { if (type !== 'neutral') { if (element) element.style.display = 'none'; showAppAlert(message, { variant: type }); return; } if (!element) return; element.textContent = message; element.className = `alert ${type}`; element.style.display = 'block'; },
     async startWebcam() { try { this.stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: false }); this.video.srcObject = this.stream; this.video.onloadedmetadata = () => { this.canvas.width = this.video.videoWidth; this.canvas.height = this.video.videoHeight; }; } catch (_) { this.setFeedback(this.captureFeedback, 'Could not access webcam. Please grant permission.', 'error'); } },
     onLearnerChange() { this.captureButton.disabled = this.select.value === ''; this.preview.style.display = 'none'; this.video.style.display = 'block'; if (this.captureFeedback) this.captureFeedback.style.display = 'none'; },
     async capturePhoto() {

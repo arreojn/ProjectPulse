@@ -530,6 +530,7 @@ $pageMeta = $allowedModules[$module];
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo escape(APP_NAME); ?> Teacher Portal</title>
     <link rel="stylesheet" href="<?php echo escape(asset_url('assets/css/app.css')); ?>">
+    <link rel="stylesheet" href="<?php echo escape(asset_url('assets/dist/tailwind.css')); ?>">
     <link rel="stylesheet" href="<?php echo escape(asset_url('loginassets/fonts/font-awesome-4.7.0/css/font-awesome.min.css')); ?>">
 </head>
 <body class="dashboard-body admin-dashboard">
@@ -2033,7 +2034,7 @@ $pageMeta = $allowedModules[$module];
                                             <td data-label="Actions">
                                                 <div class="table-actions">
                                                     <a href="<?php echo escape(teacher_module_url('announcements', ['edit_announcement_id' => $announcement['id']])); ?>" class="secondary-link small-link icon-only-action" title="Edit announcement" aria-label="Edit announcement"><i class="fa fa-pencil" aria-hidden="true"></i><span class="sr-only">Edit announcement</span></a>
-                                                    <form method="post" class="inline-form" data-vue-teacher-form data-endpoint="<?php echo escape(route_url('api/teacher_workflows.php')); ?>" onsubmit="return confirm('Delete this announcement?');">
+                                                    <form method="post" class="inline-form" data-vue-teacher-form data-endpoint="<?php echo escape(route_url('api/teacher_workflows.php')); ?>" data-app-confirm="Delete this announcement?">
                                                         <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
                                                         <input type="hidden" name="form_action" value="delete_announcement">
                                                         <input type="hidden" name="announcement_id" value="<?php echo escape((string) $announcement['id']); ?>">

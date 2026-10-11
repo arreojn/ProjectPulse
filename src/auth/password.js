@@ -1,23 +1,5 @@
 import { mountVueStatus } from '../shared/status.js';
-
-function buildStatusBox(form) {
-  const existing = form.querySelector('[data-auth-status]');
-  if (existing) return existing;
-
-  const status = document.createElement('div');
-  status.className = 'alert neutral';
-  status.setAttribute('data-auth-status', 'true');
-  status.setAttribute('role', 'status');
-  status.setAttribute('aria-live', 'polite');
-  form.insertBefore(status, form.firstChild);
-  return status;
-}
-
-function setStatus(form, message, type = 'neutral') {
-  const status = buildStatusBox(form);
-  status.textContent = message;
-  status.className = `alert ${type}`;
-}
+import { showAppAlert } from '../shared/dialogs.js';
 
 function makePayload(form) {
   const formData = new FormData(form);
@@ -59,7 +41,7 @@ async function submitPasswordForm(form) {
       throw new Error(data.message || 'Unable to process the request right now.');
     }
 
-    setStatus(form, data.message || 'Request submitted.', 'success');
+    await showAppAlert(data.message || 'Request submitted.', { variant: 'success' });
     form.reset();
 
     if (action === 'change') {
@@ -69,7 +51,7 @@ async function submitPasswordForm(form) {
       }, 700);
     }
   } catch (error) {
-    setStatus(form, error.message || 'Unable to process the request right now.', 'error');
+    await showAppAlert(error instanceof Error ? error.message : 'Unable to process the request right now.');
   } finally {
     if (submitButton) {
       submitButton.disabled = false;

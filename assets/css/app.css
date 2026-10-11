@@ -332,6 +332,120 @@ textarea:focus {
     border: 1px solid rgba(31, 41, 51, 0.08);
 }
 
+.app-dialog {
+    width: min(420px, calc(100% - 32px));
+    max-width: 100%;
+    margin: auto;
+    padding: 30px;
+    border: 1px solid rgba(255, 255, 255, 0.8);
+    border-radius: 28px;
+    background: var(--surface-strong);
+    color: var(--ink);
+    box-shadow: 0 28px 80px rgba(15, 23, 42, 0.28);
+    text-align: center;
+    font: inherit;
+}
+
+.app-dialog::backdrop {
+    background: rgba(29, 42, 57, 0.58);
+    backdrop-filter: blur(7px);
+}
+
+.app-dialog-icon {
+    display: grid;
+    width: 58px;
+    height: 58px;
+    margin: 0 auto 16px;
+    place-items: center;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--success) 13%, white);
+    color: var(--success);
+    font-size: 1.8rem;
+    font-weight: 800;
+}
+
+.app-dialog-icon.is-error {
+    background: color-mix(in srgb, var(--danger) 12%, white);
+    color: var(--danger);
+}
+
+.app-dialog-icon.is-confirm {
+    background: color-mix(in srgb, var(--accent) 13%, white);
+    color: var(--accent);
+}
+
+.app-dialog-eyebrow {
+    margin: 0 0 8px;
+    color: var(--muted);
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+}
+
+.app-dialog-title {
+    margin: 0 0 10px;
+    font-family: inherit;
+    font-size: 1.55rem;
+    font-weight: 800;
+    line-height: 1.2;
+}
+
+.app-dialog-message {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.95rem;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+}
+
+.app-dialog-actions {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 24px;
+}
+
+.app-dialog-button {
+    min-width: 120px;
+    min-height: 46px;
+    padding: 10px 20px;
+    border: 0;
+    border-radius: 999px;
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.9rem;
+    font-weight: 800;
+    transition: transform 140ms ease, filter 140ms ease;
+}
+
+.app-dialog-button:hover {
+    filter: brightness(1.04);
+    transform: translateY(-1px);
+}
+
+.app-dialog-accept {
+    background: linear-gradient(135deg, var(--success), color-mix(in srgb, var(--success) 78%, #16a34a));
+    color: #fff;
+    box-shadow: 0 8px 18px color-mix(in srgb, var(--success) 20%, transparent);
+}
+
+.app-dialog-accept.is-danger {
+    background: linear-gradient(135deg, var(--danger), color-mix(in srgb, var(--danger) 78%, #ef4444));
+    box-shadow: 0 8px 18px color-mix(in srgb, var(--danger) 20%, transparent);
+}
+
+.app-dialog-cancel {
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--muted);
+}
+
+.app-dialog-button:focus-visible {
+    outline: 3px solid color-mix(in srgb, var(--accent) 45%, transparent);
+    outline-offset: 3px;
+}
+
 .password-utility-grid {
     width: min(720px, 100%);
     margin: 0 auto;
@@ -1926,6 +2040,22 @@ textarea:focus {
 .learner-form-actions {
     grid-column: 1 / -1;
     margin-top: 4px;
+}
+
+.theme-action-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.theme-action-row .learner-form-actions,
+.theme-reset-form {
+    margin: 0;
+}
+
+.theme-reset-form {
+    display: flex;
 }
 
 .template-actions,

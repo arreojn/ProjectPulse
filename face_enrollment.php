@@ -29,6 +29,7 @@ $enrollmentConfig = [
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo escape(APP_NAME); ?> - Face Enrollment</title>
     <link rel="stylesheet" href="<?php echo escape(asset_url('assets/css/app.css')); ?>">
+    <link rel="stylesheet" href="<?php echo escape(asset_url('assets/dist/tailwind.css')); ?>">
     <style>
         #video-feed, #photo-preview { width: 100%; height: auto; border-radius: 18px; }
         #video-feed { transform: scaleX(-1); background: #000; }

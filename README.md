@@ -134,6 +134,7 @@ The system automates attendance monitoring, academic record management, health p
 ### Frontend
 - HTML5
 - CSS3
+- Tailwind CSS
 - Bootstrap 5
 - JavaScript
 - AJAX
@@ -196,6 +197,11 @@ served by the PHP page. The production build is committed so a deployed
 XAMPP copy does not need Node.js. The pilot preserves the existing scanner
 workflow: 12-digit LRN validation, CSRF-protected scans and mode changes,
 learner lookup, recent logs, empty/loading/error states, and responsive CSS.
+
+Tailwind CSS utilities are compiled with the Vite production build and loaded
+alongside the existing stylesheets across the portal. Tailwind's preflight
+reset is disabled to preserve current page styling; existing screens are not
+migrated, so new or selected UI can adopt utility classes incrementally.
 
 The shared Vue bundle is also loaded by the administrator, teacher, health,
 guidance, and parent portals. It currently owns the common responsive sidebar,
