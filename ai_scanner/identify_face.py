@@ -1,12 +1,14 @@
 """OpenCV LBPH recognition bridge for ProjectPulse facial attendance.
 
-Learner registrations are named ``<12-digit-LRN>.jpg`` in
-``assets/images/learners``.  PHP remains responsible for authentication and
-attendance database writes; this process only recognises a face in a frame.
+Learner registrations are named ``<12-digit-LRN>.jpg`` or
+``<12-digit-LRN>_<photo-number>.jpg``. PHP remains responsible for
+authentication and attendance database writes; this process only recognises
+a face in a frame.
 """
 
 import argparse
 import json
+import os
 from pathlib import Path
 
 import cv2
@@ -15,14 +17,16 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parent.parent
 PHOTO_DIRECTORY = Path(
-    __import__("os").environ.get(
+    os.environ.get(
         "PROJECTPULSE_FACE_STORAGE",
         str(ROOT.parent.parent / "ProjectPulsePrivate" / "learner_faces"),
     )
 )
 MODEL_FILE = Path(__file__).resolve().parent / "recognizer.yml"
 LABELS_FILE = Path(__file__).resolve().parent / "labels.json"
+MANIFEST_FILE = Path(__file__).resolve().parent / "training_manifest.json"
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+PHOTO_NUMBER_LIMIT = 5
 
 
 def respond(**payload):
@@ -42,8 +46,39 @@ def registration_files():
         return []
     return [
         path for path in sorted(PHOTO_DIRECTORY.iterdir())
-        if path.suffix.lower() in IMAGE_EXTENSIONS and path.stem.isdigit() and len(path.stem) == 12
+        if path.suffix.lower() in IMAGE_EXTENSIONS
+        and len(path.stem.split("_", 1)[0]) == 12
+        and path.stem.split("_", 1)[0].isdigit()
+        and (
+            "_" not in path.stem
+            or (
+                path.stem.rsplit("_", 1)[1].isdigit()
+                and 1 <= int(path.stem.rsplit("_", 1)[1]) <= PHOTO_NUMBER_LIMIT
+            )
+        )
     ]
+
+
+def registration_manifest():
+    return [
+        {
+            "name": path.name,
+            "size": path.stat().st_size,
+            "modified_ns": path.stat().st_mtime_ns,
+        }
+        for path in registration_files()
+    ]
+
+
+def model_is_current():
+    if not MODEL_FILE.is_file() or not LABELS_FILE.is_file() or not MANIFEST_FILE.is_file():
+        return False
+
+    try:
+        trained_manifest = json.loads(MANIFEST_FILE.read_text(encoding="utf-8"))
+        return trained_manifest == registration_manifest()
+    except (OSError, json.JSONDecodeError):
+        return False
 
 
 def train_model():
@@ -52,7 +87,10 @@ def train_model():
 
     detector = cascade_classifier()
     images, labels, label_map = [], [], {}
-    for label, path in enumerate(registration_files()):
+    files = registration_files()
+    learner_lrns = sorted({path.stem.split("_", 1)[0] for path in files})
+    learner_labels = {lrn: label for label, lrn in enumerate(learner_lrns)}
+    for path in files:
         image = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
         if image is None:
             continue
@@ -61,8 +99,10 @@ def train_model():
             continue
         x, y, width, height = faces[0]
         images.append(cv2.resize(image[y:y + height, x:x + width], (200, 200)))
-        labels.append(label)
-        label_map[str(label)] = path.stem
+        learner_lrn = path.stem.split("_", 1)[0]
+        learner_label = learner_labels[learner_lrn]
+        labels.append(learner_label)
+        label_map[str(learner_label)] = learner_lrn
 
     if not images:
         raise RuntimeError("No usable learner face registrations were found. Each photo must contain one clear face.")
@@ -71,6 +111,7 @@ def train_model():
     recognizer.train(images, np.array(labels, dtype=np.int32))
     recognizer.write(str(MODEL_FILE))
     LABELS_FILE.write_text(json.dumps(label_map), encoding="utf-8")
+    MANIFEST_FILE.write_text(json.dumps(registration_manifest()), encoding="utf-8")
     return len(images)
 
 
@@ -89,6 +130,9 @@ def main():
         return
     if not MODEL_FILE.is_file() or not LABELS_FILE.is_file():
         respond(ok=False, error="No trained face model was found. Capture learner photos, then train the recognizer.")
+        return
+    if not model_is_current():
+        respond(ok=False, error="Learner face photos have changed since the model was trained. An administrator must train the face recognition model again.")
         return
     if not hasattr(cv2, "face"):
         respond(ok=False, error="OpenCV contrib is required. Install ai_scanner/requirements.txt with Python 3.11.")

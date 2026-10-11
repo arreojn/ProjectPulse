@@ -144,7 +144,7 @@ function theme_inline_styles(): string
     $colors = theme_colors();
 
     $css = ':root {'
-        // This style is rendered before app.css, so !important ensures the saved theme overrides CSS defaults.
+        // Keep saved theme values dominant over the compiled Tailwind component defaults.
         . '--accent: ' . $colors['theme_color_accent'] . ' !important;'
         . '--accent-strong: ' . $colors['theme_color_accent_strong'] . ' !important;'
         . '--bg: ' . $colors['theme_color_bg'] . ' !important;'

@@ -274,122 +274,6 @@ $filterLabel = health_portal_filter_label($filters, $allSectionDropdownOptions);
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo escape(APP_NAME); ?> Health Coordinator Portal</title>
     <?php echo theme_stylesheet_markup(); ?>
-    <style>
-        .chart-container {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 20px;
-            justify-content: space-around;
-            margin-top: 20px;
-        }
-        .chart-card {
-            background: var(--surface-strong);
-            border: 1px solid var(--line);
-            border-radius: 28px;
-            box-shadow: var(--shadow);
-            padding: 20px;
-            flex: 1;
-            min-width: 300px;
-            max-width: 45%;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-        .chart-title {
-            font-size: 1.2rem;
-            font-weight: bold;
-            margin-bottom: 15px;
-            color: var(--ink);
-        }
-        .pie-chart {
-            width: 180px;
-            height: 180px;
-            border-radius: 50%;
-            background: conic-gradient(
-                var(--success) 0% var(--slice1),
-                var(--warning) var(--slice1) var(--slice2),
-                var(--danger) var(--slice2) var(--slice3),
-                var(--info) var(--slice3) var(--slice4),
-                var(--muted) var(--slice4) 100%
-            );
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.9rem;
-            color: var(--surface-strong);
-            font-weight: 600;
-            position: relative;
-        }
-        .pie-chart::before {
-            content: '';
-            position: absolute;
-            background: var(--surface-strong);
-            border-radius: 50%;
-            width: 60%;
-            height: 60%;
-        }
-        .pie-chart span {
-            position: relative;
-            z-index: 1;
-            color: var(--ink);
-        }
-        .chart-legend {
-            margin-top: 20px;
-            width: 100%;
-        }
-        .chart-legend-item {
-            display: flex;
-            justify-content: space-between;
-            padding: 5px 0;
-            font-size: 0.9rem;
-        }
-        .chart-legend-item span:first-child {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .chart-legend-color {
-            width: 12px;
-            height: 12px;
-            border-radius: 3px;
-        }
-        .bar-chart-container {
-            width: 100%;
-            height: 150px;
-            display: flex;
-            align-items: flex-end;
-            gap: 10px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid var(--line);
-        }
-        .bar-chart-bar {
-            flex: 1;
-            background-color: var(--accent);
-            border-radius: 5px 5px 0 0;
-            position: relative;
-            display: flex;
-            align-items: flex-end;
-            justify-content: center;
-            color: var(--surface-strong);
-            font-size: 0.8rem;
-            font-weight: bold;
-            transition: height 0.5s ease-out;
-        }
-        .bar-chart-bar span {
-            position: absolute;
-            top: -20px;
-            color: var(--ink);
-            font-size: 0.75rem;
-            font-weight: normal;
-        }
-        .bar-chart-label {
-            text-align: center;
-            font-size: 0.8rem;
-            color: var(--muted);
-            margin-top: 5px;
-        }
-    </style>
-    <link rel="stylesheet" href="<?php echo escape(asset_url('assets/css/app.css')); ?>">
     <link rel="stylesheet" href="<?php echo escape(asset_url('assets/dist/tailwind.css')); ?>">
 </head>
 <body class="dashboard-body admin-dashboard" data-health-portal="true">
@@ -542,11 +426,11 @@ $filterLabel = health_portal_filter_label($filters, $allSectionDropdownOptions);
                         <!-- Removed Quick Actions Card as per request -->
                     </section>
 
-                    <div id="health-portal-visualizations" class="chart-container" aria-live="polite"></div>
+                    <div id="health-portal-visualizations" class="mt-5 flex flex-wrap justify-around gap-5" aria-live="polite"></div>
 
-                    <section class="chart-container">
-                        <article class="chart-card">
-                            <h3 class="chart-title">BMI Remarks Distribution</h3>
+                    <section class="mt-5 flex flex-wrap justify-around gap-5">
+                        <article class="flex min-w-[300px] max-w-[45%] flex-1 flex-col items-center rounded-[28px] border border-[var(--line)] bg-[var(--surface-strong)] p-5 shadow-[var(--shadow)]">
+                            <h3 class="mb-[15px] text-[1.2rem] font-bold text-[var(--ink)]">BMI Remarks Distribution</h3>
                             <?php
                                 $bmiTotal = array_sum(array_column($dashboardBmiRows, 'total'));
                                 $slice1 = health_portal_percent($dashboardBmiRows[0]['total'] ?? 0, $bmiTotal);
@@ -554,7 +438,7 @@ $filterLabel = health_portal_filter_label($filters, $allSectionDropdownOptions);
                                 $slice3 = $slice2 + health_portal_percent($dashboardBmiRows[2]['total'] ?? 0, $bmiTotal);
                                 $slice4 = $slice3 + health_portal_percent($dashboardBmiRows[3]['total'] ?? 0, $bmiTotal);
                             ?>
-                            <div class="pie-chart" style="
+                            <div class="relative flex h-[180px] w-[180px] items-center justify-center rounded-full bg-[conic-gradient(var(--success)_0%_var(--slice1),_var(--warning)_var(--slice1)_var(--slice2),_var(--danger)_var(--slice2)_var(--slice3),_var(--info)_var(--slice3)_var(--slice4),_var(--muted)_var(--slice4)_100%)] text-[0.9rem] font-semibold text-[var(--surface-strong)] before:absolute before:h-3/5 before:w-3/5 before:rounded-full before:bg-[var(--surface-strong)] before:content-[''] [&>span]:relative [&>span]:z-[1] [&>span]:text-[var(--ink)]" style="
                                 --slice1: <?php echo escape((string) $slice1); ?>%;
                                 --slice2: <?php echo escape((string) $slice2); ?>%;
                                 --slice3: <?php echo escape((string) $slice3); ?>%;
@@ -562,12 +446,11 @@ $filterLabel = health_portal_filter_label($filters, $allSectionDropdownOptions);
                             ">
                                 <span><?php echo escape((string) $bmiTotal); ?> Learners</span>
                             </div>
-                            <div class="chart-legend">
+                            <div class="mt-5 w-full">
                                 <?php foreach ($dashboardBmiRows as $bmiRow): ?>
-                                    <div class="chart-legend-item">
-                                        <span>
-                                            <span class="chart-legend-color" style="background-color: <?php echo escape($bmiRow['color']); ?>;"></span>
-                                            <?php echo escape($bmiRow['label']); ?>
+                                    <div class="flex justify-between py-[5px] text-[0.9rem]">
+                                        <span class="flex items-center gap-2">
+                                            <span class="h-3 w-3 rounded-[3px] bg-[var(--chart-color)]" style="--chart-color: <?php echo escape($bmiRow['color']); ?>;"></span><?php echo escape($bmiRow['label']); ?>
                                         </span>
                                         <strong><?php echo escape((string) $bmiRow['total']); ?> (<?php echo escape((string) health_portal_percent($bmiRow['total'], $bmiTotal)); ?>%)</strong>
                                     </div>
@@ -575,66 +458,65 @@ $filterLabel = health_portal_filter_label($filters, $allSectionDropdownOptions);
                             </div>
                         </article>
 
-                        <article class="chart-card">
-                            <h3 class="chart-title">Deworming Status</h3>
+                        <article class="flex min-w-[300px] max-w-[45%] flex-1 flex-col items-center rounded-[28px] border border-[var(--line)] bg-[var(--surface-strong)] p-5 shadow-[var(--shadow)]">
+                            <h3 class="mb-[15px] text-[1.2rem] font-bold text-[var(--ink)]">Deworming Status</h3>
                             <?php
                                 $dewormingTotal = $dashboardDewormingCounts['total_learners'];
                                 $firstDosePercent = health_portal_percent($dashboardDewormingCounts['first_dose_count'], $dewormingTotal);
                                 $secondDosePercent = health_portal_percent($dashboardDewormingCounts['second_dose_count'], $dewormingTotal);
                                 $noDosePercent = health_portal_percent($dashboardDewormingCounts['no_dose_count'], $dewormingTotal);
                             ?>
-                            <div class="bar-chart-container">
-                                <div class="bar-chart-bar" style="height: <?php echo escape((string) $firstDosePercent); ?>%; background-color: var(--success);">
-                                    <span><?php echo escape((string) $dashboardDewormingCounts['first_dose_count']); ?></span>
+                            <div class="flex h-[150px] w-full items-end gap-2.5 border-b border-[var(--line)] pb-2.5">
+                                <div class="relative flex flex-1 items-end justify-center rounded-t-[5px] bg-[var(--success)] text-[0.8rem] font-bold text-[var(--surface-strong)] transition-[height] duration-500 ease-out h-[var(--bar-height)]" style="--bar-height: <?php echo escape((string) $firstDosePercent); ?>%;">
+                                    <span class="absolute -top-5 text-[0.75rem] font-normal text-[var(--ink)]"><?php echo escape((string) $dashboardDewormingCounts['first_dose_count']); ?></span>
                                 </div>
-                                <div class="bar-chart-bar" style="height: <?php echo escape((string) $secondDosePercent); ?>%; background-color: var(--info);">
-                                    <span><?php echo escape((string) $dashboardDewormingCounts['second_dose_count']); ?></span>
+                                <div class="relative flex flex-1 items-end justify-center rounded-t-[5px] bg-[var(--info)] text-[0.8rem] font-bold text-[var(--surface-strong)] transition-[height] duration-500 ease-out h-[var(--bar-height)]" style="--bar-height: <?php echo escape((string) $secondDosePercent); ?>%;">
+                                    <span class="absolute -top-5 text-[0.75rem] font-normal text-[var(--ink)]"><?php echo escape((string) $dashboardDewormingCounts['second_dose_count']); ?></span>
                                 </div>
-                                <div class="bar-chart-bar" style="height: <?php echo escape((string) $noDosePercent); ?>%; background-color: var(--muted);">
-                                    <span><?php echo escape((string) $dashboardDewormingCounts['no_dose_count']); ?></span>
+                                <div class="relative flex flex-1 items-end justify-center rounded-t-[5px] bg-[var(--muted)] text-[0.8rem] font-bold text-[var(--surface-strong)] transition-[height] duration-500 ease-out h-[var(--bar-height)]" style="--bar-height: <?php echo escape((string) $noDosePercent); ?>%;">
+                                    <span class="absolute -top-5 text-[0.75rem] font-normal text-[var(--ink)]"><?php echo escape((string) $dashboardDewormingCounts['no_dose_count']); ?></span>
                                 </div>
                             </div>
-                            <div style="display: flex; justify-content: space-around; width: 100%; margin-top: 5px;">
-                                <div class="bar-chart-label">1st Dose</div>
-                                <div class="bar-chart-label">2nd Dose</div>
-                                <div class="bar-chart-label">No Dose</div>
+                            <div class="mt-[5px] flex w-full justify-around">
+                                <div class="mt-[5px] text-center text-[0.8rem] text-[var(--muted)]">1st Dose</div>
+                                <div class="mt-[5px] text-center text-[0.8rem] text-[var(--muted)]">2nd Dose</div>
+                                <div class="mt-[5px] text-center text-[0.8rem] text-[var(--muted)]">No Dose</div>
                             </div>
-                            <div class="chart-legend">
-                                <div class="chart-legend-item">
-                                    <span><span class="chart-legend-color" style="background-color: var(--success);"></span>1st Dose</span>
+                            <div class="mt-5 w-full">
+                                <div class="flex justify-between py-[5px] text-[0.9rem]">
+                                    <span class="flex items-center gap-2"><span class="h-3 w-3 rounded-[3px] bg-[var(--success)]"></span>1st Dose</span>
                                     <strong><?php echo escape((string) $dashboardDewormingCounts['first_dose_count']); ?> (<?php echo escape((string) $firstDosePercent); ?>%)</strong>
                                 </div>
-                                <div class="chart-legend-item">
-                                    <span><span class="chart-legend-color" style="background-color: var(--info);"></span>2nd Dose</span>
+                                <div class="flex justify-between py-[5px] text-[0.9rem]">
+                                    <span class="flex items-center gap-2"><span class="h-3 w-3 rounded-[3px] bg-[var(--info)]"></span>2nd Dose</span>
                                     <strong><?php echo escape((string) $dashboardDewormingCounts['second_dose_count']); ?> (<?php echo escape((string) $secondDosePercent); ?>%)</strong>
                                 </div>
-                                <div class="chart-legend-item">
-                                    <span><span class="chart-legend-color" style="background-color: var(--muted);"></span>No Dose</span>
+                                <div class="flex justify-between py-[5px] text-[0.9rem]">
+                                    <span class="flex items-center gap-2"><span class="h-3 w-3 rounded-[3px] bg-[var(--muted)]"></span>No Dose</span>
                                     <strong><?php echo escape((string) $dashboardDewormingCounts['no_dose_count']); ?> (<?php echo escape((string) $noDosePercent); ?>%)</strong>
                                 </div>
                             </div>
                         </article>
 
-                        <article class="chart-card">
-                            <h3 class="chart-title">Feeding Program Status</h3>
+                        <article class="flex min-w-[300px] max-w-[45%] flex-1 flex-col items-center rounded-[28px] border border-[var(--line)] bg-[var(--surface-strong)] p-5 shadow-[var(--shadow)]">
+                            <h3 class="mb-[15px] text-[1.2rem] font-bold text-[var(--ink)]">Feeding Program Status</h3>
                             <?php
                                 $feedingTotal = $dashboardFeedingCounts['total_learners'];
                                 $recipientPercent = health_portal_percent($dashboardFeedingCounts['recipient_count'], $feedingTotal);
                                 $nonRecipientPercent = health_portal_percent($dashboardFeedingCounts['non_recipient_count'], $feedingTotal);
                             ?>
-                            <div class="pie-chart" style="
+                            <div class="relative flex h-[180px] w-[180px] items-center justify-center rounded-full bg-[conic-gradient(var(--accent)_0%_var(--slice1),_var(--muted)_var(--slice1)_100%)] text-[0.9rem] font-semibold text-[var(--surface-strong)] before:absolute before:h-3/5 before:w-3/5 before:rounded-full before:bg-[var(--surface-strong)] before:content-[''] [&>span]:relative [&>span]:z-[1] [&>span]:text-[var(--ink)]" style="
                                 --slice1: <?php echo escape((string) $recipientPercent); ?>%;
-                                background: conic-gradient(var(--accent) 0% var(--slice1), var(--muted) var(--slice1) 100%);
                             ">
                                 <span><?php echo escape((string) $feedingTotal); ?> Learners</span>
                             </div>
-                            <div class="chart-legend">
-                                <div class="chart-legend-item">
-                                    <span><span class="chart-legend-color" style="background-color: var(--accent);"></span>Recipients</span>
+                            <div class="mt-5 w-full">
+                                <div class="flex justify-between py-[5px] text-[0.9rem]">
+                                    <span class="flex items-center gap-2"><span class="h-3 w-3 rounded-[3px] bg-[var(--accent)]"></span>Recipients</span>
                                     <strong><?php echo escape((string) $dashboardFeedingCounts['recipient_count']); ?> (<?php echo escape((string) $recipientPercent); ?>%)</strong>
                                 </div>
-                                <div class="chart-legend-item">
-                                    <span><span class="chart-legend-color" style="background-color: var(--muted);"></span>Non-Recipients</span>
+                                <div class="flex justify-between py-[5px] text-[0.9rem]">
+                                    <span class="flex items-center gap-2"><span class="h-3 w-3 rounded-[3px] bg-[var(--muted)]"></span>Non-Recipients</span>
                                     <strong><?php echo escape((string) $dashboardFeedingCounts['non_recipient_count']); ?> (<?php echo escape((string) $nonRecipientPercent); ?>%)</strong>
                                 </div>
                             </div>
@@ -704,8 +586,8 @@ $filterLabel = health_portal_filter_label($filters, $allSectionDropdownOptions);
 
                         <?php $bmiRemarksSelectedTotal = array_sum(array_column($bmiRemarksForSelectedFilter, 'total')); ?>
                         <?php if ($filters['section_id'] !== '' && $bmiRemarksSelectedTotal > 0): ?>
-                            <div class="chart-card" style="width: 100%; max-width: none; margin-bottom: 20px;">
-                                <h3 class="chart-title">BMI Remarks for Selected Section</h3>
+                            <div class="flex w-full flex-col items-center rounded-[28px] border border-[var(--line)] bg-[var(--surface-strong)] p-5 shadow-[var(--shadow)] mb-5">
+                                <h3 class="mb-[15px] text-[1.2rem] font-bold text-[var(--ink)]">BMI Remarks for Selected Section</h3>
                                 <?php
                                     $bmiTotalFiltered = $bmiRemarksSelectedTotal;
                                     $slice1Filtered = health_portal_percent($bmiRemarksForSelectedFilter[0]['total'] ?? 0, $bmiTotalFiltered);
@@ -713,7 +595,7 @@ $filterLabel = health_portal_filter_label($filters, $allSectionDropdownOptions);
                                     $slice3Filtered = $slice2Filtered + health_portal_percent($bmiRemarksForSelectedFilter[2]['total'] ?? 0, $bmiTotalFiltered);
                                     $slice4Filtered = $slice3Filtered + health_portal_percent($bmiRemarksForSelectedFilter[3]['total'] ?? 0, $bmiTotalFiltered);
                                 ?>
-                                <div class="pie-chart" style="
+                                <div class="relative flex h-[180px] w-[180px] items-center justify-center rounded-full bg-[conic-gradient(var(--success)_0%_var(--slice1),_var(--warning)_var(--slice1)_var(--slice2),_var(--danger)_var(--slice2)_var(--slice3),_var(--info)_var(--slice3)_var(--slice4),_var(--muted)_var(--slice4)_100%)] text-[0.9rem] font-semibold text-[var(--surface-strong)] before:absolute before:h-3/5 before:w-3/5 before:rounded-full before:bg-[var(--surface-strong)] before:content-[''] [&>span]:relative [&>span]:z-[1] [&>span]:text-[var(--ink)]" style="
                                     --slice1: <?php echo escape((string) $slice1Filtered); ?>%;
                                     --slice2: <?php echo escape((string) $slice2Filtered); ?>%;
                                     --slice3: <?php echo escape((string) $slice3Filtered); ?>%;
@@ -721,11 +603,11 @@ $filterLabel = health_portal_filter_label($filters, $allSectionDropdownOptions);
                                 ">
                                     <span><?php echo escape((string) $bmiTotalFiltered); ?> Learners</span>
                                 </div>
-                                <div class="chart-legend">
+                                <div class="mt-5 w-full">
                                     <?php foreach ($bmiRemarksForSelectedFilter as $bmiRow): ?>
-                                        <div class="chart-legend-item">
+                                        <div class="flex justify-between py-[5px] text-[0.9rem]">
                                             <span>
-                                                <span class="chart-legend-color" style="background-color: <?php echo escape($bmiRow['color']); ?>;"></span>
+                                                <span class="mr-2 inline-block h-3 w-3 rounded-[3px] bg-[var(--chart-color)] align-middle" style="--chart-color: <?php echo escape($bmiRow['color']); ?>;"></span>
                                                 <?php echo escape($bmiRow['label']); ?>
                                             </span>
                                             <strong><?php echo escape((string) $bmiRow['total']); ?> (<?php echo escape((string) health_portal_percent($bmiRow['total'], $bmiTotalFiltered)); ?>%)</strong>
@@ -734,7 +616,7 @@ $filterLabel = health_portal_filter_label($filters, $allSectionDropdownOptions);
                                 </div>
                             </div>
                         <?php elseif ($filters['grade_level'] !== '' && $bmiRemarksSelectedTotal > 0): ?>
-                            <div class="alert neutral" style="margin-bottom: 20px;">
+                            <div class="alert neutral mb-5">
                                 Select a specific section to view BMI remarks distribution for that section.
                             </div>
                         <?php else: ?>
@@ -995,38 +877,38 @@ $filterLabel = health_portal_filter_label($filters, $allSectionDropdownOptions);
                     </article>
 
                     <?php if ($dewormingStatusForSelectedFilter['total_learners'] > 0): ?>
-                        <article class="chart-card" style="width: 100%; max-width: none; margin-bottom: 20px;">
-                            <h3 class="chart-title">Deworming Status for Filtered Learners</h3>
+                        <article class="flex w-full flex-col items-center rounded-[28px] border border-[var(--line)] bg-[var(--surface-strong)] p-5 shadow-[var(--shadow)] mb-5">
+                            <h3 class="mb-[15px] text-[1.2rem] font-bold text-[var(--ink)]">Deworming Status for Filtered Learners</h3>
                             <?php
                                 $dewormingTotalFiltered = $dewormingStatusForSelectedFilter['total_learners'];
                                 $firstDosePercentFiltered = health_portal_percent($dewormingStatusForSelectedFilter['first_dose_count'], $dewormingTotalFiltered);
                                 $secondDosePercentFiltered = health_portal_percent($dewormingStatusForSelectedFilter['second_dose_count'], $dewormingTotalFiltered);
                                 $noDosePercentFiltered = health_portal_percent($dewormingStatusForSelectedFilter['no_dose_count'], $dewormingTotalFiltered);
                             ?>
-                            <div class="bar-chart-container">
-                                <div class="bar-chart-bar" style="height: <?php echo escape((string) $firstDosePercentFiltered); ?>%; background-color: var(--success);">
-                                    <span><?php echo escape((string) $dewormingStatusForSelectedFilter['first_dose_count']); ?></span>
+                            <div class="flex h-[150px] w-full items-end gap-2.5 border-b border-[var(--line)] pb-2.5">
+                                <div class="relative flex flex-1 items-end justify-center rounded-t-[5px] bg-[var(--success)] text-[0.8rem] font-bold text-[var(--surface-strong)] transition-[height] duration-500 ease-out h-[var(--bar-height)]" style="--bar-height: <?php echo escape((string) $firstDosePercentFiltered); ?>%;">
+                                    <span class="absolute -top-5 text-[0.75rem] font-normal text-[var(--ink)]"><?php echo escape((string) $dewormingStatusForSelectedFilter['first_dose_count']); ?></span>
                                 </div>
-                                <div class="bar-chart-bar" style="height: <?php echo escape((string) $secondDosePercentFiltered); ?>%; background-color: var(--info);">
-                                    <span><?php echo escape((string) $dewormingStatusForSelectedFilter['second_dose_count']); ?></span>
+                                <div class="relative flex flex-1 items-end justify-center rounded-t-[5px] bg-[var(--info)] text-[0.8rem] font-bold text-[var(--surface-strong)] transition-[height] duration-500 ease-out h-[var(--bar-height)]" style="--bar-height: <?php echo escape((string) $secondDosePercentFiltered); ?>%;">
+                                    <span class="absolute -top-5 text-[0.75rem] font-normal text-[var(--ink)]"><?php echo escape((string) $dewormingStatusForSelectedFilter['second_dose_count']); ?></span>
                                 </div>
-                                <div class="bar-chart-bar" style="height: <?php echo escape((string) $noDosePercentFiltered); ?>%; background-color: var(--muted);">
-                                    <span><?php echo escape((string) $dewormingStatusForSelectedFilter['no_dose_count']); ?></span>
+                                <div class="relative flex flex-1 items-end justify-center rounded-t-[5px] bg-[var(--muted)] text-[0.8rem] font-bold text-[var(--surface-strong)] transition-[height] duration-500 ease-out h-[var(--bar-height)]" style="--bar-height: <?php echo escape((string) $noDosePercentFiltered); ?>%;">
+                                    <span class="absolute -top-5 text-[0.75rem] font-normal text-[var(--ink)]"><?php echo escape((string) $dewormingStatusForSelectedFilter['no_dose_count']); ?></span>
                                 </div>
                             </div>
-                            <div style="display: flex; justify-content: space-around; width: 100%; margin-top: 5px;">
-                                <div class="bar-chart-label">1st Dose</div>
-                                <div class="bar-chart-label">2nd Dose</div>
-                                <div class="bar-chart-label">No Dose</div>
+                            <div class="mt-[5px] flex w-full justify-around">
+                                <div class="mt-[5px] text-center text-[0.8rem] text-[var(--muted)]">1st Dose</div>
+                                <div class="mt-[5px] text-center text-[0.8rem] text-[var(--muted)]">2nd Dose</div>
+                                <div class="mt-[5px] text-center text-[0.8rem] text-[var(--muted)]">No Dose</div>
                             </div>
-                            <div class="chart-legend">
-                                <div class="chart-legend-item"><span><span class="chart-legend-color" style="background-color: var(--success);"></span>1st Dose</span><strong><?php echo escape((string) $firstDosePercentFiltered); ?> (<?php echo escape((string) $firstDosePercentFiltered); ?>%)</strong></div>
-                                <div class="chart-legend-item"><span><span class="chart-legend-color" style="background-color: var(--info);"></span>2nd Dose</span><strong><?php echo escape((string) $secondDosePercentFiltered); ?> (<?php echo escape((string) $secondDosePercentFiltered); ?>%)</strong></div>
-                                <div class="chart-legend-item"><span><span class="chart-legend-color" style="background-color: var(--muted);"></span>No Dose</span><strong><?php echo escape((string) $noDosePercentFiltered); ?> (<?php echo escape((string) $noDosePercentFiltered); ?>%)</strong></div>
+                            <div class="mt-5 w-full">
+                                <div class="flex justify-between py-[5px] text-[0.9rem]"><span class="flex items-center gap-2"><span class="h-3 w-3 rounded-[3px] bg-[var(--success)]"></span>1st Dose</span><strong><?php echo escape((string) $firstDosePercentFiltered); ?> (<?php echo escape((string) $firstDosePercentFiltered); ?>%)</strong></div>
+                                <div class="flex justify-between py-[5px] text-[0.9rem]"><span class="flex items-center gap-2"><span class="h-3 w-3 rounded-[3px] bg-[var(--info)]"></span>2nd Dose</span><strong><?php echo escape((string) $secondDosePercentFiltered); ?> (<?php echo escape((string) $secondDosePercentFiltered); ?>%)</strong></div>
+                                <div class="flex justify-between py-[5px] text-[0.9rem]"><span class="flex items-center gap-2"><span class="h-3 w-3 rounded-[3px] bg-[var(--muted)]"></span>No Dose</span><strong><?php echo escape((string) $noDosePercentFiltered); ?> (<?php echo escape((string) $noDosePercentFiltered); ?>%)</strong></div>
                             </div>
                         </article>
                     <?php else: ?>
-                        <div class="alert neutral" style="margin-bottom: 20px;">
+                        <div class="alert neutral mb-5">
                             No learners found for the selected filters to display deworming status.
                         </div>
                     <?php endif; ?>

@@ -37,6 +37,14 @@ function learner_photo_url(?string $lrn, string $defaultAsset = 'assets/images/l
                 return route_url('learner_photo.php?lrn=' . rawurlencode($normalizedLrn));
             }
         }
+
+        foreach (['jpg', 'jpeg', 'png', 'webp'] as $extension) {
+            $candidatePath = $photoDirectory . $normalizedLrn . '_1.' . $extension;
+
+            if (is_file($candidatePath)) {
+                return route_url('learner_photo.php?lrn=' . rawurlencode($normalizedLrn));
+            }
+        }
     }
 
     $defaultPath = __DIR__ . '/../' . ltrim($defaultAsset, '/');
@@ -52,6 +60,39 @@ function learner_photo_storage_directory(): string
         : dirname(__DIR__, 3) . DIRECTORY_SEPARATOR . 'ProjectPulsePrivate' . DIRECTORY_SEPARATOR . 'learner_faces';
 
     return rtrim($basePath, "\\/") . DIRECTORY_SEPARATOR;
+}
+
+function face_enrollment_max_photos(): int
+{
+    return 5;
+}
+
+function learner_face_photo_slots(string $lrn): array
+{
+    if (preg_match('/^\d{12}$/', $lrn) !== 1) {
+        return [];
+    }
+
+    $directory = learner_photo_storage_directory();
+    $slots = [];
+
+    foreach (['jpg', 'jpeg', 'png', 'webp'] as $extension) {
+        if (is_file($directory . $lrn . '.' . $extension)) {
+            $slots[] = 1;
+            break;
+        }
+    }
+
+    for ($slot = 1; $slot <= face_enrollment_max_photos(); $slot++) {
+        foreach (['jpg', 'jpeg', 'png', 'webp'] as $extension) {
+            if (is_file($directory . $lrn . '_' . $slot . '.' . $extension)) {
+                $slots[] = $slot;
+                break;
+            }
+        }
+    }
+
+    return array_values(array_unique($slots));
 }
 
 function route_url(string $path): string
@@ -145,7 +186,7 @@ function face_recognition_python(): string
     return 'python';
 }
 
-function face_recognition_service_request(string $path, ?string $body = null): ?array
+function face_recognition_service_request(string $path, ?string $body = null, array $headers = []): ?array
 {
     if (!extension_loaded('curl')) {
         return null;
@@ -162,7 +203,10 @@ function face_recognition_service_request(string $path, ?string $body = null): ?
     if ($body !== null) {
         curl_setopt($curl, CURLOPT_POST, true);
         curl_setopt($curl, CURLOPT_POSTFIELDS, $body);
-        curl_setopt($curl, CURLOPT_HTTPHEADER, ['Content-Type: image/jpeg', 'Content-Length: ' . strlen($body)]);
+        curl_setopt($curl, CURLOPT_HTTPHEADER, array_merge(
+            ['Content-Type: image/jpeg', 'Content-Length: ' . strlen($body)],
+            $headers
+        ));
     }
 
     $response = curl_exec($curl);

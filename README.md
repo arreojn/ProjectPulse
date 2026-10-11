@@ -158,9 +158,11 @@ The system automates attendance monitoring, academic record management, health p
 
 The face-recognition station is integrated with the ProjectPulse database and
 learner records. It does not use the separate `attendance_db` from the source
-repository. Learner face registrations are stored as
-`assets/images/learners/<12-digit-LRN>.jpg` and attendance is written to the
-existing `attendance_records` and `attendance_scan_logs` tables.
+repository. Learner face registrations are stored in the configured private
+face-photo directory using `<12-digit-LRN>_<photo-number>.jpg` names.
+Existing `<12-digit-LRN>.jpg` registrations remain supported. Attendance is
+written to the existing `attendance_records` and `attendance_scan_logs`
+tables.
 
 1. Install Python 3.11 (recommended by the source attendance project) and the
    scanner dependencies with the same Python executable Apache will use:
@@ -168,13 +170,25 @@ existing `attendance_records` and `attendance_scan_logs` tables.
 2. If Apache cannot find Python, set `PROJECTPULSE_FACE_PYTHON` (or the legacy
    `AI_ATTENDANCE_PYTHON`) to the full path of that Python executable and
    restart Apache.
-3. In the administrator portal, open **Face Enrollment**, capture a clear
-   photo for each learner, then select **Train Face Recognition Model** to
-   rebuild the local encoding cache.
-4. Open **Face Recognition Station** using an Attendance or Administrator
-   account and allow browser camera access.
+3. In **Face Enrollment**, capture up to five clear photos per learner. Keep
+   only that learner in each photo and vary the angle or distance slightly
+   between shots. Photos without exactly one clear face are not used for
+   training.
+4. After adding or changing learner photos, retrain the model from **Admin
+   Panel → Settings → Face Recognition Model** using **Retrain Face
+   Recognition Model**. Admins can also train it from the Face Enrollment
+   page. Retrain whenever enrollment photos are added, changed, or removed;
+   the face attendance scanner reports when its model is out of date.
+5. Open **Face Recognition Station** using an Attendance or Administrator
+   account and allow browser camera access. Multiple learners can be detected,
+   recognized, and labeled independently in one camera frame. Recognition
+   requires repeated detections to confirm an identity, and brief missed
+   detections are tolerated. Attendance is committed for one eligible learner
+   per scan; other confirmed learners can be saved on subsequent scans.
 
-The recognition model is rebuilt by the training action after enrollment.
+The administrator can adjust recognition strictness in **Admin Panel →
+Settings → Face Recognition**. More relaxed thresholds may accept weaker
+matches and increase false-match risk.
 
 ### Vue attendance pilot
 
@@ -198,10 +212,19 @@ XAMPP copy does not need Node.js. The pilot preserves the existing scanner
 workflow: 12-digit LRN validation, CSRF-protected scans and mode changes,
 learner lookup, recent logs, empty/loading/error states, and responsive CSS.
 
-Tailwind CSS utilities are compiled with the Vite production build and loaded
-alongside the existing stylesheets across the portal. Tailwind's preflight
-reset is disabled to preserve current page styling; existing screens are not
-migrated, so new or selected UI can adopt utility classes incrementally.
+Tailwind CSS is compiled with the Vite production build and is the sole
+Project PULSE stylesheet loaded by portal pages. Shared portal component rules
+are maintained in Tailwind's `components` layer, followed by utility classes;
+new page styling should use Tailwind utilities. The former `assets/css/app.css`
+rules were consolidated into this layer to preserve existing portal behavior
+while the templates continue to adopt utilities. Dynamic chart values and
+administrator-selected theme variables remain runtime CSS custom properties,
+not dynamically generated Tailwind class names. Tailwind's preflight reset
+remains disabled to preserve existing browser defaults. Third-party icon CSS
+is retained on pages that use Font Awesome. Vite uses relative asset URLs so
+generated fonts and chunks work when the project is hosted below the web root.
+The bundled Poppins font used on the sign-in page is also the default font for
+all portal pages, headings, and form controls.
 
 The shared Vue bundle is also loaded by the administrator, teacher, health,
 guidance, and parent portals. It currently owns the common responsive sidebar,

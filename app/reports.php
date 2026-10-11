@@ -319,7 +319,12 @@ function attendance_report_monthly_summary(array $filters): array
             l.id AS learner_id,
             l.learner_number,
             l.sex,
-            CONCAT(l.last_name, \', \', l.first_name) AS learner_name,
+            CONCAT(
+                l.last_name,
+                \', \',
+                l.first_name,
+                IF(l.middle_name IS NULL OR l.middle_name = \'\', \'\', CONCAT(\' \', l.middle_name))
+            ) AS learner_name,
             le.grade_level,
             COALESCE(s.name, \'Unassigned\') AS section_name,
             ar.attendance_date,
@@ -361,6 +366,7 @@ function attendance_report_monthly_summary(array $filters): array
                 'grade_level' => $rawRow['grade_level'],
                 'section_name' => $rawRow['section_name'],
                 'days' => array_fill(1, $daysInMonth, ''),
+                'day_present_units' => array_fill(1, $daysInMonth, 0.0),
                 'total_absences' => 0,
                 'total_present_days' => 0,
             ];
@@ -381,6 +387,7 @@ function attendance_report_monthly_summary(array $filters): array
         $rows[$learnerId]['days'][$dayNumber] = $attendanceCode === 'A' && $summary['absent_units'] === 0.5
             ? 'A (0.5)'
             : $attendanceCode;
+        $rows[$learnerId]['day_present_units'][$dayNumber] = $summary['present_units'];
         $rows[$learnerId]['total_absences'] += $summary['absent_units'];
         $rows[$learnerId]['total_present_days'] += $summary['present_units'];
         $dayTotals[$dayNumber] += $summary['present_units'];

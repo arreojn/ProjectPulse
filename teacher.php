@@ -310,8 +310,30 @@ if (is_post()) {
         }
 
         if ($formAction === 'save_announcement') {
-            announcement_save($_POST, (int) $user['id']);
-            flash_set('teacher_dashboard', 'Announcement saved successfully.');
+            $existingAnnouncementId = (int) ($_POST['id'] ?? 0);
+            if ($existingAnnouncementId > 0) {
+                $existingAnnouncement = announcement_find($existingAnnouncementId);
+                if ($existingAnnouncement === null || (int) $existingAnnouncement['created_by_user_id'] !== (int) $user['id']) {
+                    throw new RuntimeException('You can only edit your own announcements.');
+                }
+            }
+
+            $announcementId = announcement_save($_POST, (int) $user['id']);
+            $message = 'Announcement saved successfully.';
+            $flashType = 'success';
+            if (isset($_POST['send_sms'])) {
+                $smsResult = announcement_send_sms_to_teacher_guardians($announcementId, (int) $user['id']);
+                $message = $smsResult['sent']
+                    ? (string) $smsResult['message']
+                    : 'Announcement was saved, but SMS was not sent: ' . (string) $smsResult['reason'];
+                if (!$smsResult['sent'] && str_starts_with((string) $smsResult['reason'], 'Announcement was saved,')) {
+                    $message = (string) $smsResult['reason'];
+                }
+                if (!$smsResult['sent']) {
+                    $flashType = 'error';
+                }
+            }
+            flash_set('teacher_dashboard', $message, $flashType);
             redirect('teacher.php?module=announcements');
         }
 
@@ -529,7 +551,6 @@ $pageMeta = $allowedModules[$module];
     <?php echo theme_stylesheet_markup(); ?>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo escape(APP_NAME); ?> Teacher Portal</title>
-    <link rel="stylesheet" href="<?php echo escape(asset_url('assets/css/app.css')); ?>">
     <link rel="stylesheet" href="<?php echo escape(asset_url('assets/dist/tailwind.css')); ?>">
     <link rel="stylesheet" href="<?php echo escape(asset_url('loginassets/fonts/font-awesome-4.7.0/css/font-awesome.min.css')); ?>">
 </head>
@@ -919,7 +940,7 @@ $pageMeta = $allowedModules[$module];
                                 <h2>Grades</h2>
                             </div>
 
-                            <form method="get" class="report-filter-grid" style="margin-bottom: 1.5rem;" data-vue-teacher-report-form>
+                            <form method="get" class="report-filter-grid mb-6" data-vue-teacher-report-form>
                                 <input type="hidden" name="module" value="learner_details">
                                 <input type="hidden" name="learner_id" value="<?php echo escape((string) $selectedDashboardLearner['id']); ?>">
 
@@ -1235,15 +1256,15 @@ $pageMeta = $allowedModules[$module];
                             </header>
 
                             <div class="table-shell sf2-table-shell">
-                                <table class="records-table monthly-report-table sf2-table" style="table-layout: fixed;">
+                                <table class="records-table monthly-report-table sf2-table table-fixed">
                                     <colgroup>
-                                        <col style="width: 40px;">
-                                        <col style="width: 200px;">
+                                        <col class="w-10">
+                                        <col class="w-[200px]">
                                         <?php foreach ($sectionAttendanceReport['days_in_month'] as $dayNumber): ?>
-                                            <col style="width: 38px;">
+                                            <col class="w-[38px]">
                                         <?php endforeach; ?>
-                                        <col style="width: 50px;">
-                                        <col style="width: 50px;">
+                                        <col class="w-[50px]">
+                                        <col class="w-[50px]">
                                     </colgroup>
                                     <thead>
                                         <tr>
@@ -1401,7 +1422,7 @@ $pageMeta = $allowedModules[$module];
                             }
                         }
                         ?>
-                        <article class="teacher-panel-card report-print-area sf2-report" style="margin-top: 20px;">
+                        <article class="teacher-panel-card report-print-area sf2-report mt-5">
                             <div class="panel-heading compact-heading">
                                 <h2>Summary of Attendance and Enrollment</h2>
                                 <p>For the month of <?php echo escape($sectionAttendanceReport['month_label'] . ' ' . $sectionAttendanceReport['year_label']); ?></p>
@@ -1503,7 +1524,7 @@ $pageMeta = $allowedModules[$module];
                             <p>Review the grade records currently stored for your assigned learners.</p>
                         </div>
 
-                        <form method="get" class="report-filter-grid" style="margin-bottom: 1.5rem;" data-vue-teacher-report-form>
+                        <form method="get" class="report-filter-grid mb-6" data-vue-teacher-report-form>
                             <input type="hidden" name="module" value="grades_import">
 
                             <div class="report-filter-field report-filter-field-wide">
@@ -1991,6 +2012,10 @@ $pageMeta = $allowedModules[$module];
                                     <label>
                                         <input type="checkbox" name="is_published" value="1"<?php echo !empty($announcementForm['is_published']) ? ' checked' : ''; ?>>
                                         Publish this announcement
+                                    </label>
+                                    <label>
+                                        <input type="checkbox" name="send_sms" value="1">
+                                        Also send via SMS to parents/guardians linked to learners in your current assigned section (requires publishing)
                                     </label>
                                 </div>
 

@@ -131,8 +131,6 @@ function announcement_send_sms_to_guardians(int $announcementId): array
         ];
     }
 
-    require_once __DIR__ . '/sms_gateway.php';
-
     $statement = database()->query(
         'SELECT parent_guardian_contact_number AS phone
          FROM learners
@@ -145,10 +143,76 @@ function announcement_send_sms_to_guardians(int $announcementId): array
            AND TRIM(contact_number) <> \'\''
     );
 
+    return announcement_send_sms_to_contacts($announcement, array_column($statement->fetchAll(), 'phone'));
+}
+
+function announcement_send_sms_to_teacher_guardians(int $announcementId, int $teacherUserId): array
+{
+    $announcement = announcement_find($announcementId);
+
+    if ($announcement === null) {
+        throw new RuntimeException('The saved announcement could not be found.');
+    }
+
+    if ((int) ($announcement['created_by_user_id'] ?? 0) !== $teacherUserId) {
+        throw new RuntimeException('You can only send SMS for your own announcements.');
+    }
+
+    if ((int) ($announcement['is_published'] ?? 0) !== 1) {
+        return [
+            'sent' => false,
+            'reason' => 'SMS was not sent because the announcement is not published.',
+        ];
+    }
+
+    require_once __DIR__ . '/teachers.php';
+    require_once __DIR__ . '/learners.php';
+    teacher_management_bootstrap();
+    learner_management_bootstrap();
+
+    $statement = database()->prepare(
+        'SELECT l.parent_guardian_contact_number AS phone
+         FROM teacher_section_assignments tsa
+         INNER JOIN school_years sy
+            ON sy.id = tsa.school_year_id
+           AND sy.is_current = 1
+         INNER JOIN learner_enrollments le
+            ON le.section_id = tsa.section_id
+           AND le.school_year_id = tsa.school_year_id
+         INNER JOIN learners l ON l.id = le.learner_id
+         WHERE tsa.teacher_user_id = :teacher_user_id
+           AND l.parent_guardian_contact_number IS NOT NULL
+           AND TRIM(l.parent_guardian_contact_number) <> \'\'
+         UNION ALL
+         SELECT p.contact_number AS phone
+         FROM teacher_section_assignments tsa
+         INNER JOIN school_years sy
+            ON sy.id = tsa.school_year_id
+           AND sy.is_current = 1
+         INNER JOIN learner_enrollments le
+            ON le.section_id = tsa.section_id
+           AND le.school_year_id = tsa.school_year_id
+         INNER JOIN parent_learner_links pll ON pll.learner_id = le.learner_id
+         INNER JOIN parents p ON p.id = pll.parent_id
+         WHERE tsa.teacher_user_id = :linked_teacher_user_id
+           AND p.contact_number IS NOT NULL
+           AND TRIM(p.contact_number) <> \'\''
+    );
+    $statement->execute([
+        'teacher_user_id' => $teacherUserId,
+        'linked_teacher_user_id' => $teacherUserId,
+    ]);
+
+    return announcement_send_sms_to_contacts($announcement, array_column($statement->fetchAll(), 'phone'));
+}
+
+function announcement_send_sms_to_contacts(array $announcement, array $phoneNumbers): array
+{
+    require_once __DIR__ . '/sms_gateway.php';
     $recipients = [];
     $invalidCount = 0;
-    foreach ($statement->fetchAll() as $row) {
-        $phone = sms_normalize_phone((string) ($row['phone'] ?? ''));
+    foreach ($phoneNumbers as $phoneNumber) {
+        $phone = sms_normalize_phone((string) $phoneNumber);
         if ($phone === '') {
             $invalidCount++;
             continue;

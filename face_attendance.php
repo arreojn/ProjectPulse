@@ -23,24 +23,7 @@ $faceConfig = [
     <?php echo theme_stylesheet_markup(); ?>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo escape(APP_NAME); ?> Face Attendance</title>
-    <link rel="stylesheet" href="<?php echo escape(asset_url('assets/css/app.css')); ?>">
     <link rel="stylesheet" href="<?php echo escape(asset_url('assets/dist/tailwind.css')); ?>">
-    <style>
-        #video-feed { width: 100%; max-width: 620px; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 18px; transform: scaleX(-1); background: #000; }
-        .face-attendance-layout { display: grid; grid-template-columns: minmax(390px, 0.85fr) minmax(0, 1.15fr); gap: 16px; align-items: start; }
-        .today-attendance-panel { max-height: calc(100vh - 160px); overflow: hidden; }
-        .today-attendance-panel .table-shell { max-height: calc(100vh - 270px); overflow: auto; }
-        .camera-station { display: grid; gap: 14px; justify-items: center; }
-        .camera-station .scan-head, .camera-station .scan-mode-panel, .camera-station #scan-feedback { width: min(100%, 620px); }
-        .camera-station .scan-head { align-items: center; }
-        .camera-station .clock-panel { min-width: 210px; padding: 12px 16px; }
-        .camera-station .clock-value { font-size: 1.45rem; }
-        .camera-station .scan-mode-panel { justify-content: center; padding: 10px; }
-        .attendance-time-table th:not(:first-child), .attendance-time-table td:not(:first-child) { text-align: center; white-space: nowrap; }
-        .learner-name-cell strong, .learner-name-cell small { display: block; }
-        .learner-name-cell small { color: var(--muted); margin-top: 3px; }
-        @media (max-width: 980px) { .face-attendance-layout { grid-template-columns: 1fr; } .today-attendance-panel, .today-attendance-panel .table-shell { max-height: none; } }
-    </style>
 </head>
 <body class="dashboard-body">
 <main class="dashboard-shell fullscreen-shell">
@@ -48,9 +31,36 @@ $faceConfig = [
         <div class="header-title-block"><img class="school-logo" src="<?php echo escape(school_logo_url()); ?>" alt="School logo"><div class="header-copy"><p class="eyebrow">Attendance Module</p><h1>Face Recognition Scanner</h1></div></div>
         <div class="topbar-actions"><p class="signed-in-as">Signed in as <?php echo escape($user['username']); ?></p><?php if (($user['role'] ?? '') === 'admin'): ?><a href="<?php echo escape(route_url('admin.php')); ?>" class="secondary-link">Admin Panel</a><?php endif; ?><a href="<?php echo escape(route_url('logout.php')); ?>" class="secondary-link">Logout</a></div>
     </header>
-    <section class="face-attendance-layout">
-        <article class="admin-module-card today-attendance-panel"><div class="panel-heading compact-heading"><h2>Today’s Learners</h2><p>Live time-in and time-out records.</p></div><div class="table-shell"><table class="records-table attendance-time-table"><thead><tr><th>Learner</th><th>AM In</th><th>AM Out</th><th>PM In</th><th>PM Out</th></tr></thead><tbody id="today-attendance-body"><tr><td colspan="5" class="empty-row">Loading attendance records...</td></tr></tbody></table></div></article>
-        <article class="admin-module-card camera-station"><section class="scan-head"><div class="panel-heading no-gap"><h2>Live Camera Feed</h2><p>Position face in the frame to log attendance automatically.</p></div><div class="clock-panel"><p class="meta-label">Current Time</p><p id="live-time" class="clock-value"><?php echo escape(date('h:i:s A')); ?></p><p id="live-date" class="date-value"><?php echo escape(date('l, F j, Y')); ?></p></div></section><section class="scan-mode-panel"><video id="video-feed" autoplay playsinline muted></video><canvas id="capture-canvas" style="display:none;"></canvas></section><div id="scan-feedback" class="alert neutral" style="margin: 0; text-align: center;">Starting camera...</div></article>
+    <section class="grid grid-cols-[minmax(390px,0.85fr)_minmax(0,1.15fr)] items-start gap-4 max-[980px]:grid-cols-1">
+        <article class="admin-module-card max-h-[calc(100vh_-_160px)] overflow-hidden max-[980px]:max-h-none">
+            <div class="mb-4 flex flex-wrap items-center justify-between gap-4">
+                <div class="panel-heading compact-heading">
+                    <h2>Today’s Learners</h2>
+                    <p>Live time-in and time-out records.</p>
+                </div>
+                <div class="clock-panel min-w-[220px] flex-1 px-4 py-3 text-center sm:flex-none">
+                    <p class="meta-label">Current Time</p>
+                    <p id="live-time" class="clock-value text-[2rem]"><?php echo escape(date('h:i:s A')); ?></p>
+                    <p id="live-date" class="date-value text-base"><?php echo escape(date('l, F j, Y')); ?></p>
+                </div>
+            </div>
+            <div class="table-shell max-h-[calc(100vh_-_270px)] overflow-auto max-[980px]:max-h-none">
+                <table class="records-table">
+                    <thead><tr><th>Learner</th><th class="text-center whitespace-nowrap">AM In</th><th class="text-center whitespace-nowrap">AM Out</th><th class="text-center whitespace-nowrap">PM In</th><th class="text-center whitespace-nowrap">PM Out</th></tr></thead>
+                    <tbody id="today-attendance-body"><tr><td colspan="5" class="empty-row">Loading attendance records...</td></tr></tbody>
+                </table>
+            </div>
+        </article>
+        <article class="admin-module-card grid min-w-0 justify-items-center gap-3.5">
+            <section class="scan-mode-panel w-full min-w-0 justify-center p-2.5">
+                <div class="relative aspect-[4/3] w-full overflow-hidden rounded-[18px] bg-black">
+                    <video id="video-feed" class="absolute inset-0 h-full w-full object-cover" autoplay playsinline muted></video>
+                    <canvas id="face-overlay" class="pointer-events-none absolute inset-0 h-full w-full" aria-hidden="true"></canvas>
+                </div>
+                <canvas id="capture-canvas" class="hidden"></canvas>
+            </section>
+            <div id="scan-feedback" class="alert neutral m-0 w-full max-w-full text-center">Starting camera...</div>
+        </article>
     </section>
 </main>
 <script>window.ProjectPulse = <?php echo json_encode($faceConfig, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_THROW_ON_ERROR); ?>;</script>

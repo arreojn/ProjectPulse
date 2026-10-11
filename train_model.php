@@ -24,6 +24,9 @@ try {
     $result = train_face_recognizer();
 
     http_response_code($result['success'] ? 200 : 500);
+    $result['message'] = $result['success']
+        ? 'Face recognition model retrained successfully.'
+        : (string) ($result['error'] ?? 'Face recognition model retraining failed.');
     echo json_encode($result);
 
 } catch (Throwable $e) {

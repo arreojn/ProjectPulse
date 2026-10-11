@@ -143,11 +143,38 @@ try {
         }
 
         case 'save_announcement': {
-            announcement_save($_POST, (int) $user['id']);
-            flash_set('teacher_dashboard', 'Announcement saved successfully.');
+            $existingAnnouncementId = (int) ($_POST['id'] ?? 0);
+            if ($existingAnnouncementId > 0) {
+                $existingAnnouncement = announcement_find($existingAnnouncementId);
+                if ($existingAnnouncement === null || (int) $existingAnnouncement['created_by_user_id'] !== (int) $user['id']) {
+                    throw new RuntimeException('You can only edit your own announcements.');
+                }
+            }
+
+            $announcementId = announcement_save($_POST, (int) $user['id']);
+            $message = 'Announcement saved successfully.';
+            $flashType = 'success';
+            $notificationSent = null;
+
+            if (isset($_POST['send_sms'])) {
+                $smsResult = announcement_send_sms_to_teacher_guardians($announcementId, (int) $user['id']);
+                $notificationSent = (bool) $smsResult['sent'];
+                $message = $notificationSent
+                    ? (string) $smsResult['message']
+                    : 'Announcement was saved, but SMS was not sent: ' . (string) $smsResult['reason'];
+                if (!$notificationSent && str_starts_with((string) $smsResult['reason'], 'Announcement was saved,')) {
+                    $message = (string) $smsResult['reason'];
+                }
+                if (!$notificationSent) {
+                    $flashType = 'error';
+                }
+            }
+
+            flash_set('teacher_dashboard', $message, $flashType);
             echo json_encode([
                 'success' => true,
-                'message' => 'Announcement saved successfully.',
+                'message' => $message,
+                'notification_sent' => $notificationSent,
                 'redirect' => teacher_workflow_redirect_url('announcements'),
             ]);
             exit;

@@ -177,24 +177,7 @@ if ($module === 'case_detail' && $editingCase === null) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo escape(APP_NAME); ?> Guidance Counselor Portal</title>
     <?php echo theme_stylesheet_markup(); ?>
-    <link rel="stylesheet" href="<?php echo escape(asset_url('assets/css/app.css')); ?>">
     <link rel="stylesheet" href="<?php echo escape(asset_url('assets/dist/tailwind.css')); ?>">
-    <style>
-        .sidebar-theme-form {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0 1.5rem;
-            margin-bottom: 1rem;
-        }
-        .sidebar-theme-form label {
-            color: var(--text-muted, #6c757d);
-            font-size: 0.9rem;
-        }
-        .sidebar-theme-form select {
-            border-radius: 4px;
-        }
-    </style>
 </head>
 <body class="dashboard-body admin-dashboard">
     <button

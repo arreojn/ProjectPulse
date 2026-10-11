@@ -6,6 +6,7 @@ require_once __DIR__ . '/config/config.php';
 require_once __DIR__ . '/app/helpers.php';
 require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/app/auth.php';
+require_once __DIR__ . '/app/learners.php';
 require_once __DIR__ . '/app/teachers.php';
 
 header('Content-Type: application/json; charset=UTF-8');
@@ -34,8 +35,18 @@ try {
         throw new RuntimeException('A valid 12-digit LRN is required.', 422);
     }
 
+    $imageNumber = filter_var($payload['image_number'] ?? null, FILTER_VALIDATE_INT);
+    $maxPhotos = face_enrollment_max_photos();
+    if ($imageNumber === false || $imageNumber < 1 || $imageNumber > $maxPhotos) {
+        throw new RuntimeException('The image number must be between 1 and ' . $maxPhotos . '.', 422);
+    }
+
     if (($user['role'] ?? '') === 'teacher' && teacher_accessible_learner_by_lrn((int) $user['id'], $lrn) === null) {
         throw new RuntimeException('The selected learner is not part of your assigned section.', 403);
+    }
+
+    if (in_array($imageNumber, learner_face_photo_slots($lrn), true)) {
+        throw new RuntimeException('That photo slot is already saved. Select another learner or train the model.', 409);
     }
 
     if (empty($imageDataUrl) || !str_starts_with($imageDataUrl, 'data:image/jpeg;base64,')) {
@@ -51,13 +62,31 @@ try {
     if (!is_dir($storageDirectory) && !mkdir($storageDirectory, 0700, true) && !is_dir($storageDirectory)) {
         throw new RuntimeException('The learner photo storage directory is unavailable.');
     }
-    $filePath = $storageDirectory . $lrn . '.jpg';
+    $filePath = $storageDirectory . $lrn . '_' . $imageNumber . '.jpg';
+    $file = @fopen($filePath, 'xb');
 
-    if (file_put_contents($filePath, $imgData) === false) {
-        throw new RuntimeException('Failed to save learner photo on the server.');
+    if ($file === false) {
+        throw new RuntimeException('Could not create the learner photo file. The photo slot may already exist or storage may be unavailable.');
     }
 
-    echo json_encode(['success' => true, 'message' => 'Learner photo captured successfully.']);
+    try {
+        $bytesWritten = fwrite($file, $imgData);
+    } finally {
+        fclose($file);
+    }
+
+    if ($bytesWritten !== strlen($imgData)) {
+        @unlink($filePath);
+        throw new RuntimeException('The learner photo could not be fully written to storage.');
+    }
+
+    $photoSlots = learner_face_photo_slots($lrn);
+    echo json_encode([
+        'success' => true,
+        'message' => 'Learner photo ' . $imageNumber . ' of ' . $maxPhotos . ' saved successfully.',
+        'image_number' => $imageNumber,
+        'photo_slots' => $photoSlots,
+    ]);
 
 } catch (Throwable $e) {
     http_response_code(is_int($e->getCode()) && $e->getCode() >= 400 ? $e->getCode() : 500);

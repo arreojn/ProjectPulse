@@ -215,29 +215,29 @@ const HealthPortalApp = {
         if (card.type === 'bar') {
           const max = Math.max(1, ...card.items.map((item) => Number(item.value || 0)));
           return `
-            <article class="chart-card">
-              <h3 class="chart-title">${card.title}</h3>
-              <div class="bar-chart-container">
+            <article class="flex min-w-[300px] max-w-[45%] flex-1 flex-col items-center rounded-[28px] border border-[var(--line)] bg-[var(--surface-strong)] p-5 shadow-[var(--shadow)]">
+              <h3 class="mb-[15px] text-[1.2rem] font-bold text-[var(--ink)]">${card.title}</h3>
+              <div class="flex h-[150px] w-full items-end gap-2.5 border-b border-[var(--line)] pb-2.5">
                 ${card.items.map((item) => {
                   const value = Number(item.value || 0);
                   const percent = card.total > 0 ? (value / Math.max(card.total, 1)) * 100 : 0;
                   return `
-                    <div class="bar-chart-bar" style="height: ${Math.max(8, percent)}%; background-color: ${item.color};">
-                      <span>${value}</span>
+                    <div class="relative flex flex-1 items-end justify-center rounded-t-[5px] text-[0.8rem] font-bold text-[var(--surface-strong)] transition-[height] duration-500 ease-out h-[var(--bar-height)] bg-[var(--chart-color)]" style="--bar-height: ${Math.max(8, percent)}%; --chart-color: ${item.color};">
+                      <span class="absolute -top-5 text-[0.75rem] font-normal text-[var(--ink)]">${value}</span>
                     </div>
                   `;
                 }).join('')}
               </div>
-              <div style="display: flex; justify-content: space-around; width: 100%; margin-top: 5px;">
-                ${card.items.map((item) => `<div class="bar-chart-label">${item.label}</div>`).join('')}
+              <div class="mt-[5px] flex w-full justify-around">
+                ${card.items.map((item) => `<div class="mt-[5px] text-center text-[0.8rem] text-[var(--muted)]">${item.label}</div>`).join('')}
               </div>
-              <div class="chart-legend">
+              <div class="mt-5 w-full">
                 ${card.items.map((item) => {
                   const value = Number(item.value || 0);
                   const percent = card.total > 0 ? Math.round((value / card.total) * 100) : 0;
                   return `
-                    <div class="chart-legend-item">
-                      <span><span class="chart-legend-color" style="background-color: ${item.color};"></span>${item.label}</span>
+                    <div class="flex justify-between py-[5px] text-[0.9rem]">
+                      <span class="flex items-center gap-2"><span class="h-3 w-3 rounded-[3px] bg-[var(--chart-color)]" style="--chart-color: ${item.color};"></span>${item.label}</span>
                       <strong>${value} (${percent}%)</strong>
                     </div>
                   `;
@@ -257,18 +257,18 @@ const HealthPortalApp = {
         });
 
         return `
-          <article class="chart-card">
-            <h3 class="chart-title">${card.title}</h3>
-            <div class="pie-chart" style="background: conic-gradient(${strokeStops.join(', ')});">
+          <article class="flex min-w-[300px] max-w-[45%] flex-1 flex-col items-center rounded-[28px] border border-[var(--line)] bg-[var(--surface-strong)] p-5 shadow-[var(--shadow)]">
+            <h3 class="mb-[15px] text-[1.2rem] font-bold text-[var(--ink)]">${card.title}</h3>
+            <div class="relative flex h-[180px] w-[180px] items-center justify-center rounded-full bg-[var(--chart-gradient)] text-[0.9rem] font-semibold text-[var(--surface-strong)] before:absolute before:h-3/5 before:w-3/5 before:rounded-full before:bg-[var(--surface-strong)] before:content-[''] [&>span]:relative [&>span]:z-[1] [&>span]:text-[var(--ink)]" style="--chart-gradient: conic-gradient(${strokeStops.join(', ')});">
               <span>${card.total} Learners</span>
             </div>
-            <div class="chart-legend">
+            <div class="mt-5 w-full">
               ${card.items.map((item) => {
                 const value = Number(item.value || 0);
                 const percent = card.total > 0 ? Math.round((value / card.total) * 100) : 0;
                 return `
-                  <div class="chart-legend-item">
-                    <span><span class="chart-legend-color" style="background-color: ${item.color};"></span>${item.label}</span>
+                  <div class="flex justify-between py-[5px] text-[0.9rem]">
+                    <span class="flex items-center gap-2"><span class="h-3 w-3 rounded-[3px] bg-[var(--chart-color)]" style="--chart-color: ${item.color};"></span>${item.label}</span>
                     <strong>${value} (${percent}%)</strong>
                   </div>
                 `;

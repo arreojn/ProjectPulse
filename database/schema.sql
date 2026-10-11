@@ -349,7 +349,8 @@ INSERT IGNORE INTO school_years (label, start_date, end_date, is_current) VALUES
 ('2026-2027', '2026-06-01', '2027-03-31', 1);
 
 INSERT IGNORE INTO system_settings (setting_key, setting_value) VALUES
-('attendance_scan_mode', 'strict_windows');
+('attendance_scan_mode', 'strict_windows'),
+('face_recognition_strictness', 'strict');
 
 INSERT IGNORE INTO sections (name, grade_level, school_year_id, adviser_name)
 SELECT 'Mabini', 'Grade 7', sy.id, 'Adviser Demo'

@@ -48,11 +48,13 @@ if ($role === 'teacher') {
 }
 
 $photoPath = null;
-foreach (['jpg', 'jpeg', 'png', 'webp'] as $extension) {
-    $candidate = learner_photo_storage_directory() . $lrn . '.' . $extension;
-    if (is_file($candidate)) {
-        $photoPath = $candidate;
-        break;
+foreach ([$lrn, $lrn . '_1'] as $photoName) {
+    foreach (['jpg', 'jpeg', 'png', 'webp'] as $extension) {
+        $candidate = learner_photo_storage_directory() . $photoName . '.' . $extension;
+        if (is_file($candidate)) {
+            $photoPath = $candidate;
+            break 2;
+        }
     }
 }
 

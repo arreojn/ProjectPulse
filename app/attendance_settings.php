@@ -16,6 +16,37 @@ function attendance_scan_mode_options(): array
     ];
 }
 
+function face_recognition_strictness_options(): array
+{
+    return [
+        'very_strict' => [
+            'label' => 'Very Strict',
+            'threshold' => 20.0,
+            'description' => 'LBPH cutoff 20. Most cautious option; may reject more genuine scans.',
+        ],
+        'strict' => [
+            'label' => 'Strict',
+            'threshold' => 25.0,
+            'description' => 'LBPH cutoff 25. Most cautious; may reject more genuine scans.',
+        ],
+        'balanced' => [
+            'label' => 'Balanced',
+            'threshold' => 35.0,
+            'description' => 'LBPH cutoff 35. More tolerant of image variation, with increased false-match risk.',
+        ],
+        'relaxed' => [
+            'label' => 'Relaxed',
+            'threshold' => 45.0,
+            'description' => 'LBPH cutoff 45. Accepts weaker matches and has increased false-match risk.',
+        ],
+        'very_relaxed' => [
+            'label' => 'Very Relaxed',
+            'threshold' => 55.0,
+            'description' => 'LBPH cutoff 55. Most tolerant option and greatest false-match risk.',
+        ],
+    ];
+}
+
 function attendance_settings_bootstrap(): void
 {
     static $bootstrapped = false;
@@ -43,8 +74,73 @@ function attendance_settings_bootstrap(): void
         'setting_key' => 'attendance_scan_mode',
         'setting_value' => 'strict_windows',
     ]);
+    $statement->execute([
+        'setting_key' => 'face_recognition_strictness',
+        'setting_value' => 'strict',
+    ]);
 
     $bootstrapped = true;
+}
+
+function face_recognition_strictness_normalize(string $strictness): string
+{
+    $options = face_recognition_strictness_options();
+
+    return array_key_exists($strictness, $options) ? $strictness : 'strict';
+}
+
+function face_recognition_strictness_details(?string $strictness = null): array
+{
+    $options = face_recognition_strictness_options();
+    $key = face_recognition_strictness_normalize($strictness ?? face_recognition_strictness());
+
+    return [
+        'key' => $key,
+        'label' => $options[$key]['label'],
+        'threshold' => $options[$key]['threshold'],
+        'description' => $options[$key]['description'],
+    ];
+}
+
+function face_recognition_strictness(): string
+{
+    attendance_settings_bootstrap();
+
+    $statement = database()->prepare(
+        'SELECT setting_value
+         FROM system_settings
+         WHERE setting_key = :setting_key
+         LIMIT 1'
+    );
+    $statement->execute(['setting_key' => 'face_recognition_strictness']);
+    $row = $statement->fetch();
+
+    return face_recognition_strictness_normalize((string) ($row['setting_value'] ?? 'strict'));
+}
+
+function face_recognition_strictness_set(string $strictness): array
+{
+    attendance_settings_bootstrap();
+    $strictness = trim($strictness);
+    $normalized = face_recognition_strictness_normalize($strictness);
+
+    if ($normalized !== $strictness) {
+        throw new RuntimeException('Invalid face recognition strictness level.');
+    }
+
+    $statement = database()->prepare(
+        'INSERT INTO system_settings (setting_key, setting_value)
+         VALUES (:setting_key, :setting_value)
+         ON DUPLICATE KEY UPDATE
+            setting_value = VALUES(setting_value),
+            updated_at = CURRENT_TIMESTAMP'
+    );
+    $statement->execute([
+        'setting_key' => 'face_recognition_strictness',
+        'setting_value' => $normalized,
+    ]);
+
+    return face_recognition_strictness_details($normalized);
 }
 
 function attendance_scan_mode_normalize(string $mode): string

@@ -10,7 +10,12 @@ export default {
     preflight: false,
   },
   theme: {
-    extend: {},
+    extend: {
+      fontFamily: {
+        sans: ['ProjectPulsePoppins', 'Trebuchet MS', 'sans-serif'],
+        login: ['ProjectPulsePoppins', 'Trebuchet MS', 'sans-serif'],
+      },
+    },
   },
   plugins: [],
 };

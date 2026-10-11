@@ -802,6 +802,7 @@ if ($module === 'attendance_module' && $attendanceSchoolYear !== null) {
 if ($module === 'settings') {
     $stats['today_logins'] = (int) database()->query('SELECT COUNT(*) FROM auth_login_logs WHERE login_status = \'success\' AND DATE(logged_in_at) = CURDATE()')->fetchColumn();
     $systemLoginLogs = auth_recent_login_logs(10);
+    $faceStrictness = face_recognition_strictness_details();
 }
 
 
@@ -928,79 +929,76 @@ $attendanceDashboardChartData = [
     <?php echo theme_stylesheet_markup(); ?>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo escape(APP_NAME); ?> Admin</title>
-    <link rel="stylesheet" href="<?php echo escape(asset_url('assets/css/app.css')); ?>">
     <link rel="stylesheet" href="<?php echo escape(asset_url('assets/dist/tailwind.css')); ?>">
     <link rel="stylesheet" href="<?php echo escape(asset_url('loginassets/fonts/font-awesome-4.7.0/css/font-awesome.min.css')); ?>">
 </head>
 <body class="dashboard-body admin-dashboard">
     <button
         id="sidebar-toggle"
-        class="sidebar-toggle-button"
+        class="fixed left-4 top-4 z-[1003] inline-flex h-[52px] w-[52px] items-center justify-center rounded-[18px] border border-[var(--line)] bg-[var(--surface-strong)] p-0 shadow-[var(--shadow)] transition duration-[140ms] hover:-translate-y-px hover:bg-white focus-visible:outline focus-visible:outline-4 focus-visible:outline-[color-mix(in_srgb,var(--accent)_14%,transparent)]"
         type="button"
         data-sidebar-label="admin menu"
         aria-label="Open admin menu"
         aria-controls="admin-sidebar"
         aria-expanded="false"
     >
-        <span></span>
-        <span></span>
-        <span></span>
+        <span class="text-[28px] leading-none text-[var(--surface-dark)]" aria-hidden="true">☰</span>
     </button>
-    <div id="sidebar-backdrop" class="sidebar-backdrop" hidden></div>
+    <div id="sidebar-backdrop" class="pointer-events-none fixed inset-0 z-[1001] bg-[rgba(29,42,57,0.34)] opacity-0 backdrop-blur transition duration-[180ms] [body.sidebar-open_&]:pointer-events-auto [body.sidebar-open_&]:opacity-100" hidden></div>
 
-    <main class="dashboard-shell admin-shell wide-admin-shell">
-        <section class="admin-layout">
-            <aside id="admin-sidebar" class="admin-sidebar">
-                <div class="sidebar-profile">
-                    <div class="sidebar-brand">
-                        <div class="sidebar-brand-logos">
-                            <img class="sidebar-brand-logo pulse-logo" src="<?php echo escape(asset_url('assets/images/pulselogo.png')); ?>" alt="Project PULSE Logo">
+    <main class="mx-auto w-[min(1540px,calc(100%-24px))] py-5 pb-7 max-sm:w-[calc(100%-16px)] max-sm:pt-4 print:m-0 print:w-full print:max-w-none print:p-0">
+        <section class="grid min-h-[calc(100vh-48px)] grid-cols-[300px_minmax(0,1fr)] gap-[14px] transition-[grid-template-columns,gap] duration-[220ms] max-[1200px]:grid-cols-1 [body.sidebar-collapsed_&]:grid-cols-[0_minmax(0,1fr)] [body.sidebar-collapsed_&]:gap-0 print:block print:min-h-0">
+            <aside id="admin-sidebar" class="sticky top-5 grid h-[calc(100vh-40px)] max-h-[calc(100dvh-40px)] min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-3 self-start overflow-hidden rounded-[28px] border border-[var(--line)] bg-[var(--surface)] p-[18px] shadow-[var(--shadow)] backdrop-blur-2xl transition-[transform,opacity] duration-[220ms] [body.sidebar-collapsed_&]:pointer-events-none [body.sidebar-collapsed_&]:-translate-x-[110%] [body.sidebar-collapsed_&]:opacity-0 max-[1200px]:fixed max-[1200px]:top-3 max-[1200px]:bottom-3 max-[1200px]:left-3 max-[1200px]:z-[1002] max-[1200px]:h-auto max-[1200px]:w-[min(320px,calc(100vw-24px))] max-[1200px]:max-h-none max-[1200px]:-translate-x-[calc(100%+24px)] max-[1200px]:pointer-events-none max-[1200px]:opacity-0 max-[1200px]:[body.sidebar-open_&]:pointer-events-auto max-[1200px]:[body.sidebar-open_&]:translate-x-0 max-[1200px]:[body.sidebar-open_&]:opacity-100 print:hidden">
+                <div>
+                    <div class="mb-2 flex flex-col items-center gap-1.5 border-b border-[var(--line)] pb-2.5 text-center">
+                        <div class="flex min-h-[54px] items-center justify-center gap-2">
+                            <img class="h-12 w-12 shrink-0 rounded-full border border-[rgba(31,41,51,0.05)] bg-white/80 object-contain shadow-[0_4px_12px_rgba(32,24,17,0.12)]" src="<?php echo escape(asset_url('assets/images/pulselogo.png')); ?>" alt="Project PULSE Logo">
                         </div>
-                        <div class="sidebar-brand-text">
-                            <span class="sidebar-brand-title">Project <span class="brand-pulse">PULSE</span></span>
-                            <span class="sidebar-brand-subtitle">Monitoring Portal</span>
+                        <div class="flex flex-col items-center">
+                            <span class="text-[1.05rem] font-extrabold leading-tight tracking-[0.02em] text-[var(--ink)]">Project <span class="text-[var(--accent)]">PULSE</span></span>
+                            <span class="text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-[var(--muted)]">Monitoring Portal</span>
                         </div>
                     </div>
                 </div>
 
-                <nav class="sidebar-nav" aria-label="Admin Navigation">
-                    <div class="menu-group">
-                        <p class="menu-group-title">Attendance</p>
-                        <a href="<?php echo escape(route_url('admin.php?module=attendance_module')); ?>" class="submenu-link<?php echo $module === 'attendance_module' ? ' active' : ''; ?>">Attendance Module</a>
-                        <a href="<?php echo escape(route_url('admin.php?module=learner_management')); ?>" class="submenu-link<?php echo $module === 'learner_management' ? ' active' : ''; ?>">Learner Management</a>
-                        <a href="<?php echo escape(route_url('admin.php?module=sections_management')); ?>" class="submenu-link<?php echo $module === 'sections_management' ? ' active' : ''; ?>">Sections Management</a>
-                        <a href="<?php echo escape(route_url('admin.php?module=teacher_management')); ?>" class="submenu-link<?php echo $module === 'teacher_management' ? ' active' : ''; ?>">Teacher Management</a>
-                        <a href="<?php echo escape(route_url('admin.php?module=attendance_reports')); ?>" class="submenu-link<?php echo $module === 'attendance_reports' ? ' active' : ''; ?>">Attendance Reports</a>
+                <nav class="admin-sidebar-nav min-h-0 overflow-hidden pr-1" aria-label="Admin Navigation">
+                    <div class="grid gap-1.5">
+                        <p class="mb-1 mt-0 text-[0.68rem] font-bold uppercase tracking-[0.12em] text-[var(--muted)]">Attendance</p>
+                        <a href="<?php echo escape(route_url('admin.php?module=attendance_module')); ?>" class="block rounded-2xl border border-transparent bg-[rgba(29,42,57,0.04)] px-3.5 py-2.5 text-[0.9rem] font-bold text-[var(--ink)] no-underline transition hover:-translate-y-px hover:bg-[rgba(180,83,9,0.08)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)]<?php echo $module === 'attendance_module' ? ' border-[rgba(180,83,9,0.18)] bg-[linear-gradient(135deg,rgba(180,83,9,0.12),rgba(124,45,18,0.1))] text-[var(--accent-strong)]' : ''; ?>">Attendance Module</a>
+                        <a href="<?php echo escape(route_url('admin.php?module=learner_management')); ?>" class="block rounded-2xl border border-transparent bg-[rgba(29,42,57,0.04)] px-3.5 py-2.5 text-[0.9rem] font-bold text-[var(--ink)] no-underline transition hover:-translate-y-px hover:bg-[rgba(180,83,9,0.08)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)]<?php echo $module === 'learner_management' ? ' border-[rgba(180,83,9,0.18)] bg-[linear-gradient(135deg,rgba(180,83,9,0.12),rgba(124,45,18,0.1))] text-[var(--accent-strong)]' : ''; ?>">Learner Management</a>
+                        <a href="<?php echo escape(route_url('admin.php?module=sections_management')); ?>" class="block rounded-2xl border border-transparent bg-[rgba(29,42,57,0.04)] px-3.5 py-2.5 text-[0.9rem] font-bold text-[var(--ink)] no-underline transition hover:-translate-y-px hover:bg-[rgba(180,83,9,0.08)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)]<?php echo $module === 'sections_management' ? ' border-[rgba(180,83,9,0.18)] bg-[linear-gradient(135deg,rgba(180,83,9,0.12),rgba(124,45,18,0.1))] text-[var(--accent-strong)]' : ''; ?>">Sections Management</a>
+                        <a href="<?php echo escape(route_url('admin.php?module=teacher_management')); ?>" class="block rounded-2xl border border-transparent bg-[rgba(29,42,57,0.04)] px-3.5 py-2.5 text-[0.9rem] font-bold text-[var(--ink)] no-underline transition hover:-translate-y-px hover:bg-[rgba(180,83,9,0.08)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)]<?php echo $module === 'teacher_management' ? ' border-[rgba(180,83,9,0.18)] bg-[linear-gradient(135deg,rgba(180,83,9,0.12),rgba(124,45,18,0.1))] text-[var(--accent-strong)]' : ''; ?>">Teacher Management</a>
+                        <a href="<?php echo escape(route_url('admin.php?module=attendance_reports')); ?>" class="block rounded-2xl border border-transparent bg-[rgba(29,42,57,0.04)] px-3.5 py-2.5 text-[0.9rem] font-bold text-[var(--ink)] no-underline transition hover:-translate-y-px hover:bg-[rgba(180,83,9,0.08)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)]<?php echo $module === 'attendance_reports' ? ' border-[rgba(180,83,9,0.18)] bg-[linear-gradient(135deg,rgba(180,83,9,0.12),rgba(124,45,18,0.1))] text-[var(--accent-strong)]' : ''; ?>">Attendance Reports</a>
                         
                         
                     </div>
-                    <div class="menu-group">
-                        <p class="menu-group-title">System</p>
-                        <a href="<?php echo escape(route_url('admin.php?module=announcements')); ?>" class="submenu-link<?php echo $module === 'announcements' ? ' active' : ''; ?>">Announcements</a>
-                        <a href="<?php echo escape(route_url('admin.php?module=reported_issues')); ?>" class="submenu-link submenu-link-counted<?php echo $module === 'reported_issues' ? ' active' : ''; ?>" aria-label="<?php echo escape('Reported Issues' . ($sidebarRequestCounts['issues'] > 0 ? ', ' . $sidebarRequestCounts['issues'] . ' open or in-progress requests' : '')); ?>">
+                    <div class="mt-4 grid gap-1.5">
+                        <p class="mb-1 mt-0 text-[0.68rem] font-bold uppercase tracking-[0.12em] text-[var(--muted)]">System</p>
+                        <a href="<?php echo escape(route_url('admin.php?module=announcements')); ?>" class="block rounded-2xl border border-transparent bg-[rgba(29,42,57,0.04)] px-3.5 py-2.5 text-[0.9rem] font-bold text-[var(--ink)] no-underline transition hover:-translate-y-px hover:bg-[rgba(180,83,9,0.08)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)]<?php echo $module === 'announcements' ? ' border-[rgba(180,83,9,0.18)] bg-[linear-gradient(135deg,rgba(180,83,9,0.12),rgba(124,45,18,0.1))] text-[var(--accent-strong)]' : ''; ?>">Announcements</a>
+                        <a href="<?php echo escape(route_url('admin.php?module=reported_issues')); ?>" class="flex items-center justify-between gap-3 rounded-2xl border border-transparent bg-[rgba(29,42,57,0.04)] px-3.5 py-2.5 text-[0.9rem] font-bold text-[var(--ink)] no-underline transition hover:-translate-y-px hover:bg-[rgba(180,83,9,0.08)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)]<?php echo $module === 'reported_issues' ? ' border-[rgba(180,83,9,0.18)] bg-[linear-gradient(135deg,rgba(180,83,9,0.12),rgba(124,45,18,0.1))] text-[var(--accent-strong)]' : ''; ?>" aria-label="<?php echo escape('Reported Issues' . ($sidebarRequestCounts['issues'] > 0 ? ', ' . $sidebarRequestCounts['issues'] . ' open or in-progress requests' : '')); ?>">
                             <span>Reported Issues</span>
-                            <?php if ($sidebarRequestCounts['issues'] > 0): ?><span class="sidebar-count" aria-hidden="true"><?php echo escape((string) $sidebarRequestCounts['issues']); ?></span><?php endif; ?>
+                            <?php if ($sidebarRequestCounts['issues'] > 0): ?><span class="inline-grid h-6 min-w-6 shrink-0 place-items-center rounded-full bg-[var(--accent)] px-[7px] text-[0.72rem] font-extrabold leading-none tabular-nums text-white" aria-hidden="true"><?php echo escape((string) $sidebarRequestCounts['issues']); ?></span><?php endif; ?>
                         </a>
-                        <a href="<?php echo escape(route_url('admin.php?module=password_resets')); ?>" class="submenu-link submenu-link-counted<?php echo $module === 'password_resets' ? ' active' : ''; ?>" aria-label="<?php echo escape('Password Resets' . ($sidebarRequestCounts['password_resets'] > 0 ? ', ' . $sidebarRequestCounts['password_resets'] . ' pending requests' : '')); ?>">
+                        <a href="<?php echo escape(route_url('admin.php?module=password_resets')); ?>" class="flex items-center justify-between gap-3 rounded-2xl border border-transparent bg-[rgba(29,42,57,0.04)] px-3.5 py-2.5 text-[0.9rem] font-bold text-[var(--ink)] no-underline transition hover:-translate-y-px hover:bg-[rgba(180,83,9,0.08)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)]<?php echo $module === 'password_resets' ? ' border-[rgba(180,83,9,0.18)] bg-[linear-gradient(135deg,rgba(180,83,9,0.12),rgba(124,45,18,0.1))] text-[var(--accent-strong)]' : ''; ?>" aria-label="<?php echo escape('Password Resets' . ($sidebarRequestCounts['password_resets'] > 0 ? ', ' . $sidebarRequestCounts['password_resets'] . ' pending requests' : '')); ?>">
                             <span>Password Resets</span>
-                            <?php if ($sidebarRequestCounts['password_resets'] > 0): ?><span class="sidebar-count" aria-hidden="true"><?php echo escape((string) $sidebarRequestCounts['password_resets']); ?></span><?php endif; ?>
+                            <?php if ($sidebarRequestCounts['password_resets'] > 0): ?><span class="inline-grid h-6 min-w-6 shrink-0 place-items-center rounded-full bg-[var(--accent)] px-[7px] text-[0.72rem] font-extrabold leading-none tabular-nums text-white" aria-hidden="true"><?php echo escape((string) $sidebarRequestCounts['password_resets']); ?></span><?php endif; ?>
                         </a>
-                        <a href="<?php echo escape(route_url('admin.php?module=settings')); ?>" class="submenu-link<?php echo $module === 'settings' ? ' active' : ''; ?>">Settings</a>
-                        <a href="<?php echo escape(route_url('change_password.php')); ?>" class="submenu-link">Change Password</a>
+                        <a href="<?php echo escape(route_url('admin.php?module=settings')); ?>" class="block rounded-2xl border border-transparent bg-[rgba(29,42,57,0.04)] px-3.5 py-2.5 text-[0.9rem] font-bold text-[var(--ink)] no-underline transition hover:-translate-y-px hover:bg-[rgba(180,83,9,0.08)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)]<?php echo $module === 'settings' ? ' border-[rgba(180,83,9,0.18)] bg-[linear-gradient(135deg,rgba(180,83,9,0.12),rgba(124,45,18,0.1))] text-[var(--accent-strong)]' : ''; ?>">Settings</a>
+                        <a href="<?php echo escape(route_url('change_password.php')); ?>" class="block rounded-2xl border border-transparent bg-[rgba(29,42,57,0.04)] px-3.5 py-2.5 text-[0.9rem] font-bold text-[var(--ink)] no-underline transition hover:-translate-y-px hover:bg-[rgba(180,83,9,0.08)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)]">Change Password</a>
                     </div>
                 </nav>
 
-                <div class="sidebar-footer">
-                    <a href="<?php echo escape(route_url('logout.php')); ?>" class="secondary-link full-width-link">Logout</a>
+                <div class="grid gap-1">
+                    <a href="<?php echo escape(route_url('logout.php')); ?>" class="flex min-h-10 w-full items-center justify-center rounded-full border border-[var(--line)] bg-[var(--surface-strong)] px-4 py-2 text-[0.85rem] font-semibold text-[var(--ink)] no-underline transition hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)]">Logout</a>
                 </div>
             </aside>
 
             <section class="admin-main-panel">
                 <?php if ($module === 'attendance_module'): ?>
-                    <header class="admin-page-header">
-                        <div class="admin-page-title">
-                            <img class="school-logo header-logo" src="<?php echo escape(school_logo_url()); ?>" alt="School logo">
-                            <div class="header-copy">
+                    <header class="flex items-start justify-between gap-[18px] max-[920px]:flex-col max-[920px]:items-stretch print:hidden [&_h2]:text-[1.6rem] [&_h2]:mb-1.5 max-sm:[&_h2]:text-[1.3rem] max-sm:[&_a.primary-button]:w-full max-sm:[&_a.primary-button]:justify-center">
+                        <div class="flex min-w-0 items-start gap-2">
+                            <img class="h-32 w-32 flex-none rounded-[7px] border border-[rgba(31,41,51,0.08)] bg-white p-0.5 object-contain shadow-[0_3px_8px_rgba(32,24,17,0.08)]" src="<?php echo escape(school_logo_url()); ?>" alt="School logo">
+                            <div class="min-w-0 [&>*]:[overflow-wrap:anywhere]">
                                 <h2>Attendance Dashboard</h2>
                                 <div class="dashboard-header-meta">
                                     <span><?php echo escape(date('l, F j, Y')); ?></span>
@@ -1012,6 +1010,7 @@ $attendanceDashboardChartData = [
 
                         <div class="topbar-actions">
                             <a href="<?php echo escape(route_url('attendance.php')); ?>" class="primary-button" target="_blank" rel="noopener">Open Attendance Station</a>
+                            <a href="<?php echo escape(route_url('face_attendance.php')); ?>" class="secondary-link" target="_blank" rel="noopener">Face Recognition Attendance</a>
                         </div>
                     </header>
 
@@ -1244,10 +1243,10 @@ $attendanceDashboardChartData = [
                         </article>
                     </section>
                 <?php elseif ($module === 'learner_management'): ?>
-                    <header class="admin-page-header">
-                        <div class="admin-page-title">
-                            <img class="school-logo header-logo" src="<?php echo escape(school_logo_url()); ?>" alt="School logo">
-                            <div class="header-copy">
+                    <header class="flex items-start justify-between gap-[18px] max-[920px]:flex-col max-[920px]:items-stretch print:hidden [&_h2]:text-[1.6rem] [&_h2]:mb-1.5 max-sm:[&_h2]:text-[1.3rem] max-sm:[&_a.primary-button]:w-full max-sm:[&_a.primary-button]:justify-center">
+                        <div class="flex min-w-0 items-start gap-2">
+                            <img class="h-32 w-32 flex-none rounded-[7px] border border-[rgba(31,41,51,0.08)] bg-white p-0.5 object-contain shadow-[0_3px_8px_rgba(32,24,17,0.08)]" src="<?php echo escape(school_logo_url()); ?>" alt="School logo">
+                            <div class="min-w-0 [&>*]:[overflow-wrap:anywhere]">
                                 <p class="eyebrow">Attendance</p>
                                 <h2>Learner Management</h2>
                                 <p>Manage learners, import master lists, and maintain current school-year grade, section, and basic profile assignments.</p>
@@ -1262,7 +1261,7 @@ $attendanceDashboardChartData = [
                     <section class="learner-admin-grid">
                         <article class="admin-module-card">
                             <?php if ($learnerForm['id'] !== null): ?>
-                                <div class="teacher-profile-identity" style="margin-bottom: 1rem;">
+                                <div class="teacher-profile-identity mb-4">
                                     <div class="teacher-profile-photo-frame">
                                         <img
                                             class="teacher-profile-photo"
@@ -1596,10 +1595,10 @@ $attendanceDashboardChartData = [
                         <?php endif; ?>
                     </section>
                 <?php elseif ($module === 'sections_management'): ?>
-                    <header class="admin-page-header">
-                        <div class="admin-page-title">
-                            <img class="school-logo header-logo" src="<?php echo escape(school_logo_url()); ?>" alt="School logo">
-                            <div class="header-copy">
+                    <header class="flex items-start justify-between gap-[18px] max-[920px]:flex-col max-[920px]:items-stretch print:hidden [&_h2]:text-[1.6rem] [&_h2]:mb-1.5 max-sm:[&_h2]:text-[1.3rem] max-sm:[&_a.primary-button]:w-full max-sm:[&_a.primary-button]:justify-center">
+                        <div class="flex min-w-0 items-start gap-2">
+                            <img class="h-32 w-32 flex-none rounded-[7px] border border-[rgba(31,41,51,0.08)] bg-white p-0.5 object-contain shadow-[0_3px_8px_rgba(32,24,17,0.08)]" src="<?php echo escape(school_logo_url()); ?>" alt="School logo">
+                            <div class="min-w-0 [&>*]:[overflow-wrap:anywhere]">
                                 <p class="eyebrow">Attendance</p>
                                 <h2>Sections Management</h2>
                                 <p>Create, update, and remove sections for the current school year before assigning teachers and learners.</p>
@@ -1716,10 +1715,10 @@ $attendanceDashboardChartData = [
                         </div>
                     </section>
                 <?php elseif ($module === 'teacher_management'): ?>
-                    <header class="admin-page-header">
-                        <div class="admin-page-title">
-                            <img class="school-logo header-logo" src="<?php echo escape(school_logo_url()); ?>" alt="School logo">
-                            <div class="header-copy">
+                    <header class="flex items-start justify-between gap-[18px] max-[920px]:flex-col max-[920px]:items-stretch print:hidden [&_h2]:text-[1.6rem] [&_h2]:mb-1.5 max-sm:[&_h2]:text-[1.3rem] max-sm:[&_a.primary-button]:w-full max-sm:[&_a.primary-button]:justify-center">
+                        <div class="flex min-w-0 items-start gap-2">
+                            <img class="h-32 w-32 flex-none rounded-[7px] border border-[rgba(31,41,51,0.08)] bg-white p-0.5 object-contain shadow-[0_3px_8px_rgba(32,24,17,0.08)]" src="<?php echo escape(school_logo_url()); ?>" alt="School logo">
+                            <div class="min-w-0 [&>*]:[overflow-wrap:anywhere]">
                                 <p class="eyebrow">Attendance</p>
                                 <h2>Teacher Management</h2>
                                 <p>Create teacher accounts, capture complete names, and assign an advisory section for the teacher portal.</p>
@@ -1861,7 +1860,7 @@ $attendanceDashboardChartData = [
                         </div>
                     </section>
                 <?php elseif ($module === 'attendance_reports'): ?>
-                    <header class="admin-page-header">
+                    <header class="flex items-start justify-between gap-[18px] max-[920px]:flex-col max-[920px]:items-stretch print:hidden [&_h2]:text-[1.6rem] [&_h2]:mb-1.5 max-sm:[&_h2]:text-[1.3rem] max-sm:[&_a.primary-button]:w-full max-sm:[&_a.primary-button]:justify-center">
                         <div>
                             <p class="eyebrow">Attendance</p>
                             <h2>Attendance Reports</h2>
@@ -1952,11 +1951,11 @@ $attendanceDashboardChartData = [
                             </form>
                         </section>
 
-                        <section class="admin-module-card report-card report-print-area">
+                        <section class="admin-module-card report-card report-print-area<?php echo $reportFilters['report_type'] === 'monthly_summary' ? ' monthly-sf2-report' : ''; ?>">
                             <div class="report-print-header">
-                                <div class="admin-page-title">
-                                    <img class="school-logo header-logo" src="<?php echo escape(school_logo_url()); ?>" alt="School logo">
-                                    <div class="header-copy">
+                                <div class="flex min-w-0 items-start gap-2">
+                                    <img class="h-32 w-32 flex-none rounded-[7px] border border-[rgba(31,41,51,0.08)] bg-white p-0.5 object-contain shadow-[0_3px_8px_rgba(32,24,17,0.08)]" src="<?php echo escape(school_logo_url()); ?>" alt="School logo">
+                                    <div class="min-w-0 [&>*]:[overflow-wrap:anywhere]">
                                         <p class="eyebrow">Attendance Report</p>
                                         <h2><?php echo escape($reportMeta['title']); ?></h2>
                                         <p><?php echo escape($reportMeta['description']); ?></p>
@@ -2041,7 +2040,7 @@ $attendanceDashboardChartData = [
                                         </tbody>
                                     </table>
                                 <?php elseif ($reportFilters['report_type'] === 'monthly_summary'): ?>
-                                    <table class="records-table report-table monthly-report-table">
+                                    <table class="records-table report-table monthly-report-table monthly-report-screen-table">
                                         <thead>
                                             <tr>
                                                 <th>No.</th>
@@ -2194,14 +2193,187 @@ $attendanceDashboardChartData = [
                                     </table>
                                 <?php endif; ?>
                             </div>
+                            <?php if ($reportFilters['report_type'] === 'monthly_summary'): ?>
+                                <?php
+                                $sf2Days = $reportMeta['days_in_month'] ?? [];
+                                $sf2RowsBySex = ['male' => [], 'female' => [], 'other' => []];
+                                $sf2DayTotalsBySex = [
+                                    'male' => array_fill_keys($sf2Days, 0.0),
+                                    'female' => array_fill_keys($sf2Days, 0.0),
+                                    'other' => array_fill_keys($sf2Days, 0.0),
+                                ];
+                                $sf2TotalsBySex = [
+                                    'male' => ['absences' => 0.0, 'present' => 0.0],
+                                    'female' => ['absences' => 0.0, 'present' => 0.0],
+                                    'other' => ['absences' => 0.0, 'present' => 0.0],
+                                ];
+                                foreach ($reportRows as $sf2Row) {
+                                    $sf2Sex = strtolower((string) ($sf2Row['sex'] ?? ''));
+                                    $sf2Sex = in_array($sf2Sex, ['male', 'female'], true) ? $sf2Sex : 'other';
+                                    $sf2RowsBySex[$sf2Sex][] = $sf2Row;
+                                    $sf2TotalsBySex[$sf2Sex]['absences'] += (float) $sf2Row['total_absences'];
+                                    $sf2TotalsBySex[$sf2Sex]['present'] += (float) $sf2Row['total_present_days'];
+                                    foreach ($sf2Days as $sf2Day) {
+                                        $sf2DayTotalsBySex[$sf2Sex][$sf2Day] += (float) ($sf2Row['day_present_units'][$sf2Day] ?? 0);
+                                    }
+                                }
+                                $sf2GradeLevel = 'All Grades';
+                                $sf2SectionName = (string) ($reportMeta['section_label'] ?? 'All Sections');
+                                foreach ($reportSections as $sf2Section) {
+                                    if ((string) $sf2Section['id'] === $reportFilters['section_id']) {
+                                        $sf2GradeLevel = (string) $sf2Section['grade_level'];
+                                        $sf2SectionName = (string) $sf2Section['name'];
+                                        break;
+                                    }
+                                }
+                                $sf2MonthDate = new DateTimeImmutable($reportFilters['report_month'] . '-01');
+                                $sf2ColumnCount = count($sf2Days) + 5;
+                                ?>
+                                <div class="sf2-print-template">
+                                    <header class="sf2-print-heading">
+                                        <h1>School Form 2 (SF2) Daily Attendance Report of Learners</h1>
+                                        <p>(This replaces Form 1, Form 2 &amp; STS Form 4 - Absenteeism and Dropout Profile)</p>
+                                    </header>
+
+                                    <div class="sf2-print-meta">
+                                        <p><strong>School ID</strong><span>____________________</span></p>
+                                        <p><strong>School Year</strong><span><?php echo escape($reportSchoolYear['label'] ?? ''); ?></span></p>
+                                        <p><strong>Report for the Month of</strong><span><?php echo escape($reportMeta['month_label'] . ' ' . $reportMeta['year_label']); ?></span></p>
+                                        <p><strong>Name of School</strong><span>____________________________________________</span></p>
+                                        <p><strong>Grade Level</strong><span><?php echo escape($sf2GradeLevel); ?></span></p>
+                                        <p><strong>Section</strong><span><?php echo escape($sf2SectionName); ?></span></p>
+                                    </div>
+
+                                    <table class="sf2-print-table">
+                                        <thead>
+                                            <tr>
+                                                <th rowspan="2" class="sf2-number-column">No.</th>
+                                                <th rowspan="2" class="sf2-name-column">Name (Last Name, First Name, Middle Name)</th>
+                                                <th colspan="<?php echo escape((string) count($sf2Days)); ?>">Daily Attendance</th>
+                                                <th colspan="2" class="sf2-month-total-heading">Total for the Month</th>
+                                                <th rowspan="2" class="sf2-remarks-column">Remarks</th>
+                                            </tr>
+                                            <tr>
+                                                <?php foreach ($sf2Days as $sf2Day): ?>
+                                                    <?php $sf2Date = $sf2MonthDate->setDate((int) $sf2MonthDate->format('Y'), (int) $sf2MonthDate->format('n'), (int) $sf2Day); ?>
+                                                    <th class="sf2-day-column"><span><?php echo escape((string) $sf2Day); ?></span><small><?php echo escape(strtoupper(substr($sf2Date->format('D'), 0, 1))); ?></small></th>
+                                                <?php endforeach; ?>
+                                                <th class="sf2-total-column">ABSENT</th>
+                                                <th class="sf2-total-column">PRESENT</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <?php foreach (['male' => 'MALE', 'female' => 'FEMALE', 'other' => 'OTHER / UNSPECIFIED'] as $sf2Sex => $sf2SexLabel): ?>
+                                                <?php if ($sf2RowsBySex[$sf2Sex] !== [] || $sf2Sex !== 'other'): ?>
+                                                    <tr class="sf2-group-row"><th colspan="<?php echo escape((string) $sf2ColumnCount); ?>"><?php echo escape($sf2SexLabel); ?></th></tr>
+                                                    <?php foreach ($sf2RowsBySex[$sf2Sex] as $sf2Index => $sf2Row): ?>
+                                                        <tr>
+                                                            <td class="sf2-number-column"><?php echo escape((string) ($sf2Index + 1)); ?></td>
+                                                            <td class="sf2-name-column"><?php echo escape($sf2Row['learner_name']); ?></td>
+                                                            <?php foreach ($sf2Days as $sf2Day): ?>
+                                                                <?php
+                                                                $sf2AttendanceMark = (string) ($sf2Row['days'][$sf2Day] ?? '');
+                                                                $sf2AttendanceMark = match ($sf2AttendanceMark) {
+                                                                    'P' => '',
+                                                                    'A' => 'X',
+                                                                    'A (0.5)' => 'X½',
+                                                                    default => $sf2AttendanceMark,
+                                                                };
+                                                                ?>
+                                                                <td class="sf2-day-column"><?php echo escape($sf2AttendanceMark); ?></td>
+                                                            <?php endforeach; ?>
+                                                            <td class="sf2-total-column"><?php echo escape((string) $sf2Row['total_absences']); ?></td>
+                                                            <td class="sf2-total-column"><?php echo escape((string) $sf2Row['total_present_days']); ?></td>
+                                                            <td class="sf2-remarks-column"></td>
+                                                        </tr>
+                                                    <?php endforeach; ?>
+                                                    <tr class="sf2-subtotal-row">
+                                                        <th colspan="2">TOTAL PER DAY</th>
+                                                        <?php foreach ($sf2Days as $sf2Day): ?>
+                                                            <th class="sf2-day-column"><?php echo escape((string) $sf2DayTotalsBySex[$sf2Sex][$sf2Day]); ?></th>
+                                                        <?php endforeach; ?>
+                                                        <th><?php echo escape((string) $sf2TotalsBySex[$sf2Sex]['absences']); ?></th>
+                                                        <th><?php echo escape((string) $sf2TotalsBySex[$sf2Sex]['present']); ?></th>
+                                                        <th></th>
+                                                    </tr>
+                                                <?php endif; ?>
+                                            <?php endforeach; ?>
+                                            <?php if ($reportRows === []): ?>
+                                                <tr><td colspan="<?php echo escape((string) $sf2ColumnCount); ?>">No attendance data matched the selected month and section.</td></tr>
+                                            <?php endif; ?>
+                                        </tbody>
+                                        <tfoot>
+                                            <tr class="sf2-combined-row">
+                                                <th colspan="2">COMBINED TOTAL PER DAY</th>
+                                                <?php foreach ($sf2Days as $sf2Day): ?>
+                                                    <th class="sf2-day-column"><?php echo escape((string) ($reportMeta['day_totals'][$sf2Day] ?? 0)); ?></th>
+                                                <?php endforeach; ?>
+                                                <th><?php echo escape((string) ($reportMeta['overall_absences'] ?? 0)); ?></th>
+                                                <th><?php echo escape((string) ($reportMeta['overall_present_days'] ?? 0)); ?></th>
+                                                <th></th>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+
+                                    <div class="sf2-print-summary">
+                                        <div class="sf2-print-guidelines">
+                                            <strong>GUIDELINES</strong>
+                                            <ol>
+                                                <li>Accomplish attendance daily using the codes in the legend.</li>
+                                                <li>Write the date in the columns after the learner's name.</li>
+                                                <li>At the end of the month, submit this form to the school head for recording in School Form 4.</li>
+                                                <li>Provide interventions, including home visits, for learners absent for five consecutive days or at risk of dropping out.</li>
+                                                <li>Attendance performance is reflected in Forms 137 and 138 every grading period.</li>
+                                            </ol>
+                                            <strong>CODES FOR CHECKING LEARNERS' ATTENDANCE</strong>
+                                            <p class="sf2-print-legend">Blank — Present; X — Absent; X½ — Half-day absent; enter remarks for dropped out or transferred learners.</p>
+                                            <strong>REASONS / CAUSES FOR NON-SCHOOLING</strong>
+                                            <ol class="sf2-reasons-list">
+                                                <li><strong>Domestic-related:</strong> care of siblings; early marriage/pregnancy; parents' attitude; family problems.</li>
+                                                <li><strong>Individual-related:</strong> illness; overage; death; drug abuse; poor academic performance; lack of interest/distractions; hunger/malnutrition.</li>
+                                                <li><strong>School-related:</strong> teacher factor; classroom condition; peer influence.</li>
+                                                <li><strong>Geographic/environmental:</strong> distance; armed conflict; calamities/disasters.</li>
+                                                <li><strong>Financial-related:</strong> child labor/work.</li>
+                                                <li><strong>Others:</strong> specify in Remarks.</li>
+                                            </ol>
+                                        </div>
+                                        <div class="sf2-print-month-summary">
+                                            <strong>MONTHLY SUMMARY</strong>
+                                            <p>Month: <?php echo escape($reportMeta['month_label'] . ' ' . $reportMeta['year_label']); ?></p>
+                                            <p>No. of days of classes: <span>________</span></p>
+                                            <p>Enrolment as of 1st Friday of June: <span>________</span></p>
+                                            <p>Registered learners as of end of month: <strong><?php echo escape((string) count($reportRows)); ?></strong></p>
+                                            <p>Male: <strong><?php echo escape((string) count($sf2RowsBySex['male'])); ?></strong> &nbsp; Female: <strong><?php echo escape((string) count($sf2RowsBySex['female'])); ?></strong></p>
+                                            <p>Late enrolment beyond cut-off: <span>________</span></p>
+                                            <p>Average Daily Attendance: <span>________</span></p>
+                                            <p>Percentage of Attendance: <span>________</span></p>
+                                            <p>Absent for 5 consecutive days: <span>________</span></p>
+                                            <p>Dropped out: <span>________</span></p>
+                                            <p>Transferred out: <span>________</span> &nbsp; Transferred in: <span>________</span></p>
+                                            <div class="sf2-print-formulas">
+                                                <p><strong>% Enrolment</strong> = Registered learners at month-end ÷ beginning enrolment × 100</p>
+                                                <p><strong>Average Daily Attendance</strong> = Total daily attendance ÷ class days</p>
+                                                <p><strong>% Attendance</strong> = Average daily attendance ÷ registered learners at month-end × 100</p>
+                                            </div>
+                                            <p class="sf2-print-certification">I certify that this is a true and correct report.</p>
+                                        </div>
+                                    </div>
+
+                                    <div class="sf2-signatures">
+                                        <p><span>_______________________________</span><strong>Class Adviser</strong></p>
+                                        <p><span>_______________________________</span><strong>School Head</strong></p>
+                                    </div>
+                                    <p class="sf2-print-footer">Generated through ProjectPulse Learner Information System</p>
+                                </div>
+                            <?php endif; ?>
                             <?php endif; ?>
                         </section>
                     <?php endif; ?>
                 <?php elseif ($module === 'announcements'): ?>
-                    <header class="admin-page-header">
-                        <div class="admin-page-title">
-                            <img class="school-logo header-logo" src="<?php echo escape(school_logo_url()); ?>" alt="School logo">
-                            <div class="header-copy">
+                    <header class="flex items-start justify-between gap-[18px] max-[920px]:flex-col max-[920px]:items-stretch print:hidden [&_h2]:text-[1.6rem] [&_h2]:mb-1.5 max-sm:[&_h2]:text-[1.3rem] max-sm:[&_a.primary-button]:w-full max-sm:[&_a.primary-button]:justify-center">
+                        <div class="flex min-w-0 items-start gap-2">
+                            <img class="h-32 w-32 flex-none rounded-[7px] border border-[rgba(31,41,51,0.08)] bg-white p-0.5 object-contain shadow-[0_3px_8px_rgba(32,24,17,0.08)]" src="<?php echo escape(school_logo_url()); ?>" alt="School logo">
+                            <div class="min-w-0 [&>*]:[overflow-wrap:anywhere]">
                                 <p class="eyebrow">Communication</p>
                                 <h2>Announcements</h2>
                                 <p>Create and manage announcements for the parent portal.</p>
@@ -2304,12 +2476,12 @@ $attendanceDashboardChartData = [
                         </div>
                     </section>
                 <?php elseif ($module === 'reported_issues'): ?>
-                    <header class="admin-page-header admin-page-header-reported-issues">
-                        <div class="admin-page-title">
-                            <img class="school-logo header-logo" src="<?php echo escape(school_logo_url()); ?>" alt="School logo">
-                            <div class="header-copy">
+                    <header class="flex items-start justify-between gap-[18px] max-[920px]:flex-col max-[920px]:items-stretch print:hidden">
+                        <div class="flex min-w-0 items-start gap-2">
+                            <img class="h-32 w-32 flex-none rounded-[7px] border border-[rgba(31,41,51,0.08)] bg-white p-0.5 object-contain shadow-[0_3px_8px_rgba(32,24,17,0.08)]" src="<?php echo escape(school_logo_url()); ?>" alt="School logo">
+                            <div class="min-w-0 [&>*]:[overflow-wrap:anywhere]">
                                 <p class="eyebrow">System</p>
-                                <h2>Reported Issues</h2>
+                                <h2 class="mb-1.5 text-[1.6rem] max-sm:text-[1.3rem]">Reported Issues</h2>
                                 <p>Review and manage issues reported by teachers.</p>
                             </div>
                         </div>
@@ -2377,10 +2549,10 @@ $attendanceDashboardChartData = [
                         </div>
                     </article>
                 <?php elseif ($module === 'password_resets'): ?>
-                    <header class="admin-page-header">
-                        <div class="admin-page-title">
-                            <img class="school-logo header-logo" src="<?php echo escape(school_logo_url()); ?>" alt="School logo">
-                            <div class="header-copy">
+                    <header class="flex items-start justify-between gap-[18px] max-[920px]:flex-col max-[920px]:items-stretch print:hidden [&_h2]:text-[1.6rem] [&_h2]:mb-1.5 max-sm:[&_h2]:text-[1.3rem] max-sm:[&_a.primary-button]:w-full max-sm:[&_a.primary-button]:justify-center">
+                        <div class="flex min-w-0 items-start gap-2">
+                            <img class="h-32 w-32 flex-none rounded-[7px] border border-[rgba(31,41,51,0.08)] bg-white p-0.5 object-contain shadow-[0_3px_8px_rgba(32,24,17,0.08)]" src="<?php echo escape(school_logo_url()); ?>" alt="School logo">
+                            <div class="min-w-0 [&>*]:[overflow-wrap:anywhere]">
                                 <p class="eyebrow">System</p>
                                 <h2>Password Resets</h2>
                                 <p>Approve or deny user requests for password resets.</p>
@@ -2445,10 +2617,10 @@ $attendanceDashboardChartData = [
                         </div>
                     </article>
                 <?php elseif ($module === 'settings'): ?>
-                    <header class="admin-page-header">
-                        <div class="admin-page-title">
-                            <img class="school-logo header-logo" src="<?php echo escape(school_logo_url()); ?>" alt="School logo">
-                            <div class="header-copy">
+                    <header class="flex items-start justify-between gap-[18px] max-[920px]:flex-col max-[920px]:items-stretch print:hidden [&_h2]:text-[1.6rem] [&_h2]:mb-1.5 max-sm:[&_h2]:text-[1.3rem] max-sm:[&_a.primary-button]:w-full max-sm:[&_a.primary-button]:justify-center">
+                        <div class="flex min-w-0 items-start gap-2">
+                            <img class="h-32 w-32 flex-none rounded-[7px] border border-[rgba(31,41,51,0.08)] bg-white p-0.5 object-contain shadow-[0_3px_8px_rgba(32,24,17,0.08)]" src="<?php echo escape(school_logo_url()); ?>" alt="School logo">
+                            <div class="min-w-0 [&>*]:[overflow-wrap:anywhere]">
                                 <p class="eyebrow">System</p>
                                 <h2>Settings</h2>
                                 <p>Manage system settings and view logs.</p>
@@ -2459,6 +2631,41 @@ $attendanceDashboardChartData = [
                     <?php if ($settingsFlash !== null): ?>
                         <div class="alert <?php echo escape($settingsFlash['type']); ?>"><?php echo escape($settingsFlash['message']); ?></div>
                     <?php endif; ?>
+
+                    <article class="admin-module-card">
+                        <div class="panel-heading compact-heading">
+                            <h2>Face Recognition</h2>
+                            <p>Set how closely a learner’s face must match the trained photos. More relaxed levels can increase false matches.</p>
+                        </div>
+                        <form method="post" class="learner-form-grid" data-vue-admin-form data-admin-endpoint="<?php echo escape(route_url('api/face_recognition_strictness.php')); ?>" data-admin-reload="true">
+                            <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
+                            <div>
+                                <label for="face-strictness">Recognition Strictness</label>
+                                <select id="face-strictness" name="strictness">
+                                    <?php foreach (face_recognition_strictness_options() as $key => $option): ?>
+                                        <option value="<?php echo escape($key); ?>" <?php echo $faceStrictness['key'] === $key ? 'selected' : ''; ?>><?php echo escape($option['label']); ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <p class="mt-2 text-sm text-[var(--muted)]"><?php echo escape($faceStrictness['description']); ?></p>
+                            </div>
+                            <div class="learner-form-actions">
+                                <button type="submit" class="primary-button">Save Recognition Strictness</button>
+                            </div>
+                        </form>
+                    </article>
+
+                    <article class="admin-module-card">
+                        <div class="panel-heading compact-heading">
+                            <h2>Face Recognition Model</h2>
+                            <p>Retrain after learner face photos are added or changed so the scanner uses the latest registrations.</p>
+                        </div>
+                        <form method="post" class="learner-form-grid" data-vue-admin-form data-admin-endpoint="<?php echo escape(route_url('train_model.php')); ?>">
+                            <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
+                            <div class="learner-form-actions">
+                                <button type="submit" class="primary-button">Retrain Face Recognition Model</button>
+                            </div>
+                        </form>
+                    </article>
 
                     <article class="admin-module-card">
                         <div class="panel-heading compact-heading">

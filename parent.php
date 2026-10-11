@@ -71,31 +71,7 @@ if ($selectedChild !== null) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo escape(APP_NAME); ?> Parent Portal</title>
     <?php echo theme_stylesheet_markup(); ?>
-    <link rel="stylesheet" href="<?php echo escape(asset_url('assets/css/app.css')); ?>">
     <link rel="stylesheet" href="<?php echo escape(asset_url('assets/dist/tailwind.css')); ?>">
-    <style>
-        .parent-child-photo {
-            width: 56px;
-            height: 56px;
-            border-radius: 50%;
-            object-fit: cover;
-            flex-shrink: 0;
-            border: 2px solid var(--surface-strong, #fff);
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        }
-
-        .learner-header-row.with-photo .learner-photo-frame {
-            width: 96px;
-            height: 96px;
-            flex-shrink: 0;
-        }
-
-        .parent-child-detail.health-detail {
-            font-size: 0.8125rem; /* 13px */
-            opacity: 0.85;
-            margin-top: 4px;
-        }
-    </style>
 </head>
 <body class="dashboard-body">
     <main class="dashboard-shell fullscreen-shell" id="parent-portal-root" data-parent-api-endpoint="<?php echo escape(asset_url('api/parent_portal.php')); ?>" data-parent-csrf="<?php echo escape(csrf_token()); ?>">
@@ -164,7 +140,7 @@ if ($selectedChild !== null) {
                                         </h3>
                                         <p class="parent-child-detail"><?php echo escape($child['grade_level'] . ' - ' . $child['section_name']); ?></p>
                                         <p class="parent-child-detail">LRN: <?php echo escape($child['lrn']); ?></p>
-                                        <p class="parent-child-detail health-detail">
+                                        <p class="parent-child-detail mt-1 text-[0.8125rem] opacity-[0.85]">
                                             <?php echo escape('H: ' . ($child['height_cm'] ?? '-') . 'cm'); ?> •
                                             <?php echo escape('W: ' . ($child['weight_kg'] ?? '-') . 'kg'); ?> •
                                             <?php echo escape('BMI: ' . $child['bmi_remarks']); ?>
@@ -219,7 +195,7 @@ if ($selectedChild !== null) {
                 <?php if ($selectedChild !== null): ?>
                     <article class="parent-panel-card">
                         <div class="learner-header-row with-photo">
-                            <div class="learner-photo-frame">
+                            <div class="learner-photo-frame h-24 w-24 shrink-0">
                                 <img class="learner-photo" src="<?php echo escape(learner_photo_url($selectedChild['lrn'])); ?>" alt="Photo of <?php echo escape(trim($selectedChild['first_name'] . ' ' . $selectedChild['last_name'])); ?>">
                             </div>
 

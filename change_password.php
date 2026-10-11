@@ -56,47 +56,46 @@ if (is_post()) {
     <?php echo theme_stylesheet_markup(); ?>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo escape(APP_NAME); ?> Change Password</title>
-    <link rel="stylesheet" href="<?php echo escape(asset_url('assets/css/app.css')); ?>">
     <link rel="stylesheet" href="<?php echo escape(asset_url('assets/dist/tailwind.css')); ?>">
 </head>
-<body class="dashboard-body">
-    <main class="dashboard-shell">
-        <header class="topbar">
-            <div class="header-title-block">
-                <img class="school-logo" src="<?php echo escape(school_logo_url()); ?>" alt="School logo">
-                <div class="header-copy">
-                    <p class="eyebrow">Account Security</p>
-                    <h1>Change Password</h1>
+<body class="m-0 min-h-screen bg-[radial-gradient(circle_at_top_left,color-mix(in_srgb,var(--accent)_18%,transparent),transparent_26%),radial-gradient(circle_at_bottom_right,color-mix(in_srgb,var(--accent-strong)_14%,transparent),transparent_24%),linear-gradient(160deg,color-mix(in_srgb,var(--bg)_72%,white)_0%,var(--bg)_55%,var(--bg-deep)_100%)] font-sans text-[var(--ink)]">
+    <main class="mx-auto w-[min(1180px,calc(100%-32px))] py-5 pb-7">
+        <header class="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-[28px] border border-[var(--line)] bg-[var(--surface)] p-5 shadow-[var(--shadow)] backdrop-blur-2xl max-sm:items-start">
+            <div class="flex min-w-0 items-center gap-4">
+                <img class="h-14 w-14 rounded-2xl object-contain" src="<?php echo escape(school_logo_url()); ?>" alt="School logo">
+                <div>
+                    <p class="mb-1 text-[0.68rem] font-bold uppercase tracking-[0.14em] text-[var(--accent)]">Account Security</p>
+                    <h1 class="m-0 text-2xl font-bold leading-tight">Change Password</h1>
                 </div>
             </div>
 
-            <div class="topbar-actions">
-                <p class="signed-in-as">Signed in as <?php echo escape($user['username']); ?></p>
-                <a href="<?php echo escape(route_url($dashboardPath)); ?>" class="secondary-link">Dashboard</a>
-                <a href="<?php echo escape(route_url('logout.php')); ?>" class="secondary-link">Logout</a>
+            <div class="flex flex-wrap items-center gap-3">
+                <p class="m-0 text-sm text-[var(--muted)]">Signed in as <?php echo escape($user['username']); ?></p>
+                <a href="<?php echo escape(route_url($dashboardPath)); ?>" class="inline-flex min-h-10 items-center justify-center rounded-full border border-[var(--line)] bg-[var(--surface-strong)] px-4 py-2 text-sm font-semibold text-[var(--ink)] no-underline hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)]">Dashboard</a>
+                <a href="<?php echo escape(route_url('logout.php')); ?>" class="inline-flex min-h-10 items-center justify-center rounded-full border border-[var(--line)] bg-[var(--surface-strong)] px-4 py-2 text-sm font-semibold text-[var(--ink)] no-underline hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)]">Logout</a>
             </div>
         </header>
 
-        <section class="password-utility-grid">
-            <article class="password-utility-panel">
-                <div class="panel-heading">
-                    <h2>Update Password</h2>
-                    <p><?php echo escape($user['email'] ?? $user['username']); ?></p>
+        <section class="mx-auto w-full max-w-[720px]">
+            <article class="rounded-[28px] border border-[var(--line)] bg-[var(--surface)] p-7 shadow-[var(--shadow)] backdrop-blur-2xl max-sm:p-5">
+                <div class="mb-5">
+                    <h2 class="mb-1.5 text-lg font-bold">Update Password</h2>
+                    <p class="m-0 text-sm leading-snug text-[var(--muted)]"><?php echo escape($user['email'] ?? $user['username']); ?></p>
                 </div>
 
                 <?php if ($passwordFlash !== null): ?>
-                    <div class="alert <?php echo escape($passwordFlash['type']); ?>"><?php echo escape($passwordFlash['message']); ?></div>
+                    <div class="mb-4 rounded-2xl border border-[color-mix(in_srgb,var(--success)_22%,transparent)] bg-[color-mix(in_srgb,var(--success)_9%,white)] p-3 text-sm text-[var(--success)]" role="status"><?php echo escape($passwordFlash['message']); ?></div>
                 <?php endif; ?>
 
                 <?php foreach ($errors as $error): ?>
-                    <div class="alert error"><?php echo escape($error); ?></div>
+                    <div class="mb-4 rounded-2xl border border-[color-mix(in_srgb,var(--danger)_22%,transparent)] bg-[color-mix(in_srgb,var(--danger)_8%,white)] p-3 text-sm text-[var(--danger)]" role="alert"><?php echo escape($error); ?></div>
                 <?php endforeach; ?>
 
-                <form method="post" class="auth-form" id="change-password-form" data-auth-action="change" data-auth-endpoint="<?php echo escape(asset_url('api/auth_password.php')); ?>" data-redirect="<?php echo escape(route_url($dashboardPath)); ?>">
+                <form method="post" class="grid gap-3" id="change-password-form" data-auth-action="change" data-auth-endpoint="<?php echo escape(asset_url('api/auth_password.php')); ?>" data-redirect="<?php echo escape(route_url($dashboardPath)); ?>">
                     <input type="hidden" name="csrf_token" value="<?php echo escape(csrf_token()); ?>">
 
-                    <label for="current_password">Current Password</label>
-                    <input
+                    <label class="text-sm font-semibold" for="current_password">Current Password</label>
+                    <input class="box-border w-full rounded-xl border border-[var(--line)] bg-[var(--surface-strong)] px-3.5 py-3 text-sm text-[var(--ink)] outline-none transition focus:border-[var(--accent)] focus:ring-4 focus:ring-[color-mix(in_srgb,var(--accent)_15%,transparent)]"
                         id="current_password"
                         name="current_password"
                         type="password"
@@ -105,8 +104,8 @@ if (is_post()) {
                         autofocus
                     >
 
-                    <label for="new_password">New Password</label>
-                    <input
+                    <label class="text-sm font-semibold" for="new_password">New Password</label>
+                    <input class="box-border w-full rounded-xl border border-[var(--line)] bg-[var(--surface-strong)] px-3.5 py-3 text-sm text-[var(--ink)] outline-none transition focus:border-[var(--accent)] focus:ring-4 focus:ring-[color-mix(in_srgb,var(--accent)_15%,transparent)]"
                         id="new_password"
                         name="new_password"
                         type="password"
@@ -115,8 +114,8 @@ if (is_post()) {
                         required
                     >
 
-                    <label for="confirm_password">Confirm New Password</label>
-                    <input
+                    <label class="text-sm font-semibold" for="confirm_password">Confirm New Password</label>
+                    <input class="box-border w-full rounded-xl border border-[var(--line)] bg-[var(--surface-strong)] px-3.5 py-3 text-sm text-[var(--ink)] outline-none transition focus:border-[var(--accent)] focus:ring-4 focus:ring-[color-mix(in_srgb,var(--accent)_15%,transparent)]"
                         id="confirm_password"
                         name="confirm_password"
                         type="password"
@@ -125,9 +124,9 @@ if (is_post()) {
                         required
                     >
 
-                    <div class="password-form-actions">
-                        <button type="submit" class="primary-button">Save Password</button>
-                        <a href="<?php echo escape(route_url($dashboardPath)); ?>" class="secondary-link">Cancel</a>
+                    <div class="mt-2 flex flex-wrap items-center gap-3">
+                        <button type="submit" class="inline-flex min-h-11 items-center justify-center rounded-full border-0 bg-[var(--accent)] px-5 py-2.5 font-semibold text-white shadow-md transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]">Save Password</button>
+                        <a href="<?php echo escape(route_url($dashboardPath)); ?>" class="inline-flex min-h-11 items-center justify-center rounded-full border border-[var(--line)] bg-transparent px-5 py-2.5 font-semibold text-[var(--ink)] no-underline hover:bg-[var(--surface-strong)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)]">Cancel</a>
                     </div>
                 </form>
             </article>

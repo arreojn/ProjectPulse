@@ -10,6 +10,9 @@ require_once __DIR__ . '/app/attendance_settings.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 
+$recognizedLearner = null;
+$recognizedFaceBoxes = [];
+
 try {
     $user = require_roles(['attendance', 'admin']);
 
@@ -45,27 +48,50 @@ try {
         throw new RuntimeException('Fast recognition service could not be started. Train the face model and try again.', 503);
     }
 
-    $serviceResponse = face_recognition_service_request('recognize', $imageData);
+    $strictness = face_recognition_strictness();
+    $serviceHealth = face_recognition_service_request('health');
+    $supportedStrictness = $serviceHealth['payload']['strictness_levels'] ?? null;
+    if (!is_array($supportedStrictness) || !in_array($strictness, $supportedStrictness, true)) {
+        throw new RuntimeException('The face recognition service must be restarted before configurable strictness can be used.', 503);
+    }
+
+    $serviceResponse = face_recognition_service_request(
+        'recognize',
+        $imageData,
+        ['X-Face-Strictness: ' . $strictness]
+    );
     $recognition = $serviceResponse['payload'] ?? null;
     if (!is_array($recognition) || !($recognition['ok'] ?? false)) {
-        throw new RuntimeException(is_array($recognition) ? (string) ($recognition['error'] ?? 'Recognition process failed.') : 'Recognition service is unavailable.', 503);
+        $serviceStatus = (int) ($serviceResponse['status'] ?? 503);
+        throw new RuntimeException(
+            is_array($recognition) ? (string) ($recognition['error'] ?? 'Recognition process failed.') : 'Recognition service is unavailable.',
+            $serviceStatus >= 400 ? $serviceStatus : 503
+        );
     }
 
     $matches = is_array($recognition['matches'] ?? null) ? $recognition['matches'] : [];
+    $recognizedFaceBoxes = is_array($recognition['faces'] ?? null) ? $recognition['faces'] : [];
     if ($matches === []) {
-        throw new RuntimeException('No registered face was recognized.', 404);
+        $pending = (bool) ($recognition['pending'] ?? false);
+        $faceCount = (int) ($recognition['face_count'] ?? 0);
+        http_response_code($pending ? 202 : 404);
+        echo json_encode([
+            'success' => false,
+            'code' => $pending
+                ? 'confirmation_pending'
+                : ($faceCount === 0 ? 'face_not_detected' : 'face_not_recognized'),
+            'face_count' => $faceCount,
+            'face_boxes' => $recognizedFaceBoxes,
+            'message' => $pending
+                ? 'Possible learner match. Hold still while we confirm each identity.'
+                : ($faceCount === 0
+                    ? 'No face detected. Move closer and face the camera.'
+                    : 'No detected face matched the trained learner photos. Check enrollment photos and retrain the model.'),
+        ]);
+        exit;
     }
 
-    // The lowest LBPH confidence is the strongest match. Recording stays one learner per
-    // scan so the existing AM/PM slot rules remain unambiguous.
-    $lrn = (string) ($matches[0]['lrn'] ?? '');
-
-    // --- Attendance Logic (adapted from api/attendance_event.php) ---
-    $currentTime = date('H:i:s');
-    $attendanceDate = date('Y-m-d');
-    $scanMode = attendance_scan_mode();
     $pdo = database();
-
     $enrollmentStmt = $pdo->prepare(
         'SELECT le.id, l.first_name, l.last_name, le.grade_level, s.name as section_name,
                 l.parent_guardian_contact_number
@@ -77,62 +103,137 @@ try {
          ORDER BY sy.is_current DESC, sy.start_date DESC, le.id DESC
          LIMIT 1'
     );
-    $enrollmentStmt->execute(['lrn' => $lrn]);
-    $enrollment = $enrollmentStmt->fetch();
+    $recognizedCandidates = [];
+    $learnerNames = [];
+    foreach ($matches as $match) {
+        $lrn = (string) ($match['lrn'] ?? '');
+        if ($lrn === '') {
+            continue;
+        }
+        $enrollmentStmt->execute(['lrn' => $lrn]);
+        $candidateEnrollment = $enrollmentStmt->fetch();
+        if ($candidateEnrollment === false) {
+            continue;
+        }
 
-    if ($enrollment === false) {
-        throw new RuntimeException('No active enrollment found for the recognized learner.', 404);
+        $learnerName = $candidateEnrollment['first_name'] . ' ' . $candidateEnrollment['last_name'];
+        $learnerNames[$lrn] = $learnerName;
+        $recognizedCandidates[] = [
+            'lrn' => $lrn,
+            'confidence' => $match['confidence'] ?? null,
+            'face_box' => $match['face_box'] ?? null,
+            'enrollment' => $candidateEnrollment,
+            'learner' => [
+                'name' => $learnerName,
+                'lrn' => $lrn,
+                'grade_level' => $candidateEnrollment['grade_level'],
+                'section_name' => $candidateEnrollment['section_name'],
+            ],
+        ];
     }
 
-    $pdo->beginTransaction();
+    foreach ($recognizedFaceBoxes as &$faceBox) {
+        $boxLrn = (string) ($faceBox['lrn'] ?? '');
+        if (($faceBox['status'] ?? '') === 'recognized' && isset($learnerNames[$boxLrn])) {
+            $faceBox['name'] = $learnerNames[$boxLrn];
+        }
+    }
+    unset($faceBox);
 
-    $recordStmt = $pdo->prepare('SELECT * FROM attendance_records WHERE learner_enrollment_id = :id AND attendance_date = :date LIMIT 1 FOR UPDATE');
-    $recordStmt->execute(['id' => $enrollment['id'], 'date' => $attendanceDate]);
-    $record = $recordStmt->fetch();
-
-    $slot = attendance_resolve_scan_slot($scanMode, $currentTime, $record ?: []);
-
-    if (!$slot['success']) {
-        $pdo->rollBack();
-        throw new RuntimeException($slot['message'] ?? 'Unable to resolve attendance slot.', $slot['status'] ?? 422);
+    if ($recognizedCandidates === []) {
+        throw new RuntimeException('No active enrollment found for the recognized learners.', 404);
     }
 
-    $targetColumn = $slot['column'];
-    if ($record !== false && !empty($record[$targetColumn])) {
-        $pdo->rollBack();
-        throw new RuntimeException($slot['label'] . ' has already been recorded.', 409);
+    $currentTime = date('H:i:s');
+    $attendanceDate = date('Y-m-d');
+    $scanMode = attendance_scan_mode();
+    $lastSkipMessage = 'No confirmed learner could be recorded.';
+    $lastSkipStatus = 409;
+    $selectedCandidate = null;
+    $slot = null;
+
+    foreach ($recognizedCandidates as $candidate) {
+        $enrollment = $candidate['enrollment'];
+        $pdo->beginTransaction();
+        try {
+            $recordStmt = $pdo->prepare('SELECT * FROM attendance_records WHERE learner_enrollment_id = :id AND attendance_date = :date LIMIT 1 FOR UPDATE');
+            $recordStmt->execute(['id' => $enrollment['id'], 'date' => $attendanceDate]);
+            $record = $recordStmt->fetch();
+
+            $candidateSlot = attendance_resolve_scan_slot($scanMode, $currentTime, $record ?: []);
+            if (!$candidateSlot['success']) {
+                $pdo->rollBack();
+                $lastSkipMessage = $candidateSlot['message'] ?? 'Unable to resolve attendance slot.';
+                $lastSkipStatus = $candidateSlot['status'] ?? 422;
+                continue;
+            }
+
+            $targetColumn = $candidateSlot['column'];
+            if ($record !== false && !empty($record[$targetColumn])) {
+                $pdo->rollBack();
+                $lastSkipMessage = $candidateSlot['label'] . ' has already been recorded for ' . $candidate['learner']['name'] . '.';
+                $lastSkipStatus = 409;
+                continue;
+            }
+
+            $legendStmt = $pdo->prepare('SELECT id FROM attendance_legends WHERE code = :code LIMIT 1');
+            $legendStmt->execute(['code' => 'P']);
+            $presentLegend = $legendStmt->fetch();
+            if ($presentLegend === false) {
+                throw new RuntimeException('The Present attendance legend is unavailable.');
+            }
+
+            if ($record === false) {
+                $insertStmt = $pdo->prepare(
+                    "INSERT INTO attendance_records (learner_enrollment_id, attendance_date, legend_id, {$targetColumn})
+                     VALUES (:enroll_id, :date, :legend_id, :time)"
+                );
+                $insertStmt->execute([
+                    'enroll_id' => $enrollment['id'], 'date' => $attendanceDate,
+                    'legend_id' => $presentLegend['id'], 'time' => $currentTime
+                ]);
+                $attendanceRecordId = (int) $pdo->lastInsertId();
+            } else {
+                $updateStmt = $pdo->prepare("UPDATE attendance_records SET legend_id = :legend_id, {$targetColumn} = :time WHERE id = :id");
+                $updateStmt->execute(['legend_id' => $presentLegend['id'], 'time' => $currentTime, 'id' => $record['id']]);
+                $attendanceRecordId = (int) $record['id'];
+            }
+
+            $logStmt = $pdo->prepare(
+                'INSERT INTO attendance_scan_logs (attendance_record_id, learner_enrollment_id, legend_id, slot_key, slot_label, scanned_at)
+                 VALUES (:rec_id, :enroll_id, :legend_id, :key, :label, :at)'
+            );
+            $logStmt->execute([
+                'rec_id' => $attendanceRecordId, 'enroll_id' => $enrollment['id'], 'legend_id' => $presentLegend['id'],
+                'key' => $targetColumn, 'label' => $candidateSlot['label'], 'at' => date('Y-m-d H:i:s')
+            ]);
+
+            $pdo->commit();
+            $selectedCandidate = $candidate;
+            $slot = $candidateSlot;
+            $recognizedLearner = $candidate['learner'];
+            break;
+        } catch (Throwable $exception) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $exception;
+        }
     }
 
-    $legendStmt = $pdo->prepare('SELECT id FROM attendance_legends WHERE code = :code LIMIT 1');
-    $legendStmt->execute(['code' => 'P']);
-    $presentLegend = $legendStmt->fetch();
-
-    if ($record === false) {
-        $insertStmt = $pdo->prepare(
-            "INSERT INTO attendance_records (learner_enrollment_id, attendance_date, legend_id, {$targetColumn})
-             VALUES (:enroll_id, :date, :legend_id, :time)"
-        );
-        $insertStmt->execute([
-            'enroll_id' => $enrollment['id'], 'date' => $attendanceDate,
-            'legend_id' => $presentLegend['id'], 'time' => $currentTime
+    if ($selectedCandidate === null || $slot === null) {
+        http_response_code($lastSkipStatus);
+        echo json_encode([
+            'success' => false,
+            'code' => 'attendance_unavailable',
+            'message' => $lastSkipMessage,
+            'recognized_learners' => array_column(array_column($recognizedCandidates, 'learner'), 'name'),
+            'face_boxes' => $recognizedFaceBoxes,
         ]);
-        $attendanceRecordId = (int) $pdo->lastInsertId();
-    } else {
-        $updateStmt = $pdo->prepare("UPDATE attendance_records SET legend_id = :legend_id, {$targetColumn} = :time WHERE id = :id");
-        $updateStmt->execute(['legend_id' => $presentLegend['id'], 'time' => $currentTime, 'id' => $record['id']]);
-        $attendanceRecordId = (int) $record['id'];
+        exit;
     }
 
-    $logStmt = $pdo->prepare(
-        'INSERT INTO attendance_scan_logs (attendance_record_id, learner_enrollment_id, legend_id, slot_key, slot_label, scanned_at)
-         VALUES (:rec_id, :enroll_id, :legend_id, :key, :label, :at)'
-    );
-    $logStmt->execute([
-        'rec_id' => $attendanceRecordId, 'enroll_id' => $enrollment['id'], 'legend_id' => $presentLegend['id'],
-        'key' => $targetColumn, 'label' => $slot['label'], 'at' => date('Y-m-d H:i:s')
-    ]);
-
-    $pdo->commit();
+    $enrollment = $selectedCandidate['enrollment'];
 
     require_once __DIR__ . '/app/sms_gateway.php';
     if (!empty($enrollment['parent_guardian_contact_number'])) {
@@ -146,16 +247,21 @@ try {
     }
 
     http_response_code(200);
+    $otherRecognizedLearners = array_values(array_filter(
+        array_column(array_column($recognizedCandidates, 'learner'), 'name'),
+        static fn (string $name): bool => $name !== $recognizedLearner['name']
+    ));
+    $message = $slot['label'] . ' recorded for ' . $recognizedLearner['name'] . '.';
+    if ($otherRecognizedLearners !== []) {
+        $message .= ' Also recognized: ' . implode(', ', $otherRecognizedLearners) . '. One attendance is recorded per scan.';
+    }
     echo json_encode([
         'success' => true,
-        'message' => $slot['label'] . ' recorded!',
+        'message' => $message,
         'slot_label' => $slot['label'],
-        'learner' => [
-            'name' => $enrollment['first_name'] . ' ' . $enrollment['last_name'],
-            'lrn' => $lrn,
-            'grade_level' => $enrollment['grade_level'],
-            'section_name' => $enrollment['section_name'],
-        ]
+        'learner' => $recognizedLearner,
+        'recognized_learners' => array_column(array_column($recognizedCandidates, 'learner'), 'name'),
+        'face_boxes' => $recognizedFaceBoxes,
     ]);
 
 } catch (Throwable $e) {
@@ -164,5 +270,10 @@ try {
     }
     $code = $e->getCode();
     http_response_code(is_int($code) && $code >= 400 && $code < 600 ? $code : 500);
-    echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+    $response = ['success' => false, 'message' => $e->getMessage()];
+    if (is_array($recognizedLearner)) {
+        $response['learner'] = $recognizedLearner;
+        $response['face_boxes'] = $recognizedFaceBoxes;
+    }
+    echo json_encode($response);
 }
