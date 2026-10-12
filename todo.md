@@ -583,6 +583,32 @@ The final result must be a polished, responsive Project PULSE dashboard that pre
 - [x] Confirm deployment serves the built Tailwind asset and requires neither a CDN nor a runtime Node.js process.
 - [x] Document the migration, removed stylesheets, retained Font Awesome exception, and build requirements.
 - [x] Document rollback through version-control history; no commit was created in this session.
+
+---
+
+# PHASE 15 — Improve Multi-Face Recognition Accuracy
+
+**Objective:** Prevent one physical face from being detected or confirmed as multiple learners while preserving recognition of multiple distinct learners in the same camera frame.
+
+**User story:** As attendance staff, I want each visible learner's face to be matched to at most one learner identity, so one person is not mistaken for two learners and uncertain matches do not create incorrect attendance records.
+
+### Tasks
+
+- [ ] Reproduce and trace the reported case where one visible face results in two learner identities; inspect detector boxes, per-face LBPH predictions, confirmation state, and attendance API results.
+- [ ] Determine whether the cause is duplicate/overlapping face detections, unstable identity predictions between frames, similar enrollment photos, or another recognition-stage issue before selecting a fix.
+- [ ] Ensure one detected face region can confirm no more than one learner identity; reject ambiguous or conflicting predictions instead of associating the same face with multiple learners.
+- [ ] Preserve recognition of two or more distinct faces in the same frame, with each face independently matched and displayed.
+- [ ] Keep the existing policy of recording attendance for at most one eligible learner per scan; allow other confirmed learners to be recorded on subsequent scans.
+- [ ] Add automated tests for duplicate/overlapping detections of one face, unstable predictions across frames, ambiguous matches, and multiple distinct faces in one frame.
+- [ ] Verify false matches do not record attendance, and report confidence/recognition outcomes clearly to attendance staff without exposing sensitive image data in logs.
+- [ ] Validate with representative enrollment photos and live-camera scenarios under the configured strictness levels before marking the recognition improvement complete.
+
+### Completion Criteria
+
+- [ ] A single visible face is never confirmed as two learner identities or used to record two learners.
+- [ ] Multiple distinct visible faces can still be recognized independently in the same frame.
+- [ ] Ambiguous matches are rejected and do not create attendance records.
+- [ ] Automated regression tests and documented live-camera checks pass.
 - [ ] Obtain approval before deploying to production and verify deployment only if it is performed.
 
 ### Completion Criteria

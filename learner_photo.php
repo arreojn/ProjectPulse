@@ -48,7 +48,18 @@ if ($role === 'teacher') {
 }
 
 $photoPath = null;
-foreach ([$lrn, $lrn . '_1'] as $photoName) {
+if (array_key_exists('slot', $_GET)) {
+    $slot = filter_var($_GET['slot'], FILTER_VALIDATE_INT);
+    if ($slot === false || $slot < 1 || $slot > 5) {
+        http_response_code(404);
+        exit;
+    }
+    $photoNames = $slot === 1 ? [$lrn . '_1', $lrn] : [$lrn . '_' . $slot];
+} else {
+    $photoNames = [$lrn, $lrn . '_1'];
+}
+
+foreach ($photoNames as $photoName) {
     foreach (['jpg', 'jpeg', 'png', 'webp'] as $extension) {
         $candidate = learner_photo_storage_directory() . $photoName . '.' . $extension;
         if (is_file($candidate)) {

@@ -45,7 +45,11 @@ $faceSettingsSource = file_get_contents(__DIR__ . '/../app/attendance_settings.p
 $faceStrictnessApiSource = file_get_contents(__DIR__ . '/../api/face_recognition_strictness.php');
 $faceAttendanceEventSource = file_get_contents(__DIR__ . '/../face_attendance_event.php');
 $faceEnrollmentEventSource = file_get_contents(__DIR__ . '/../face_enrollment_event.php');
+$faceEnrollmentPageSource = file_get_contents(__DIR__ . '/../face_enrollment.php');
 $faceEnrollmentScript = file_get_contents(__DIR__ . '/../src/attendance/enrollment.js');
+$faceEnrollmentDeleteSource = file_get_contents(__DIR__ . '/../face_enrollment_delete.php');
+$tailwindSource = file_get_contents(__DIR__ . '/../src/tailwind.css');
+$learnerPhotoSource = file_get_contents(__DIR__ . '/../learner_photo.php');
 $faceHelpersSource = file_get_contents(__DIR__ . '/../app/helpers.php');
 $trainModelSource = file_get_contents(__DIR__ . '/../train_model.php');
 
@@ -57,6 +61,13 @@ test_assert(is_string($faceSource) && str_contains($faceSource, "'/app/learners.
 test_assert(is_string($faceEnrollmentEventSource) && str_contains($faceEnrollmentEventSource, '$imageNumber > $maxPhotos'), 'Face enrollment must validate the configured photo limit.');
 test_assert(is_string($faceHelpersSource) && str_contains($faceHelpersSource, 'function face_enrollment_max_photos(): int') && str_contains($faceHelpersSource, 'return 5;'), 'Face enrollment must allow up to five photos and detect all saved slots.');
 test_assert(is_string($faceEnrollmentScript) && str_contains($faceEnrollmentScript, 'config.maxPhotos'), 'Face enrollment controls must use the configured photo limit.');
+test_assert(is_string($faceEnrollmentPageSource) && str_contains($faceEnrollmentPageSource, 'id="captured-photos"') && str_contains($faceEnrollmentPageSource, "'photoUrl' => route_url('learner_photo.php')"), 'Face enrollment must show a saved-photo gallery beneath the capture controls.');
+test_assert(is_string($faceEnrollmentPageSource) && str_contains($faceEnrollmentPageSource, 'class="face-enrollment-layout items-start"') && is_string($tailwindSource) && str_contains($tailwindSource, '.face-enrollment-layout') && str_contains($tailwindSource, 'grid-template-columns: minmax(0, 1.8fr) minmax(240px, 0.7fr);'), 'The enrollment controls and video feed must remain in explicit side-by-side columns.');
+test_assert(is_string($faceEnrollmentPageSource) && str_contains($faceEnrollmentPageSource, 'id="reset-learner-btn"') && str_contains($faceEnrollmentPageSource, "'deletePhotosUrl' => route_url('face_enrollment_delete.php')") && str_contains($faceEnrollmentScript, 'async resetSelection()'), 'Face enrollment must provide a reset action for captured photos.');
+test_assert(is_string($faceEnrollmentScript) && str_contains($faceEnrollmentScript, 'showAppConfirm') && str_contains($faceEnrollmentScript, 'config.deletePhotosUrl'), 'Deleting a learner photo set must require confirmation and call the dedicated endpoint.');
+test_assert(is_string($faceEnrollmentDeleteSource) && str_contains($faceEnrollmentDeleteSource, "require_roles(['admin', 'teacher'])") && str_contains($faceEnrollmentDeleteSource, 'verify_csrf_token') && str_contains($faceEnrollmentDeleteSource, 'teacher_accessible_learner_by_lrn') && str_contains($faceEnrollmentDeleteSource, 'unlink($photoPath)'), 'Photo deletion must be CSRF-protected, enforce learner access, and delete only matching photo files.');
+test_assert(is_string($faceEnrollmentScript) && str_contains($faceEnrollmentScript, 'updatePhotoGallery()') && str_contains($faceEnrollmentScript, "searchParams.set('slot'"), 'The enrollment gallery must update and request each saved photo slot.');
+test_assert(is_string($learnerPhotoSource) && str_contains($learnerPhotoSource, "\$_GET['slot']") && str_contains($learnerPhotoSource, '$slot > 5') && str_contains($learnerPhotoSource, "require_roles(['admin', 'attendance', 'health', 'guidance', 'teacher', 'parent'])"), 'Saved enrollment thumbnails must use the authenticated, learner-authorized photo endpoint and bounded photo slots.');
 test_assert(is_string($faceTrainerSource) && str_contains($faceTrainerSource, 'PHOTO_NUMBER_LIMIT = 5'), 'Face model training must include photo slots through five.');
 test_assert(is_string($faceTrainerSource) && str_contains($faceTrainerSource, 'learner_labels[learner_lrn]'), 'Face training must group multiple photos under the same learner identity.');
 test_assert(is_string($faceServiceSource) && str_contains($faceServiceSource, 'model_is_current()'), 'Face attendance must reject stale models after enrollment photos change.');

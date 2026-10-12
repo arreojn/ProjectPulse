@@ -634,6 +634,12 @@ textarea:focus {
     border: 1px solid rgba(31, 41, 51, 0.08);
 }
 
+.face-enrollment-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.8fr) minmax(240px, 0.7fr);
+    gap: 20px;
+}
+
 .scan-mode-copy {
     min-width: 0;
 }

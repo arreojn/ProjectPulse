@@ -1,6 +1,6 @@
 import { createApp } from 'vue';
 import { mountVueStatus } from '../shared/status.js';
-import { showAppAlert } from '../shared/dialogs.js';
+import { showAppAlert, showAppConfirm } from '../shared/dialogs.js';
 
 const config = window.ProjectPulse || {};
 
@@ -10,6 +10,7 @@ const FaceEnrollment = {
     return {
       stream: null,
       saving: false,
+      deleting: false,
       training: false,
       cameraReady: false,
       photoSlots: Object.fromEntries((config.learners || []).map((learner) => [learner.lrn, learner.photoSlots || []])),
@@ -17,12 +18,12 @@ const FaceEnrollment = {
   },
   mounted() {
     this.video = document.getElementById('video-feed'); this.canvas = document.getElementById('capture-canvas'); this.context = this.canvas?.getContext('2d');
-    this.select = document.getElementById('learner_id'); this.captureButton = document.getElementById('capture-btn'); this.preview = document.getElementById('photo-preview'); this.captureFeedback = document.getElementById('capture-feedback'); this.captureProgress = document.getElementById('capture-progress');
+    this.select = document.getElementById('learner_id'); this.resetButton = document.getElementById('reset-learner-btn'); this.captureButton = document.getElementById('capture-btn'); this.photoGallery = document.getElementById('captured-photos'); this.captureFeedback = document.getElementById('capture-feedback'); this.captureProgress = document.getElementById('capture-progress');
     this.trainButton = document.getElementById('train-btn'); this.trainFeedback = document.getElementById('train-feedback'); this.trainLog = document.getElementById('train-log');
-    this.boundLearnerChange = this.onLearnerChange.bind(this); this.boundCapturePhoto = this.capturePhoto.bind(this); this.boundTrainModel = this.trainModel.bind(this);
-    this.select?.addEventListener('change', this.boundLearnerChange); this.captureButton?.addEventListener('click', this.boundCapturePhoto); this.trainButton?.addEventListener('click', this.boundTrainModel); this.updateCaptureControls(); this.startWebcam(); mountVueStatus();
+    this.boundLearnerChange = this.onLearnerChange.bind(this); this.boundResetSelection = this.resetSelection.bind(this); this.boundCapturePhoto = this.capturePhoto.bind(this); this.boundTrainModel = this.trainModel.bind(this);
+    this.select?.addEventListener('change', this.boundLearnerChange); this.resetButton?.addEventListener('click', this.boundResetSelection); this.captureButton?.addEventListener('click', this.boundCapturePhoto); this.trainButton?.addEventListener('click', this.boundTrainModel); this.updateCaptureControls(); this.updatePhotoGallery(); this.startWebcam(); mountVueStatus();
   },
-  beforeUnmount() { this.stream?.getTracks().forEach((track) => track.stop()); this.select?.removeEventListener('change', this.boundLearnerChange); this.captureButton?.removeEventListener('click', this.boundCapturePhoto); this.trainButton?.removeEventListener('click', this.boundTrainModel); },
+  beforeUnmount() { this.stream?.getTracks().forEach((track) => track.stop()); this.select?.removeEventListener('change', this.boundLearnerChange); this.resetButton?.removeEventListener('click', this.boundResetSelection); this.captureButton?.removeEventListener('click', this.boundCapturePhoto); this.trainButton?.removeEventListener('click', this.boundTrainModel); },
   methods: {
     setFeedback(element, message, type = 'neutral') { if (type !== 'neutral') { element?.classList.add('hidden'); showAppAlert(message, { variant: type }); return; } if (!element) return; element.textContent = message; element.className = `alert ${type}`; element.classList.remove('hidden'); },
     async startWebcam() { try { this.stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: false }); this.video.srcObject = this.stream; this.video.onloadedmetadata = () => { const size = Math.min(this.video.videoWidth, this.video.videoHeight); this.canvas.width = size; this.canvas.height = size; this.cameraReady = true; this.updateCaptureControls(); }; } catch (_) { this.setFeedback(this.captureFeedback, 'Could not access webcam. Please grant permission.', 'error'); } },
@@ -33,8 +34,9 @@ const FaceEnrollment = {
       const nextPhoto = this.nextPhotoNumber(lrn);
       if (this.captureButton) {
         this.captureButton.textContent = nextPhoto ? `Capture Photo ${nextPhoto} of ${config.maxPhotos}` : `${config.maxPhotos} Photos Saved`;
-        this.captureButton.disabled = !lrn || !nextPhoto || !this.cameraReady || this.saving;
+        this.captureButton.disabled = !lrn || !nextPhoto || !this.cameraReady || this.saving || this.deleting;
       }
+      if (this.resetButton) this.resetButton.disabled = !lrn || this.saving || this.deleting;
       if (this.captureProgress) {
         this.captureProgress.textContent = !lrn
           ? 'Select a learner to begin.'
@@ -43,11 +45,70 @@ const FaceEnrollment = {
             : `All ${config.maxPhotos} photos are saved. Train the model to use the updated images.`;
       }
     },
-    onLearnerChange() { this.preview.classList.add('hidden'); this.video.classList.remove('hidden'); this.captureFeedback?.classList.add('hidden'); this.updateCaptureControls(); },
+    updatePhotoGallery() {
+      if (!this.photoGallery) return;
+      const lrn = this.select?.value || '';
+      const slots = this.photoSlots[lrn] || [];
+      this.photoGallery.replaceChildren();
+      if (!lrn || slots.length === 0) {
+        const message = document.createElement('p');
+        message.className = 'col-span-full m-0 text-sm text-[var(--muted)]';
+        message.textContent = lrn ? 'No photos saved for this learner yet.' : 'Select a learner to view captured photos.';
+        this.photoGallery.append(message);
+        return;
+      }
+      slots.forEach((slot) => {
+        const figure = document.createElement('figure');
+        figure.className = 'm-0 grid gap-1.5';
+        const image = document.createElement('img');
+        const photoUrl = new URL(config.photoUrl, window.location.href);
+        photoUrl.searchParams.set('lrn', lrn);
+        photoUrl.searchParams.set('slot', String(slot));
+        image.src = photoUrl.toString();
+        image.alt = `Captured photo ${slot} for selected learner`;
+        image.className = 'aspect-square w-full rounded-xl border border-[var(--line)] bg-[var(--surface)] object-cover';
+        const caption = document.createElement('figcaption');
+        caption.className = 'text-center text-xs text-[var(--muted)]';
+        caption.textContent = `Photo ${slot} of ${config.maxPhotos}`;
+        figure.append(image, caption);
+        this.photoGallery.append(figure);
+      });
+    },
+    onLearnerChange() { this.captureFeedback?.classList.add('hidden'); this.updateCaptureControls(); this.updatePhotoGallery(); },
+    async resetSelection() {
+      const lrn = this.select?.value || '';
+      if (!lrn || this.saving || this.deleting || !this.resetButton) return;
+      const learnerName = this.select.selectedOptions[0]?.textContent?.trim() || lrn;
+      this.deleting = true;
+      this.updateCaptureControls();
+      try {
+        const confirmed = await showAppConfirm(
+          `Delete all captured photos for ${learnerName}? This cannot be undone, and the face recognition model must be retrained afterward.`,
+          { title: 'Delete captured photos?', confirmLabel: 'Delete Photos', danger: true },
+        );
+        if (!confirmed) return;
+        const response = await fetch(config.deletePhotosUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({ lrn, csrf_token: config.csrfToken }),
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) throw new Error(result.message || 'Failed to delete captured photos.');
+        this.photoSlots[lrn] = result.photo_slots || [];
+        this.updateCaptureControls();
+        this.updatePhotoGallery();
+        await showAppAlert(result.message || 'Captured photos deleted.', { variant: 'success' });
+      } catch (error) {
+        await showAppAlert(error instanceof Error ? error.message : 'Failed to delete captured photos.');
+      } finally {
+        this.deleting = false;
+        this.updateCaptureControls();
+      }
+    },
     async capturePhoto() {
       const lrn = this.select?.value || '';
       const imageNumber = this.nextPhotoNumber(lrn);
-      if (this.saving || !lrn || !imageNumber || !this.context || !this.canvas.width || !this.canvas.height) return;
+      if (this.saving || this.deleting || !lrn || !imageNumber || !this.context || !this.canvas.width || !this.canvas.height) return;
       this.saving = true; this.updateCaptureControls();
       const cropSize = Math.min(this.video.videoWidth, this.video.videoHeight);
       const cropX = (this.video.videoWidth - cropSize) / 2;
@@ -63,6 +124,7 @@ const FaceEnrollment = {
         const result = await response.json();
         if (!response.ok || !result.success) throw new Error(result.message || 'Failed to save photo.');
         this.photoSlots[lrn] = result.photo_slots || [...(this.photoSlots[lrn] || []), imageNumber];
+        this.updatePhotoGallery();
         this.setFeedback(this.captureFeedback, `Photo ${imageNumber} of ${config.maxPhotos} saved.`, 'neutral');
       } catch (error) {
         this.setFeedback(this.captureFeedback, error.message, 'error');

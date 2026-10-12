@@ -15,6 +15,8 @@ else { teacher_management_bootstrap(); $learners = teacher_section_learners((int
 $enrollmentConfig = [
     'csrfToken' => csrf_token(),
     'enrollmentUrl' => route_url('face_enrollment_event.php'),
+    'deletePhotosUrl' => route_url('face_enrollment_delete.php'),
+    'photoUrl' => route_url('learner_photo.php'),
     'trainUrl' => route_url('train_model.php'),
     'homeUrl' => route_url($user['role'] === 'admin' ? 'admin.php' : 'teacher.php'),
     'maxPhotos' => face_enrollment_max_photos(),
@@ -143,25 +145,38 @@ $sidebarGroups = $user['role'] === 'teacher'
 
             <section class="grid grid-cols-1 items-start gap-3.5">
                 <article class="admin-module-card">
-                    <div class="grid grid-cols-[minmax(0,1.8fr)_minmax(240px,0.7fr)] items-center gap-2 max-[760px]:grid-cols-1">
-                        <div class="aspect-square w-full max-w-[min(100%,88vh)] overflow-hidden rounded-[18px] bg-black">
-                            <video id="video-feed" class="block h-full w-full scale-x-[-1] object-cover" autoplay playsinline muted></video>
-                            <canvas id="capture-canvas" class="hidden"></canvas>
-                            <img id="photo-preview" class="hidden h-full w-full object-cover" alt="Captured photo preview">
+                    <div class="face-enrollment-layout items-start">
+                        <div class="grid min-w-0 justify-items-center gap-3">
+                            <div class="aspect-square w-full max-w-[min(100%,88vh)] overflow-hidden rounded-[18px] bg-black">
+                                <video id="video-feed" class="block h-full w-full scale-x-[-1] object-cover" autoplay playsinline muted></video>
+                                <canvas id="capture-canvas" class="hidden"></canvas>
+                            </div>
+                            <div id="capture-feedback" class="alert neutral hidden w-full"></div>
                         </div>
-                        <div class="grid content-center gap-4">
-                            <div class="report-filter-field">
-                                <label for="learner_id">Select Learner</label>
-                                <select id="learner_id">
-                                    <option value=""><?php echo $learners === [] ? 'No learners available in your section.' : '-- Select a learner --'; ?></option>
-                                    <?php foreach ($learners as $learner): ?>
-                                        <option value="<?php echo escape($learner['lrn']); ?>"><?php echo escape($learner['learner_name'] ?? trim(($learner['last_name'] ?? '') . ', ' . ($learner['first_name'] ?? ''))); ?> (<?php echo escape($learner['lrn']); ?>)</option>
-                                    <?php endforeach; ?>
-                                </select>
+                        <div class="grid min-w-0 content-start gap-5">
+                            <div class="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
+                                <div class="report-filter-field">
+                                    <label for="learner_id">Select Learner</label>
+                                    <select id="learner_id">
+                                        <option value=""><?php echo $learners === [] ? 'No learners available in your section.' : '-- Select a learner --'; ?></option>
+                                        <?php foreach ($learners as $learner): ?>
+                                            <option value="<?php echo escape($learner['lrn']); ?>"><?php echo escape($learner['learner_name'] ?? trim(($learner['last_name'] ?? '') . ', ' . ($learner['first_name'] ?? ''))); ?> (<?php echo escape($learner['lrn']); ?>)</option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <button id="reset-learner-btn" class="ghost-button min-h-[44px]" type="button" aria-label="Delete selected learner photos" title="Delete captured photos for the selected learner">↻ Reset Photos</button>
                             </div>
                             <button id="capture-btn" class="primary-button min-h-[44px] w-full" disabled>Capture Photo</button>
                             <p id="capture-progress" class="m-0 text-sm text-[var(--muted)]" aria-live="polite">Select a learner to begin.</p>
-                            <div id="capture-feedback" class="alert neutral hidden"></div>
+                            <section aria-labelledby="captured-photos-heading">
+                                <div class="panel-heading compact-heading">
+                                    <h2 id="captured-photos-heading">Captured Photos</h2>
+                                    <p>Saved photos for the selected learner.</p>
+                                </div>
+                                <div id="captured-photos" class="grid grid-cols-2 gap-3 sm:grid-cols-3" aria-live="polite">
+                                    <p class="m-0 text-sm text-[var(--muted)]">Select a learner to view captured photos.</p>
+                                </div>
+                            </section>
                         </div>
                     </div>
                 </article>
