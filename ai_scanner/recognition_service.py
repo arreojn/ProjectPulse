@@ -13,7 +13,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import cv2
 import numpy as np
 
-from identify_face import LABELS_FILE, MODEL_FILE, cascade_classifier, model_is_current
+try:
+    from .identify_face import LABELS_FILE, MODEL_FILE, cascade_classifier, model_is_current
+except ImportError:  # pragma: no cover - direct script execution path
+    from identify_face import LABELS_FILE, MODEL_FILE, cascade_classifier, model_is_current
 
 
 MATCH_CONFIDENCE_LIMIT = 25.0
@@ -27,6 +30,69 @@ STRICTNESS_THRESHOLDS = {
 CONFIRMATION_SCANS = 3
 CONFIRMATION_WINDOW_SECONDS = 4.5
 CONFIRMATION_MISS_GRACE_SECONDS = 1.25
+AMBIGUOUS_MATCH_GAP = 7.0
+OVERLAPPING_FACE_RATIO = 0.35
+
+
+def face_box_overlap_ratio(face_a, face_b):
+    ax1 = int(face_a["x"])
+    ay1 = int(face_a["y"])
+    ax2 = ax1 + int(face_a["width"])
+    ay2 = ay1 + int(face_a["height"])
+    bx1 = int(face_b["x"])
+    by1 = int(face_b["y"])
+    bx2 = bx1 + int(face_b["width"])
+    by2 = by1 + int(face_b["height"])
+
+    overlap_width = max(0, min(ax2, bx2) - max(ax1, bx1))
+    overlap_height = max(0, min(ay2, by2) - max(ay1, by1))
+    overlap_area = overlap_width * overlap_height
+    if overlap_area <= 0:
+        return 0.0
+
+    area_a = max(1, int(face_a["width"]) * int(face_a["height"]))
+    area_b = max(1, int(face_b["width"]) * int(face_b["height"]))
+    return overlap_area / min(area_a, area_b)
+
+
+def reduce_face_candidates(candidates):
+    if not candidates:
+        return []
+
+    groups = []
+    for candidate in sorted(candidates, key=lambda item: (item["confidence"], item["lrn"])):
+        joined_group = None
+        for group in groups:
+            if any(face_box_overlap_ratio(candidate["face_box"], existing["face_box"]) >= OVERLAPPING_FACE_RATIO for existing in group):
+                joined_group = group
+                break
+        if joined_group is None:
+            groups.append([candidate])
+        else:
+            joined_group.append(candidate)
+
+    reduced = []
+    for group in groups:
+        unique_lrns = {item["lrn"] for item in group}
+        if len(unique_lrns) == 1:
+            best = min(group, key=lambda item: item["confidence"])
+            reduced.append(best)
+            continue
+
+        ordered = sorted(group, key=lambda item: item["confidence"])
+        best = ordered[0]
+        second = ordered[1] if len(ordered) > 1 else None
+        if second is not None and (second["confidence"] - best["confidence"]) <= AMBIGUOUS_MATCH_GAP:
+            continue
+        reduced.append(best)
+
+    deduped = {}
+    for candidate in reduced:
+        existing = deduped.get(candidate["lrn"])
+        if existing is None or candidate["confidence"] < existing["confidence"]:
+            deduped[candidate["lrn"]] = candidate
+
+    return sorted(deduped.values(), key=lambda item: item["confidence"])
 
 
 class RecognitionEngine:
@@ -83,6 +149,9 @@ class RecognitionEngine:
                 face_box["status"] = "unrecognized"
             face_boxes.append(face_box)
 
+        unique_candidates = reduce_face_candidates(list(candidates.values()))
+        reduced_candidates = {candidate["lrn"]: candidate for candidate in unique_candidates}
+
         with self.confirmation_lock:
             now = time.monotonic()
             for lrn, confirmation in list(self.confirmations.items()):
@@ -100,7 +169,7 @@ class RecognitionEngine:
 
             matches = []
             pending = False
-            for lrn, candidate in candidates.items():
+            for lrn, candidate in reduced_candidates.items():
                 confirmed = self.confirmed.get(lrn)
                 if confirmed is not None:
                     confirmed["expires_at"] = now + CONFIRMATION_WINDOW_SECONDS
